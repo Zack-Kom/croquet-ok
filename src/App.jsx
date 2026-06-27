@@ -19785,13 +19785,13 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
         {!lockTab && (() => { const heroPhoto = (profile.photos || []).filter(Boolean)[0] || null; return (
         <div style={{ position: "relative", borderRadius: 16, overflow: "hidden", marginBottom: 12, boxShadow: "0 4px 18px rgba(26,74,46,0.16)" }}>
           {/* First club photo as banner (if set) */}
-          {heroPhoto && <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${heroPhoto})`, backgroundSize: "cover", backgroundPosition: "center" }} />}
-          {/* Brand gradient — solid when no photo, translucent tint over the photo so white text stays legible */}
-          <div style={{ position: "absolute", inset: 0, background: heroPhoto
-            ? `linear-gradient(135deg, ${accent}f2 0%, ${accent}d9 50%, ${accent}c4 100%)`
-            : `linear-gradient(135deg, ${accent} 0%, ${accent}d9 55%, ${accent}b0 100%)` }} />
-          {/* subtle lawn stripes overlay */}
-          <div style={{ position: "absolute", inset: 0, opacity: 0.10, backgroundImage: `repeating-linear-gradient(115deg, #fff 0 22px, transparent 22px 44px)` }} />
+          {heroPhoto && <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${heroPhoto})`, backgroundSize: "cover", backgroundPosition: profile.photoPosition || "50% 50%" }} />}
+          {/* When photo: subtle dark scrim so white UI elements stay legible. When no photo: brand gradient + lawn stripes. */}
+          {heroPhoto
+            ? <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.38) 100%)" }} />
+            : <><div style={{ position: "absolute", inset: 0, background: `linear-gradient(135deg, ${accent} 0%, ${accent}d9 55%, ${accent}b0 100%)` }} />
+               <div style={{ position: "absolute", inset: 0, opacity: 0.10, backgroundImage: `repeating-linear-gradient(115deg, #fff 0 22px, transparent 22px 44px)` }} /></>
+          }
           <div style={{ position: "relative", padding: "0.85rem 1rem", display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 48, height: 48, borderRadius: 12, background: profile.logo ? "#fff" : "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", border: "1px solid rgba(255,255,255,0.35)", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
               {profile.logo ? <img src={profile.logo} alt={clubName} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
@@ -23122,6 +23122,30 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                             </label>
                           )}
                         </div>
+                        {photos[0] && (
+                          <div style={{ marginTop: 8 }}>
+                            <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: T.textMuted }}>Drag to set banner crop</p>
+                            <div
+                              style={{ width: "100%", height: 88, borderRadius: 9, overflow: "hidden", border: `1px solid ${T.cardBorder}`, position: "relative", cursor: "crosshair", backgroundImage: `url(${photos[0]})`, backgroundSize: "cover", backgroundPosition: draft.photoPosition || "50% 50%", userSelect: "none", touchAction: "none" }}
+                              onPointerDown={e => {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                                const r = e.currentTarget.getBoundingClientRect();
+                                const x = Math.round(Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100)));
+                                const y = Math.round(Math.max(0, Math.min(100, ((e.clientY - r.top) / r.height) * 100)));
+                                setDraft(d => ({ ...d, photoPosition: `${x}% ${y}%` }));
+                              }}
+                              onPointerMove={e => {
+                                if (!e.buttons) return;
+                                const r = e.currentTarget.getBoundingClientRect();
+                                const x = Math.round(Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100)));
+                                const y = Math.round(Math.max(0, Math.min(100, ((e.clientY - r.top) / r.height) * 100)));
+                                setDraft(d => ({ ...d, photoPosition: `${x}% ${y}%` }));
+                              }}
+                            >
+                              <div style={{ position: "absolute", left: (draft.photoPosition || "50% 50%").split(" ")[0], top: (draft.photoPosition || "50% 50%").split(" ")[1] || "50%", transform: "translate(-50%,-50%)", width: 20, height: 20, borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 1px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.3)", pointerEvents: "none", background: "rgba(255,255,255,0.2)" }} />
+                            </div>
+                          </div>
+                        )}
                         <p style={{ margin: "5px 0 0", fontSize: 11, color: T.textFaint }}>Up to {MAX} photos of the club — lawns, clubhouse, or members at play. Shown at the top of the About page.</p>
                       </>
                       );
