@@ -8302,10 +8302,40 @@ function OccurrenceScheduleTab({ event, games, onUpdateEvent, onOpenGame, select
           )}
         <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 10, overflow: "hidden", marginBottom: 12 }}>
           <div style={{ background: T.greenMid, padding: "7px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", letterSpacing: "0.07em", textTransform: "uppercase" }}>
-              Attendance{attendance.length > 0 ? ` · ${confirmed.length} confirmed / ${attendance.length} total` : ""}
-            </span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", letterSpacing: "0.07em", textTransform: "uppercase" }}>Attendance</span>
+            {attendance.length > 0 && (
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>
+                {confirmed.length} confirmed{attendance.length > confirmed.length ? ` · ${attendance.length - confirmed.length} pending` : ""}
+              </span>
+            )}
           </div>
+          {attendance.length > 0 && (() => {
+            const cap = event.maxPlayers || attendance.length;
+            const totalSlots = Math.max(cap, attendance.length);
+            const segW = Math.max(4, Math.min(18, Math.floor(280 / totalSlots)));
+            const gap = Math.max(1, Math.min(3, Math.floor(segW / 5)));
+            return (
+              <div style={{ padding: "8px 14px 6px", display: "flex", gap, flexWrap: "wrap" }}>
+                {Array.from({ length: totalSlots }).map((_, i) => {
+                  const a = attendance[i];
+                  const isConfirmed = a?.confirmed;
+                  const isPending   = a && !a.confirmed;
+                  const isEmpty     = !a;
+                  return (
+                    <div key={i} style={{
+                      height: 8,
+                      width: segW,
+                      borderRadius: 4,
+                      background: isConfirmed ? T.green
+                                : isPending   ? "#f0a500"
+                                :               T.cardBorder,
+                      transition: "background 0.2s",
+                    }} />
+                  );
+                })}
+              </div>
+            );
+          })()}
           <div style={{ padding: "0.75rem 1rem" }}>
             {/* Add attendee */}
             <div style={{ display: "flex", gap: 8, marginBottom: attendance.length > 0 ? 10 : 0 }}>
@@ -18256,16 +18286,14 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
         })();
 
         const playersPanel = (
-          <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
-            <PanelHeader id="players" icon="ti-users" label="Who's here" meta={`${playing.length + available.length + benchResting.length} here`} onSwap={wide ? swapPanels : null} />
-            {!collapsed.players && (<>
-        {/* Playing — present and seated on a lawn */}
-        {playing.length > 0 && (
           <>
+        {/* On the Lawns — standalone card, only shown when people are playing */}
+        {playing.length > 0 && (
+          <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
             <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
               <i className="ti ti-ball-tennis" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
               <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>On the lawns</span>
-              <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{playing.length} on the lawns</span>
+              <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{playing.length} playing</span>
             </div>
             <div style={{ padding: "12px" }}>
               {assignments.filter(a => a.slots.some(Boolean)).map(a => {
@@ -18300,9 +18328,10 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
                 );
               })}
             </div>
-          </>
+          </div>
         )}
-        {/* On the sidelines — present and unassigned */}
+        {/* On the Sidelines — standalone card, always shown when anyone is present */}
+        <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
         <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
           <i className="ti ti-armchair" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
           <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>On the sidelines</span>
@@ -18409,8 +18438,8 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
             )}
           </>
         )}
-          </>)}
-          </div>
+        </div>{/* end On the Sidelines card */}
+          </>
         );
 
         // Render panels in stored order, two-column on wide
@@ -21628,7 +21657,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
           // presence. Apply the same rule here: someone seated in a game is here;
           // an explicit away override wins; otherwise they're here only if active
           // within the timeout window. Reads the same session store the board uses.
-          const hereActiveCount = (() => {
+          const { hereActive, hereResting, hereActiveCount } = (() => {
             const slug = clubKey.replace("clubProfile_", "");
             const t = new Date();
             const dk = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
@@ -21640,18 +21669,39 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
             (sess.assignments || []).forEach(a => (a.slots || []).forEach(s => { if (s) seated.add(s); }));
             const timeoutMs = Math.max(1, profile.presenceTimeoutHours || 4) * 3600 * 1000;
             const now = Date.now();
-            return presentPlayers.filter(p => {
+            const isActive = p => {
               if (seated.has(p.id)) return true;
               if (Object.prototype.hasOwnProperty.call(awayOverride, p.id)) return !awayOverride[p.id];
               const la = Math.max(p.ts ? (Date.parse(p.ts) || 0) : 0, activity[p.id] || 0);
               return !(la > 0 && (now - la) > timeoutMs);
-            }).length;
+            };
+            const hereActive  = presentPlayers.filter(p =>  isActive(p));
+            const hereResting = presentPlayers.filter(p => !isActive(p));
+            return { hereActive, hereResting, hereActiveCount: hereActive.length };
           })();
           const today = weekAhead[0] || { sessions: [], closures: [], tourns: [] };
           const codeLabel = code => (CROQUET_CODES.find(c => c.value === code || c.short === code)?.short) || code;
 
           const fmtTimeShort = ts => new Date(ts).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
           const showLive = isClubMember && !previewPublic;
+
+          // People who indicated they're coming today (RSVP'd yes on any club event
+          // occurrence for today) but haven't checked in yet.
+          const todayIso = today.iso;
+          const expectedMap = new Map(); // lowercase name → display name
+          (clubEvents || []).forEach(ev => {
+            const synced = ev.rcDay ? syncOccurrences(ev) : ev;
+            (synced.occurrences || []).forEach(o => {
+              if (o.date !== todayIso) return;
+              (o.attendance || []).forEach(a => {
+                if (a.rsvp === "yes" || a.confirmed) expectedMap.set(a.playerName.trim().toLowerCase(), a.playerName.trim());
+              });
+            });
+          });
+          const presentNames = new Set(presentPlayers.map(p => p.name.trim().toLowerCase()));
+          const expectedNotHere = [...expectedMap.entries()]
+            .filter(([k]) => !presentNames.has(k))
+            .map(([, name]) => ({ name }));
 
           // ── Dev: seed ~20 member check-ins + a 2pm Club Day for today ──
           // Writes to the same stores the Live board reads from:
@@ -22079,10 +22129,17 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                       {new Date().toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })}
                     </p>
                   </div>
-                  {showLive && (
+                  {showLive && presentPlayers.length > 0 && (
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <p style={{ margin: 0, fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{hereActiveCount}</p>
-                      <p style={{ margin: "1px 0 0", fontSize: 9, color: "rgba(255,255,255,0.85)", textTransform: "uppercase", letterSpacing: "0.05em" }}>here now</p>
+                      <p style={{ margin: 0, fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{presentPlayers.length}</p>
+                      <p style={{ margin: "2px 0 0", fontSize: 9, color: "rgba(255,255,255,0.85)", textTransform: "uppercase", letterSpacing: "0.05em" }}>here today</p>
+                      {(hereActiveCount > 0 || hereResting.length > 0) && (
+                        <p style={{ margin: "3px 0 0", fontSize: 9, color: "rgba(255,255,255,0.7)", whiteSpace: "nowrap" }}>
+                          {hereActiveCount > 0 && `${hereActiveCount} active`}
+                          {hereActiveCount > 0 && hereResting.length > 0 && " · "}
+                          {hereResting.length > 0 && `${hereResting.length} resting`}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -30643,6 +30700,10 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
   const [expFeatures, setExpFeatures] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem("experimentalFeatures") || "{}"); } catch { return {}; }
   });
+  // ── Signal track admin state ──
+  const [signalTick, setSignalTick] = React.useState(0);
+  const [signalEditId, setSignalEditId] = React.useState(null); // null | "__new__" | item.id
+  const [signalDraft, setSignalDraft] = React.useState({});
   function toggleFeature(key) {
     const next = { ...expFeatures, [key]: !expFeatures[key] };
     setExpFeatures(next);
@@ -31114,6 +31175,7 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
                   { id: "banners",    label: "Banner cards",     icon: "ti-layout-navbar" },
                   { id: "livestrip",  label: "Live strip",       icon: "ti-bolt" },
                   { id: "personas",   label: "Personas & roles", icon: "ti-users" },
+                  { id: "signal",     label: "Signal track",     icon: "ti-mallet" },
                 ].map(s => {
                   const active = contentSection === s.id;
                   return (
@@ -31266,6 +31328,182 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
               )}
 
               {/* ── Personas & roles ── */}
+              {contentSection === "signal" && (() => {
+                void signalTick;
+                const items = loadCQOKBroadcast();
+                const BROADCAST_TYPES = [
+                  { value: "highlight", label: "Highlight", icon: "ti-star" },
+                  { value: "news",      label: "News",      icon: "ti-news" },
+                  { value: "clip",      label: "Watch",     icon: "ti-player-play" },
+                  { value: "result",    label: "Result",    icon: "ti-trophy" },
+                  { value: "update",    label: "Update",    icon: "ti-refresh" },
+                ];
+                const CQOK = TRACK_COLORS.cqok;
+
+                function saveAndRefresh(nextItems) {
+                  saveCQOKBroadcast(nextItems);
+                  setSignalTick(t => t + 1);
+                  setSignalEditId(null);
+                  setSignalDraft({});
+                }
+                function moveItem(idx, dir) {
+                  const next = [...items];
+                  const swap = idx + dir;
+                  if (swap < 0 || swap >= next.length) return;
+                  [next[idx], next[swap]] = [next[swap], next[idx]];
+                  saveAndRefresh(next);
+                }
+                function deleteItem(id) {
+                  if (!confirm("Delete this Signal track item?")) return;
+                  saveAndRefresh(items.filter(it => it.id !== id));
+                }
+                function startEdit(item) {
+                  setSignalEditId(item.id);
+                  setSignalDraft({ ...item });
+                }
+                function startAdd() {
+                  const today = new Date().toISOString().slice(0, 10);
+                  setSignalEditId("__new__");
+                  setSignalDraft({ id: "b" + Date.now(), type: "news", icon: "ti-news", label: "News", headline: "", detail: "", date: today });
+                }
+                function saveDraft() {
+                  if (!signalDraft.headline?.trim()) return;
+                  if (signalEditId === "__new__") {
+                    saveAndRefresh([signalDraft, ...items]);
+                  } else {
+                    saveAndRefresh(items.map(it => it.id === signalEditId ? signalDraft : it));
+                  }
+                }
+
+                return (
+                  <Section title="Signal track" subtitle={`${items.length} item${items.length !== 1 ? "s" : ""} · shown in The Circuit's Croquet? OK panel`}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+
+                      {/* Add button */}
+                      {signalEditId === null && (
+                        <button onClick={startAdd}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: `1px solid ${CQOK}`, background: CQOK + "12", color: CQOK, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", alignSelf: "flex-start" }}>
+                          <i className="ti ti-plus" style={{ fontSize: 13 }} /> Add item
+                        </button>
+                      )}
+
+                      {/* Add / Edit form */}
+                      {signalEditId !== null && (
+                        <div style={{ background: T.card, border: `1.5px solid ${CQOK}55`, borderRadius: 10, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                          <p style={{ margin: "0 0 2px", fontSize: 11, fontWeight: 700, color: CQOK, textTransform: "uppercase", letterSpacing: "0.07em" }}>{signalEditId === "__new__" ? "New item" : "Edit item"}</p>
+
+                          {/* Type pills */}
+                          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                            {BROADCAST_TYPES.map(bt => {
+                              const sel = signalDraft.type === bt.value;
+                              return (
+                                <button key={bt.value}
+                                  onClick={() => setSignalDraft(d => ({ ...d, type: bt.value, icon: bt.icon, label: bt.label }))}
+                                  style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${sel ? CQOK : T.cardBorder}`, background: sel ? CQOK + "18" : T.pageBg, color: sel ? CQOK : T.textMuted, fontWeight: sel ? 700 : 500, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+                                  <i className={`ti ${bt.icon}`} style={{ fontSize: 11, marginRight: 4 }} />{bt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Headline */}
+                          <div>
+                            <label style={{ fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 4 }}>Headline</label>
+                            <input value={signalDraft.headline || ""} onChange={e => setSignalDraft(d => ({ ...d, headline: e.target.value }))}
+                              placeholder="Brief headline…"
+                              style={{ width: "100%", padding: "7px 10px", borderRadius: 7, border: `1px solid ${T.cardBorder}`, fontSize: 13, fontFamily: "inherit", color: T.text, background: T.pageBg, boxSizing: "border-box" }} />
+                          </div>
+
+                          {/* Detail */}
+                          <div>
+                            <label style={{ fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 4 }}>Detail (optional)</label>
+                            <textarea value={signalDraft.detail || ""} onChange={e => setSignalDraft(d => ({ ...d, detail: e.target.value }))}
+                              placeholder="Supporting text…" rows={3}
+                              style={{ width: "100%", padding: "7px 10px", borderRadius: 7, border: `1px solid ${T.cardBorder}`, fontSize: 12, fontFamily: "inherit", color: T.text, background: T.pageBg, resize: "vertical", boxSizing: "border-box" }} />
+                          </div>
+
+                          {/* Date */}
+                          <div>
+                            <label style={{ fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 4 }}>Date</label>
+                            <input type="date" value={signalDraft.date || ""} onChange={e => setSignalDraft(d => ({ ...d, date: e.target.value }))}
+                              style={{ padding: "7px 10px", borderRadius: 7, border: `1px solid ${T.cardBorder}`, fontSize: 12, fontFamily: "inherit", color: T.text, background: T.pageBg }} />
+                          </div>
+
+                          {/* Actions */}
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={saveDraft} disabled={!signalDraft.headline?.trim()}
+                              style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: signalDraft.headline?.trim() ? CQOK : T.cardBorder, color: signalDraft.headline?.trim() ? "#fff" : T.textFaint, fontWeight: 700, fontSize: 12, cursor: signalDraft.headline?.trim() ? "pointer" : "default", fontFamily: "inherit" }}>
+                              {signalEditId === "__new__" ? "Publish" : "Save"}
+                            </button>
+                            <button onClick={() => { setSignalEditId(null); setSignalDraft({}); }}
+                              style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "none", color: T.textMuted, fontWeight: 600, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Item list */}
+                      {items.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "20px 14px", background: T.card, borderRadius: 10, border: `1px solid ${T.cardBorder}` }}>
+                          <i className="ti ti-mallet" style={{ fontSize: 24, color: T.textFaint, display: "block", marginBottom: 6 }} />
+                          <p style={{ margin: 0, fontSize: 12, color: T.textFaint }}>No items yet — add one above.</p>
+                        </div>
+                      ) : items.map((item, idx) => {
+                        const isEditing = signalEditId === item.id;
+                        return (
+                          <div key={item.id} style={{ background: T.card, border: `1px solid ${isEditing ? CQOK + "55" : T.cardBorder}`, borderRadius: 10, overflow: "hidden", opacity: isEditing ? 0.5 : 1 }}>
+                            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 12px" }}>
+                              <span style={{ width: 30, height: 30, borderRadius: 7, background: CQOK + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                                <i className={`ti ${item.icon}`} style={{ fontSize: 14, color: CQOK }} />
+                              </span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: T.text, lineHeight: 1.3 }}>{item.headline}</p>
+                                {item.detail && <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textMuted, lineHeight: 1.4 }}>{item.detail}</p>}
+                                <div style={{ display: "flex", gap: 6, marginTop: 4, alignItems: "center" }}>
+                                  <span style={{ fontSize: 9.5, fontWeight: 700, color: CQOK, textTransform: "uppercase", letterSpacing: "0.05em" }}>{item.label}</span>
+                                  <span style={{ fontSize: 10, color: T.textFaint }}>{item.date}</span>
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", gap: 4, flexShrink: 0, alignItems: "flex-start", marginTop: 1 }}>
+                                <button onClick={() => moveItem(idx, -1)} disabled={idx === 0} aria-label="Move up"
+                                  style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: `1px solid ${T.cardBorder}`, borderRadius: 5, cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? T.textFaint : T.textMuted, fontSize: 12, padding: 0 }}>
+                                  <i className="ti ti-chevron-up" />
+                                </button>
+                                <button onClick={() => moveItem(idx, 1)} disabled={idx === items.length - 1} aria-label="Move down"
+                                  style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: `1px solid ${T.cardBorder}`, borderRadius: 5, cursor: idx === items.length - 1 ? "default" : "pointer", color: idx === items.length - 1 ? T.textFaint : T.textMuted, fontSize: 12, padding: 0 }}>
+                                  <i className="ti ti-chevron-down" />
+                                </button>
+                                <button onClick={() => startEdit(item)} aria-label="Edit"
+                                  style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: `1px solid ${T.cardBorder}`, borderRadius: 5, cursor: "pointer", color: T.textMuted, fontSize: 12, padding: 0 }}>
+                                  <i className="ti ti-pencil" />
+                                </button>
+                                <button onClick={() => deleteItem(item.id)} aria-label="Delete"
+                                  style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "1px solid #FCA5A5", borderRadius: 5, cursor: "pointer", color: "#DC2626", fontSize: 12, padding: 0 }}>
+                                  <i className="ti ti-trash" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Reset to defaults */}
+                      <button onClick={() => {
+                        if (!confirm("Reset Signal track to built-in defaults?")) return;
+                        localStorage.removeItem(CQOK_BROADCAST_STORAGE_KEY);
+                        setSignalTick(t => t + 1);
+                        window.dispatchEvent(new Event("storage"));
+                      }}
+                        style={{ padding: "5px 11px", borderRadius: 7, border: `1px solid ${T.cardBorder}`, background: "none", color: T.textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit", alignSelf: "flex-start" }}>
+                        Reset to defaults
+                      </button>
+
+                    </div>
+                  </Section>
+                );
+              })()}
+
               {contentSection === "personas" && (
                 <Section title="Personas & roles" subtitle={`${ROLE_DEFS.length} roles defined. riverTypes controls which river cards each role sees — null means everything.`}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -35814,7 +36052,7 @@ function RoleTopNav({ role = "player", onNavigate }) {
 
 // ── LiveStripCard — glanceable card in the horizontal live strip ───────
 // Club Sign-In strip card — sized to match LiveStripCards with prominent logo.
-function SolidThinCard({ icon, logo, label, sublabel, color, onClick, badge, checkedIn = false, presence = "not_here", statusIcon, statusLabel }) {
+function SolidThinCard({ icon, logo, label, sublabel, color, onClick, badge, checkedIn = false, presence = "not_here", statusIcon, statusLabel, densityDots }) {
   const c = color || T.green;
   const [hovered, setHovered] = React.useState(false);
   const resting = presence === "here_resting";
@@ -35904,7 +36142,11 @@ function SolidThinCard({ icon, logo, label, sublabel, color, onClick, badge, che
 // circuit — avatar nodes sit on a glowing track, activity pulses between them.
 
 // ── Croquet? OK editorial broadcast — update these to push news/highlights ────
-const CROQUETOK_BROADCAST = [
+// Superadmin can edit these via the Admin → Content → Signal track panel.
+// Items are stored in localStorage under CQOK_BROADCAST_STORAGE_KEY; the
+// hardcoded array below is the fallback when no custom items have been saved.
+const CQOK_BROADCAST_STORAGE_KEY = "cqok_broadcast";
+const DEFAULT_CROQUETOK_BROADCAST = [
   {
     id: "b1",
     type: "highlight",   // highlight | news | clip | player-spotlight
@@ -35942,6 +36184,20 @@ const CROQUETOK_BROADCAST = [
     date: "2026-06-12",
   },
 ];
+
+function loadCQOKBroadcast() {
+  try {
+    const stored = localStorage.getItem(CQOK_BROADCAST_STORAGE_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch {}
+  return DEFAULT_CROQUETOK_BROADCAST;
+}
+function saveCQOKBroadcast(items) {
+  try {
+    localStorage.setItem(CQOK_BROADCAST_STORAGE_KEY, JSON.stringify(items));
+    window.dispatchEvent(new Event("storage"));
+  } catch {}
+}
 
 // ── CroquetOKTrackRow — editorial broadcast as a first-class circuit row ──────
 const CQOK_KEY = "__croquetok__";
@@ -36091,7 +36347,7 @@ function CircuitTrackWave({ hbPath, waveColor, active, intensity, sparkSpeed, an
   );
 }
 
-function CroquetOKTrackRow({ selected, setSelected, itemCount = CROQUETOK_BROADCAST.length, onTrackClick, animStagger = 0 }) {
+function CroquetOKTrackRow({ selected, setSelected, itemCount = DEFAULT_CROQUETOK_BROADCAST.length, onTrackClick, animStagger = 0 }) {
   const isSelected = selected === CQOK_KEY;
   const active   = itemCount > 0;
   const intensity = Math.min(itemCount / 5, 1);
@@ -36486,24 +36742,27 @@ function circuitEntityLabel(item) {
   return (item.name || "").split(" ")[0];
 }
 
-// Single source of truth for the Circuit unread badge — used by all three views
+// Single source of truth for the Circuit unread badge.
+// Prefers the value published by CircuitView (exact same formula), falls back to
+// a local estimate (distinct entity keys with new activity) before first visit.
 function getCircuitUnreadCount() {
   try {
+    const published = localStorage.getItem("circuit_total_unread");
+    if (published !== null) return parseInt(published, 10) || 0;
+    // Fallback before CircuitView has ever been opened
     const ps  = JSON.parse(localStorage.getItem("following_players") || "[]");
     const cs  = JSON.parse(localStorage.getItem("following_clubs")   || "[]");
     const act = getCircuitActivity(ps, cs);
     const seen      = new Set(JSON.parse(localStorage.getItem("circuit_seen")      || "[]"));
     const dismissed = new Set(JSON.parse(localStorage.getItem("circuit_dismissed") || "[]"));
-    const cqokDismissed = new Set(JSON.parse(localStorage.getItem("cqok_dismissed") || "[]"));
     const now = Date.now();
-    const actUnread = act.filter(a => {
-      const key     = a.entityKey || a.key;
-      const ageH    = (now - a.ts) / 3600000;
+    const activeKeys = new Set(act.filter(a => {
+      const key = a.entityKey || a.key;
+      const ageH = (now - a.ts) / 3600000;
       const itemKey = `${key}:${a.ts}`;
       return ageH < circuitHideAge(a.entity) * 24 && !seen.has(itemKey) && !dismissed.has(itemKey);
-    }).length;
-    const cqokUnread = CROQUETOK_BROADCAST.filter(item => !cqokDismissed.has(item.id)).length;
-    return actUnread + cqokUnread;
+    }).map(a => a.entityKey || a.key));
+    return activeKeys.size;
   } catch { return 0; }
 }
 
@@ -36642,7 +36901,7 @@ function CircuitNode({ item, selected, ageH, onClick, size = 40, idx }) {
   );
 }
 // ── CircuitTrackRow — stable top-level so it doesn't remount on every render ──
-function CircuitTrackRow({ nodes, label, activity, now, seen, dismissed = new Set(), selected, setSelected, markSeen, color: waveColor = CIRCUIT_SPARK, onTrackClick, animStagger = 0 }) {
+function CircuitTrackRow({ nodes, label, activity, now, seen, dismissed = new Set(), selected, setSelected, markSeen, color: waveColor = CIRCUIT_SPARK, onTrackClick, animStagger = 0, unreadCount }) {
   const scrollRef = useDragScroll();
 
   // Count unseen, undismissed signals for this row's nodes — drives wave intensity
@@ -36715,7 +36974,7 @@ function CircuitTrackRow({ nodes, label, activity, now, seen, dismissed = new Se
             active={unseenCount > 0} intensity={intensity}
             sparkSpeed={sparkSpeed} animStagger={animStagger} />
         </span>
-        <span style={{ fontSize: 9, color: T.textFaint }}>{nodes.length}</span>
+        <span style={{ fontSize: 9, color: T.textFaint }}>{unreadCount ?? nodes.length}</span>
       </button>
       <SwipeFade fadeColor={T.card} leftWidth={0} rightWidth={28} trackStyle={{ padding: "6px 12px 4px", cursor: "grab" }}>
         <div style={{ display: "flex", gap: 0, minWidth: "min-content" }}>
@@ -36865,7 +37124,7 @@ function TrackWaveBar({ intensities = {}, height = 44, sparks = true, sameAxis =
       }
     }
 
-    const BASE_DUR = 7500;
+    const BASE_DUR = sparks ? 4500 : 7500;
 
     function draw(ts) {
       if (!t0Ref.current) t0Ref.current = ts;
@@ -36880,12 +37139,13 @@ function TrackWaveBar({ intensities = {}, height = 44, sparks = true, sameAxis =
         if (!sparks) {
           // ── Micro mode: always-breathing wave, amplitude scales with intensity ──
           // Idle tracks breathe gently; active tracks breathe wide
-          const swing  = 0.20 + intensity * 0.72; // range of oscillation
-          const base   = 0.08 + intensity * 0.12;  // minimum amplitude
-          const breathe = base + swing * (0.5 + 0.5 * Math.sin(ts / 1300 + stagger * Math.PI * 2.5));
+          const swing   = 0.20 + intensity * 0.72; // range of oscillation
+          const base    = 0.08 + intensity * 0.12;  // minimum amplitude
+          const breathe = Math.min(1, base + swing * (0.5 + 0.5 * Math.sin(ts / 1300 + stagger * Math.PI * 2.5)));
+          const guard   = 1.5; // px clearance from canvas edge
           ctx.beginPath();
           pts.forEach(([x, y], i) => {
-            const ys = td.cy + (y - td.cy) * breathe;
+            const ys = Math.max(guard, Math.min(H - guard, td.cy + (y - td.cy) * breathe));
             i === 0 ? ctx.moveTo(x, ys) : ctx.lineTo(x, ys);
           });
           ctx.strokeStyle = rgba(0.18 + intensity * 0.42);
@@ -36967,6 +37227,12 @@ function CircuitView({ onBack, onNavigate }) {
   const [dismissed, setDismissed] = React.useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("circuit_dismissed") || "[]")); } catch { return new Set(); }
   });
+  const [broadcast, setBroadcast] = React.useState(() => loadCQOKBroadcast());
+  React.useEffect(() => {
+    function onStorage() { setBroadcast(loadCQOKBroadcast()); }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const followingPlayers = React.useMemo(() => {
     void tick;
@@ -37054,26 +37320,30 @@ function CircuitView({ onBack, onNavigate }) {
   // Per-track unread counts for compact wave bar
   const now = Date.now();
   function countUnread(nodes) {
-    return nodes.reduce((acc, node) => acc + activity.filter(a => {
+    // Count nodes (entities) that have at least one unseen, undismissed, in-window signal
+    // This matches what the user sees on screen — node circles, not raw signal counts
+    return nodes.filter(node => activity.some(a => {
       const key = a.entityKey || a.key;
       const itemKey = `${key}:${a.ts}`;
       const aH = (Date.now() - a.ts) / 3600000;
       return key === node.key && aH < circuitHideAge(a.entity) * 24 && !seen.has(itemKey) && !dismissed.has(itemKey);
-    }).length, 0);
+    })).length;
   }
   const peopleUnread = React.useMemo(() => countUnread(playerNodes), [playerNodes, activity, seen, dismissed]);
   const clubsUnread  = React.useMemo(() => countUnread(clubNodes),  [clubNodes,  activity, seen, dismissed]);
   const eventsUnread = React.useMemo(() => countUnread(eventNodes), [eventNodes, activity, seen, dismissed]);
   const gamesUnread  = React.useMemo(() => countUnread(gameNodes),  [gameNodes,  activity, seen, dismissed]);
-  const visibleBroadcast = CROQUETOK_BROADCAST.filter(item => !dismissedBroadcast.has(item.id));
+  const visibleBroadcast = broadcast.filter(item => !dismissedBroadcast.has(item.id));
   const cqokUnread = visibleBroadcast.length;
-  // Unified badge count — same formula as CircuitStripCard and micro card
-  const totalUnread = React.useMemo(() => getCircuitUnreadCount(), [seen, dismissed, dismissedBroadcast]);
+  // Total = entity nodes with new activity (matches nodes.length display in track rows)
+  const totalUnread = peopleUnread + clubsUnread + eventsUnread + gamesUnread;
 
-  // Auto-select first node only when no filter is active
+  // Publish totalUnread to localStorage so CircuitStripCard badge stays in sync
   React.useEffect(() => {
-    if (!selected && !trackFilter && activity.length > 0) setSelected(activity[0].entityKey || activity[0].key);
-  }, [activity.length]);
+    try { localStorage.setItem("circuit_total_unread", String(totalUnread)); window.dispatchEvent(new Event("storage")); } catch {}
+  }, [totalUnread]);
+
+  // No auto-selection — user chooses what to read via tracks or node clicks
 
   const isCQOKSelected = selected === CQOK_KEY || trackFilter === "cqok";
   const selectedNode = (isCQOKSelected || !selected) ? null : (allNodes.find(n => n.key === selected) || null);
@@ -37244,10 +37514,10 @@ function CircuitView({ onBack, onNavigate }) {
                 </div>
                 <div style={{ paddingTop: 6, paddingBottom: 6 }}>
                   <CroquetOKTrackRow selected={selected} setSelected={handleSetSelected} itemCount={cqokUnread} onTrackClick={() => handleSetTrackFilter("cqok")} animStagger={0.0} />
-                  <CircuitTrackRow nodes={playerNodes} label="People"  color={TRACK_COLORS.people} activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("people")} animStagger={0.2} />
-                  <CircuitTrackRow nodes={clubNodes}   label="Clubs"   color={TRACK_COLORS.clubs}  activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("clubs")}  animStagger={0.4} />
-                  <CircuitTrackRow nodes={eventNodes}  label="Events"  color={TRACK_COLORS.events} activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("events")} animStagger={0.6} />
-                  <CircuitTrackRow nodes={gameNodes}   label="Games"   color={TRACK_COLORS.games}  activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("games")}  animStagger={0.8} />
+                  <CircuitTrackRow nodes={playerNodes} label="People"  color={TRACK_COLORS.people} activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("people")} animStagger={0.2} unreadCount={peopleUnread} />
+                  <CircuitTrackRow nodes={clubNodes}   label="Clubs"   color={TRACK_COLORS.clubs}  activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("clubs")}  animStagger={0.4} unreadCount={clubsUnread} />
+                  <CircuitTrackRow nodes={eventNodes}  label="Events"  color={TRACK_COLORS.events} activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("events")} animStagger={0.6} unreadCount={eventsUnread} />
+                  <CircuitTrackRow nodes={gameNodes}   label="Games"   color={TRACK_COLORS.games}  activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("games")}  animStagger={0.8} unreadCount={gamesUnread} />
                 </div>
               </>
             ) : (
@@ -37316,6 +37586,16 @@ function CircuitView({ onBack, onNavigate }) {
 
           {/* ── Activity area ── */}
           <div style={{ padding: "6px 14px 40px" }}>
+
+            {/* ── Prompt card — shown before any track or node is selected ── */}
+            {!selected && !trackFilter && !isCQOKSelected && !isEmpty && (
+              <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, padding: "18px 16px", marginBottom: 10, animation: "circuit-fade-up 0.2s ease" }}>
+                <p style={{ margin: "0 0 4px", fontSize: 13.5, fontWeight: 700, color: T.text }}>What do you want to catch up on?</p>
+                <p style={{ margin: 0, fontSize: 12, color: T.textMuted, lineHeight: 1.55 }}>
+                  Tap a track above to filter by type — people, clubs, events — or tap a person or club directly to focus on just them.
+                </p>
+              </div>
+            )}
 
             {/* ── Croquet? OK broadcast panel — when its node is selected ── */}
             {isCQOKSelected && (
@@ -37491,11 +37771,14 @@ function CircuitView({ onBack, onNavigate }) {
                     const nodeColor = group.color || T.greenMid;
                     const initials = (group.name || "?").replace(/\s+Croquet\s+Club$/i,"").replace(/\s+CC$/i,"").split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
 
+                    const cardTrackColor = { player: TRACK_COLORS.people, club: TRACK_COLORS.clubs, event: TRACK_COLORS.events, game: TRACK_COLORS.games }[group.entity] || T.greenMid;
                     return (
-                      <div key={group.key} style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", animation: "circuit-fade-up 0.25s ease", animationFillMode: "both", animationDelay: `${gi * 0.05}s` }}>
+                      <div key={group.key} style={{ background: T.card, border: `1px solid ${cardTrackColor}33`, borderRadius: 12, overflow: "hidden", animation: "circuit-fade-up 0.25s ease", animationFillMode: "both", animationDelay: `${gi * 0.05}s` }}>
                         {/* When showing all (no filter), show a slim entity label at top of each group */}
-                        {!selected && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px 7px", borderBottom: `1px solid ${T.cardBorder}`, background: T.pageBg }}>
+                        {!selected && (() => {
+                          const trackColor = { player: TRACK_COLORS.people, club: TRACK_COLORS.clubs, event: TRACK_COLORS.events, game: TRACK_COLORS.games }[group.entity] || T.greenMid;
+                          return (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px 7px", borderBottom: `1px solid ${trackColor}33`, background: trackColor + "18" }}>
                             <span style={{ width: 18, height: 18, borderRadius: isClub ? 4 : "50%", background: nodeColor, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
                               {isClub && group.logo
                                 ? <img src={group.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", padding: 2 }} />
@@ -37504,7 +37787,8 @@ function CircuitView({ onBack, onNavigate }) {
                             <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{group.name}</span>
                             <span style={{ fontSize: 10, color: T.textFaint }}>{group.signals.length}</span>
                           </div>
-                        )}
+                          );
+                        })()}
 
                         {/* Signals stacked inside the group card */}
                         <div>
@@ -37684,7 +37968,7 @@ function CircuitStripCard({ onClick }) {
         }).length;
       }
       const cqokDismissed = new Set(JSON.parse(localStorage.getItem("cqok_dismissed") || "[]"));
-      const cqokVisible = CROQUETOK_BROADCAST.filter(item => !cqokDismissed.has(item.id)).length;
+      const cqokVisible = loadCQOKBroadcast().filter(item => !cqokDismissed.has(item.id)).length;
       setTrackIntensities({
         cqok:   Math.min(cqokVisible / 5, 1),
         people: Math.min(countEnt("player") / 8, 1),
@@ -37705,7 +37989,7 @@ function CircuitStripCard({ onClick }) {
         background: BG,
         border: `1px solid #E8D99A`,
         borderTop: `3px solid ${CIRCUIT_SPARK}`,
-        borderRadius: 10, padding: "10px 12px",
+        borderRadius: 10, padding: "10px 12px 34px",
         minWidth: 128, maxWidth: 158, flexShrink: 0,
         textAlign: "left", cursor: "pointer",
         WebkitTapHighlightColor: "transparent",
@@ -37738,8 +38022,8 @@ function CircuitStripCard({ onClick }) {
         )}
       </span>
 
-      {/* Micro wave bar — absolutely positioned at bottom, doesn't add card height */}
-      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 20, overflow: "hidden" }}>
+      {/* Micro wave bar — 4 px clear of card bottom edge */}
+      <div style={{ position: "absolute", bottom: 8, left: 8, right: 8, height: 18, overflow: "hidden" }}>
         <CircuitMicroBar intensities={trackIntensities} />
       </div>
     </button>
@@ -37954,6 +38238,49 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
   const isHere = presence === "here_ready" || presence === "here_resting";
   const presenceMeta = PRESENCE[presence] || null;
 
+  // Club density — how many members are active / resting at the home club right now.
+  const clubDensity = React.useMemo(() => {
+    void presenceTick;
+    if (!clubBrand.name) return { active: 0, resting: 0 };
+    try {
+      const slug = clubBrand.name.toLowerCase().replace(/\s+/g, "_");
+      const t = new Date();
+      const dk = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
+      const dayStartHour = 3;
+      const dayStart = new Date(); dayStart.setHours(dayStartHour, 0, 0, 0);
+      if (Date.now() < dayStart.getTime()) dayStart.setDate(dayStart.getDate() - 1);
+      const checkIns = JSON.parse(localStorage.getItem("checkIns_" + slug) || "[]");
+      // Most recent check-in per person today
+      const hereMap = new Map();
+      checkIns.forEach(c => {
+        const ts = Date.parse(c.timestamp);
+        if (!isNaN(ts) && ts >= dayStart.getTime()) {
+          const key = (c.name || "").trim().toLowerCase();
+          if (!hereMap.has(key)) hereMap.set(key, c);
+        }
+      });
+      const present = Array.from(hereMap.values());
+      // Split active vs resting via the live session
+      let sess = {};
+      try { sess = JSON.parse(localStorage.getItem(`liveSession_${slug}_${dk}`) || "null") || {}; } catch {}
+      const awayOverride = sess.awayOverride || {};
+      const activity = sess.activity || {};
+      const seated = new Set();
+      (sess.assignments || []).forEach(a => (a.slots || []).forEach(s => { if (s) seated.add(s); }));
+      const timeoutMs = 4 * 3600 * 1000;
+      const now = Date.now();
+      let active = 0, resting = 0;
+      present.forEach(c => {
+        const id = "playerProfile_" + (c.name || "").trim().toLowerCase().replace(/\s+/g, "_");
+        if (Object.prototype.hasOwnProperty.call(awayOverride, id) && awayOverride[id]) return;
+        const la = Math.max(c.timestamp ? (Date.parse(c.timestamp) || 0) : 0, activity[id] || 0);
+        const isActive = seated.has(id) || !(la > 0 && (now - la) > timeoutMs);
+        if (isActive) active++; else resting++;
+      });
+      return { active, resting };
+    } catch { return { active: 0, resting: 0 }; }
+  }, [clubBrand.name, presenceTick]);
+
   const checkInCard = !!homeClub ? {
     icon: "ti-map-pin-check",
     logo: clubBrand.logo,
@@ -37965,6 +38292,7 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
     presence,
     statusIcon: presenceMeta ? presenceMeta.icon : "ti-circle-check",
     statusLabel: presenceMeta ? presenceMeta.short : "At the club",
+    densityDots: clubDensity,
     // Not here → one-tap check in. Here → open the compact status sheet.
     onClick: isHere ? () => setPresenceSheet(true) : () => checkIn(),
   } : null;
