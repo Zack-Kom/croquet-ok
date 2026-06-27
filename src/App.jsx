@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import ReactDOM from 'react-dom';
+import QRCode from 'qrcode';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
+const OPENING_DIAGRAMS = {};
+const LEAVE_DIAGRAMS = {};
 
 const DB_VERSION = 2;
 
@@ -14332,6 +14338,83 @@ function StrategyView({ onBack, grassStyle = "diamond", grassColor = "green", gr
           grassColor={grassColor}
         />
       )}
+
+      {/* Fullscreen card modal — wide mode */}
+      {selectedCard && ReactDOM.createPortal((() => {
+        const { card: sc, section: ss } = selectedCard;
+        const cards = ss.cards || [];
+        const cardIdx = cards.findIndex(c => (c.id != null ? c.id === sc.id : c.title === sc.title));
+        const hasPrev = cardIdx > 0;
+        const hasNext = cardIdx < cards.length - 1;
+        function goTo(idx) { setSelectedCard({ card: cards[idx], section: ss }); }
+        const hcDiag = OPENING_DIAGRAMS[sc.title] || LEAVE_DIAGRAMS[sc.title];
+        const hasCustDiag = (() => { try { return !!localStorage.getItem(strategyDiagramKey(sc.title)); } catch { return false; } })();
+        const hasDiag = hcDiag || hasCustDiag;
+        return (
+          <div onClick={() => setSelectedCard(null)} style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.5)", display: "flex", flexDirection: "column", padding: "48px 10px 10px" }}>
+            <div onClick={e => e.stopPropagation()} style={{ flex: 1, background: T.pageBg, borderRadius: 16, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.3)", minHeight: 0 }}>
+              <div style={{ background: ss.color, padding: "0 14px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, minHeight: 52, borderRadius: "16px 16px 0 0" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sc.title}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.65)" }}>{ss.label} · {cardIdx + 1} / {cards.length}</p>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  {ss.editable && (
+                    <button onClick={() => { handleDeleteCard(sc.id); setSelectedCard(null); }}
+                      style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                      <i className="ti ti-trash" style={{ fontSize: 15 }} aria-hidden="true" />
+                    </button>
+                  )}
+                  <button onClick={() => hasPrev && goTo(cardIdx - 1)}
+                    style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: hasPrev ? "pointer" : "default", opacity: hasPrev ? 1 : 0.35 }}>
+                    <i className="ti ti-chevron-left" style={{ fontSize: 16 }} aria-hidden="true" />
+                  </button>
+                  <button onClick={() => hasNext && goTo(cardIdx + 1)}
+                    style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: hasNext ? "pointer" : "default", opacity: hasNext ? 1 : 0.35 }}>
+                    <i className="ti ti-chevron-right" style={{ fontSize: 16 }} aria-hidden="true" />
+                  </button>
+                  <button onClick={() => setSelectedCard(null)}
+                    style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                    <i className="ti ti-x" style={{ fontSize: 16 }} aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "16px 16px 20px", gap: 12, overflowY: "auto" }}>
+                {sc.isometric ? (
+                  <>
+                    <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", alignItems: "stretch" }}>
+                      <IsometricLawnDiagram data={sc.isometric} grassStyle={grassStyle} grassColor={grassColor} scene={scene} grubLevel={grubLevel} waterLevel={waterLevel} />
+                    </div>
+                    {sc.body && <p style={{ margin: 0, fontSize: 14, color: T.text, lineHeight: 1.6, flexShrink: 0 }}>{sc.body}</p>}
+                  </>
+                ) : sc.animated ? (
+                  <>
+                    <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", alignItems: "stretch" }}>
+                      <AnimatedIsometricDiagram data={sc.animated} grassStyle={grassStyle} grassColor={grassColor} scene={scene} grubLevel={grubLevel} waterLevel={waterLevel} />
+                    </div>
+                    {sc.body && <p style={{ margin: 0, fontSize: 14, color: T.text, lineHeight: 1.6, flexShrink: 0 }}>{sc.body}</p>}
+                  </>
+                ) : hasDiag ? (
+                  <>
+                    <div style={{ flex: "1 1 0", minHeight: 0 }}>
+                      <StrategyDiagram key={`${sc.title}-${diagramVersion}`} diagram={hcDiag || null} title={sc.title} grassStyle={grassStyle} grassColor={grassColor} grassLength={grassLength} grubLevel={grubLevel} waterLevel={waterLevel} scene={scene} />
+                    </div>
+                    <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <button onClick={() => setEditingDiagram({ title: sc.title, diagram: hcDiag || null })}
+                        style={{ fontSize: 12, color: T.greenMid, background: "none", border: `1px solid ${T.greenMid}`, borderRadius: 6, cursor: "pointer", padding: "5px 12px", display: "inline-flex", alignItems: "center", gap: 5, alignSelf: "flex-start" }}>
+                        <i className="ti ti-pencil" aria-hidden="true" /> Edit diagram
+                      </button>
+                      {sc.body && <p style={{ margin: 0, fontSize: 14, color: T.text, lineHeight: 1.6 }}>{sc.body}</p>}
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 14, color: T.text, lineHeight: 1.6 }}>{sc.body || <em style={{ color: T.textFaint }}>No content yet.</em>}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })(), document.body)}
     </div>
   );
 }
@@ -33812,6 +33895,7 @@ function ToolsView({ onBack }) {
     { id: "timer",    label: "Clock",             icon: "ti-clock",        desc: "Time a game or turn" },
     { id: "hoop",     label: "Hoop Ticker",       icon: "ti-circle-check", desc: "Quick score tracker" },
     { id: "lawn",     label: "Snapshot",          icon: "ti-layout",       desc: "Record ball positions" },
+    { id: "swing",    label: "Swing Tracker",     icon: "ti-rotate-clockwise", desc: "Map mallet path & tempo" },
   ];
 
   // ── Coin Flip ────────────────────────────────────────────────────────────
@@ -34771,7 +34855,375 @@ function ToolsView({ onBack }) {
   }
 
 
-  const TOOL_COMPONENTS = { coin: CoinFlip, timer: GameTimer, hoop: HoopCount, bisque: BisqueCalc, handicap: IndexLookup, lawn: CanvasConfig };
+  // ── Swing Tracker ─────────────────────────────────────────────────────────
+  function SwingTracker() {
+    const swingRef  = React.useRef(null);
+    const rhythmRef = React.useRef(null);
+    const stateRef  = React.useRef({
+      active: false, recording: false,
+      swingPoints: [], allSwings: [], peakTimes: [],
+      accelHistory: [], lastPeakDir: null, swingCount: 0,
+      lpX: 0, lpY: 0, lpZ: 0, alpha: 0.18,
+      baseX: null, baseY: null, baseSet: false, calBuffer: [],
+      evtCount: 0, sensorOk: false, sensorCheckTimer: null,
+      rafId: null,
+    });
+    const [phase,    setPhase]    = React.useState("start"); // start | waiting | live | demo | error
+    const [recoding, setRecoding] = React.useState(false);
+    const [dbg,      setDbg]      = React.useState({ ax:"—", ay:"—", az:"—", evt:0 });
+    const [stats,    setStats]    = React.useState({ tempo:"—", straight:"—", rhythm:"—" });
+    const [score,    setScore]    = React.useState(null);
+    const [swingCnt, setSwingCnt] = React.useState(0);
+    const [cleared,  setCleared]  = React.useState(false); // dummy to trigger clear
+
+    const S = stateRef.current;
+
+    // canvas contexts via callback refs so we always have fresh handles
+    function getCtx(ref) { return ref.current ? ref.current.getContext("2d") : null; }
+
+    function resizeCanvases() {
+      const dpr = window.devicePixelRatio || 1;
+      if (swingRef.current) {
+        const el = swingRef.current;
+        const w = el.offsetWidth, h = el.offsetHeight;
+        el.width = w * dpr; el.height = h * dpr;
+        const ctx = el.getContext("2d"); ctx.scale(dpr, dpr);
+      }
+      if (rhythmRef.current) {
+        const el = rhythmRef.current;
+        const w = el.offsetWidth || 200, h = el.offsetHeight || 36;
+        el.width = w * dpr; el.height = h * dpr;
+        const ctx = el.getContext("2d"); ctx.scale(dpr, dpr);
+      }
+    }
+
+    function detectPeak(val, now) {
+      const thresh = 1.2;
+      const dir = val > thresh ? 1 : val < -thresh ? -1 : 0;
+      if (dir !== 0 && dir !== S.lastPeakDir) {
+        S.peakTimes.push(now);
+        S.lastPeakDir = dir;
+        if (S.peakTimes.length >= 2) {
+          const dt = S.peakTimes[S.peakTimes.length-1] - S.peakTimes[S.peakTimes.length-2];
+          const bpm = Math.round(30000 / dt);
+          setStats(s => ({ ...s, tempo: bpm, tempoGood: bpm >= 22 && bpm <= 55 }));
+        }
+      }
+    }
+
+    function scoreSwing(pts) {
+      if (pts.length < 10) return null;
+      const ys = pts.map(p => p.y), xs = pts.map(p => p.x);
+      const yr = Math.max(...ys) - Math.min(...ys) || 1;
+      const xr = Math.max(...xs) - Math.min(...xs) || 0.01;
+      const straight = Math.max(0, Math.min(100, Math.round(100 * (1 - (xr / (yr + xr)) * 2))));
+      let rhythm = 100;
+      if (S.peakTimes.length >= 3) {
+        const iv = [];
+        for (let i = 1; i < S.peakTimes.length; i++) iv.push(S.peakTimes[i] - S.peakTimes[i-1]);
+        const mean = iv.reduce((a, b) => a + b, 0) / iv.length;
+        const cv = Math.sqrt(iv.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / iv.length) / mean;
+        rhythm = Math.max(0, Math.min(100, Math.round(100 * (1 - cv * 2))));
+      }
+      setStats(s => ({ ...s, straight: straight + "%", straightGood: straight >= 75, rhythm: rhythm + "%", rhythmGood: rhythm >= 70 }));
+      return Math.round(straight * 0.6 + rhythm * 0.4);
+    }
+
+    function drawSwing() {
+      const el = swingRef.current; if (!el) return;
+      const ctx = getCtx(swingRef);
+      const W = el.clientWidth, H = el.clientHeight;
+      ctx.clearRect(0, 0, W, H);
+      ctx.strokeStyle = "#111f15"; ctx.lineWidth = 0.5;
+      for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+      for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+      const cx = W/2, cy = H/2;
+      ctx.strokeStyle = "#1e3325"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx-12, cy); ctx.lineTo(cx+12, cy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx, cy-12); ctx.lineTo(cx, cy+12); ctx.stroke();
+      S.allSwings.forEach((sw, i) => {
+        const age = S.allSwings.length - i;
+        if (sw.length < 2) return;
+        ctx.beginPath(); ctx.moveTo(sw[0].x, sw[0].y);
+        sw.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.strokeStyle = `rgba(45,106,63,${Math.max(0.04, 0.2 - age * 0.04)})`; ctx.lineWidth = 1.5; ctx.stroke();
+      });
+      const pts = S.swingPoints;
+      if (pts.length > 1) {
+        for (let i = 1; i < pts.length; i++) {
+          const t = i / pts.length;
+          ctx.beginPath(); ctx.moveTo(pts[i-1].x, pts[i-1].y); ctx.lineTo(pts[i].x, pts[i].y);
+          ctx.strokeStyle = `rgba(232,240,227,${t * 0.9 + 0.1})`; ctx.lineWidth = 2.5 * t + 0.5; ctx.lineCap = "round"; ctx.stroke();
+        }
+        const last = pts[pts.length-1];
+        ctx.beginPath(); ctx.arc(last.x, last.y, 4, 0, Math.PI*2);
+        ctx.fillStyle = S.recording ? "#e6a817" : "#3d8f55"; ctx.fill();
+      }
+    }
+
+    function drawRhythm() {
+      const el = rhythmRef.current; if (!el) return;
+      const ctx = getCtx(rhythmRef);
+      const W = el.clientWidth || 200, H = el.clientHeight || 36;
+      ctx.clearRect(0, 0, W, H);
+      const hist = S.accelHistory; if (hist.length < 2) return;
+      const vals = hist.map(h => h.v);
+      const mx = Math.max(...vals.map(Math.abs), 1);
+      ctx.beginPath();
+      hist.forEach((h, i) => {
+        const x = (i / (hist.length - 1)) * W;
+        const y = H/2 - (h.v / mx) * (H/2 - 3);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = "#3d8f55"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.lineTo(W, H/2); ctx.lineTo(0, H/2); ctx.closePath();
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, "rgba(45,106,63,0.25)"); g.addColorStop(1, "rgba(45,106,63,0)");
+      ctx.fillStyle = g; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
+      ctx.strokeStyle = "#1e3325"; ctx.lineWidth = 0.75; ctx.stroke();
+    }
+
+    function renderLoop() {
+      if (!S.active) return;
+      drawSwing(); drawRhythm();
+      S.rafId = requestAnimationFrame(renderLoop);
+    }
+
+    function handleMotion(e) {
+      S.evtCount++;
+      if (!S.sensorOk && S.evtCount >= 3) {
+        clearTimeout(S.sensorCheckTimer);
+        S.sensorOk = true;
+        setPhase("live");
+      }
+      const a = e.acceleration && e.acceleration.x !== null ? e.acceleration : e.accelerationIncludingGravity;
+      if (!a) return;
+      const rawX = a.x || 0, rawY = a.y || 0, rawZ = a.z || 0;
+      const al = S.alpha;
+      S.lpX = al * rawX + (1-al) * S.lpX;
+      S.lpY = al * rawY + (1-al) * S.lpY;
+      S.lpZ = al * rawZ + (1-al) * S.lpZ;
+      setDbg({ ax: S.lpX.toFixed(1), ay: S.lpY.toFixed(1), az: S.lpZ.toFixed(1), evt: S.evtCount });
+      if (!S.baseSet) {
+        S.calBuffer.push({ x: S.lpX, y: S.lpY });
+        if (S.calBuffer.length >= 40) {
+          S.baseX = S.calBuffer.reduce((s, v) => s + v.x, 0) / S.calBuffer.length;
+          S.baseY = S.calBuffer.reduce((s, v) => s + v.y, 0) / S.calBuffer.length;
+          S.baseSet = true;
+          setPhase("live");
+        }
+        return;
+      }
+      const ax = S.lpX - S.baseX, ay = S.lpY - S.baseY;
+      const now = Date.now();
+      S.accelHistory.push({ t: now, v: ay });
+      if (S.accelHistory.length > 400) S.accelHistory.shift();
+      if (!S.recording) return;
+      const el = swingRef.current;
+      if (!el) return;
+      const W = el.clientWidth, H = el.clientHeight;
+      S.swingPoints.push({ x: W/2 + ax * 8, y: H/2 - ay * 8, t: now, ax, ay });
+      detectPeak(ay, now);
+    }
+
+    async function startReal() {
+      setPhase("waiting");
+      if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+        try {
+          const res = await DeviceMotionEvent.requestPermission();
+          if (res !== "granted") { setPhase("error"); return; }
+        } catch(e) { setPhase("error"); return; }
+      }
+      if (typeof DeviceMotionEvent === "undefined") { startDemo(); return; }
+      setTimeout(() => { if (S.evtCount === 0) setPhase("error"); }, 3000);
+      S.active = true;
+      window.addEventListener("devicemotion", handleMotion, true);
+      resizeCanvases();
+      renderLoop();
+    }
+
+    function startDemo() {
+      S.active = true; S.baseSet = true; S.baseX = 0; S.baseY = 0;
+      setPhase("demo");
+      resizeCanvases();
+      let t = 0;
+      S.demoInterval = setInterval(() => {
+        t += 0.08;
+        const ay = Math.sin(t) * 6;
+        const ax = Math.sin(t * 1.7) * 0.5 + (Math.random() - 0.5) * 0.2;
+        const now = Date.now();
+        S.evtCount++;
+        setDbg({ ax: ax.toFixed(1), ay: ay.toFixed(1), az: "0.0", evt: S.evtCount });
+        S.accelHistory.push({ t: now, v: ay });
+        if (S.accelHistory.length > 400) S.accelHistory.shift();
+        if (!S.recording) return;
+        const el = swingRef.current; if (!el) return;
+        const W = el.clientWidth, H = el.clientHeight;
+        S.swingPoints.push({ x: W/2 + ax * 8, y: H/2 - ay * 8, t: now, ax, ay });
+        detectPeak(ay, now);
+      }, 30);
+      renderLoop();
+    }
+
+    function toggleRecord() {
+      if (!S.recording) {
+        S.recording = true; S.swingPoints = []; S.peakTimes = []; S.lastPeakDir = null;
+        setRecoding(true);
+      } else {
+        S.recording = false;
+        if (S.swingPoints.length > 5) {
+          S.allSwings.push([...S.swingPoints]);
+          if (S.allSwings.length > 5) S.allSwings.shift();
+          S.swingCount++;
+          setSwingCnt(S.swingCount);
+          const sc2 = scoreSwing(S.swingPoints);
+          if (sc2 !== null) { setScore(sc2); setTimeout(() => setScore(null), 2400); }
+        }
+        S.swingPoints = [];
+        setRecoding(false);
+      }
+    }
+
+    function clearAll() {
+      S.allSwings = []; S.swingPoints = []; S.swingCount = 0; S.peakTimes = []; S.accelHistory = [];
+      setSwingCnt(0); setScore(null); setCleared(c => !c);
+      setStats({ tempo:"—", straight:"—", rhythm:"—" });
+    }
+
+    React.useEffect(() => {
+      return () => {
+        S.active = false;
+        window.removeEventListener("devicemotion", handleMotion, true);
+        clearTimeout(S.sensorCheckTimer);
+        clearInterval(S.demoInterval);
+        cancelAnimationFrame(S.rafId);
+      };
+    }, []);
+
+    const isLive   = phase === "live" || phase === "demo";
+    const dotColor = phase === "live" || phase === "demo" ? "#3d8f55" : phase === "waiting" ? "#e6a817" : phase === "error" ? "#d94f3a" : "#7a9b80";
+    const dotAnim  = phase === "waiting" ? "pulse 0.8s infinite" : "none";
+
+    const G = {
+      bg:    "#0d1f13",
+      card:  "#0a1a0e",
+      text:  "#e8f0e3",
+      muted: "#7a9b80",
+      green: "#3d8f55",
+      amber: "#e6a817",
+      red:   "#d94f3a",
+      mono:  "'Space Mono', monospace",
+    };
+    const scoreColor = score === null ? G.green : score >= 75 ? G.green : score >= 50 ? G.amber : G.red;
+
+    const dbgBar = {
+      display: "flex", borderBottom: "1px solid #1e3325", background: G.card, fontFamily: G.mono,
+    };
+    const dbgCell = { flex: 1, padding: "5px 8px", borderRight: "1px solid #1e3325" };
+
+    return (
+      <div style={{ background: G.bg, fontFamily: G.mono, color: G.text, position: "relative", userSelect: "none" }}>
+        {/* Status row */}
+        <div style={{ padding: "8px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1e3325" }}>
+          <span style={{ fontSize: 11, color: G.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+            Attach phone to mallet &amp; swing
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, display: "inline-block", boxShadow: isLive ? `0 0 6px ${dotColor}` : "none", animation: dotAnim }} />
+            <span style={{ fontSize: 10, color: G.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              {phase === "start" ? "ready" : phase === "waiting" ? "calibrating…" : phase === "error" ? "no sensor" : phase}
+            </span>
+          </div>
+        </div>
+
+        {/* Debug bar */}
+        <div style={dbgBar}>
+          {[["Accel X", dbg.ax], ["Accel Y", dbg.ay], ["Accel Z", dbg.az], ["Events", dbg.evt]].map(([k, v]) => (
+            <div key={k} style={dbgCell}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: isLive ? G.green : G.text }}>{v}</div>
+              <div style={{ fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: G.muted, marginTop: 1 }}>{k}</div>
+            </div>
+          ))}
+          <div style={{ ...dbgCell, borderRight: "none" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: isLive ? G.green : G.text }}>{swingCnt}</div>
+            <div style={{ fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: G.muted, marginTop: 1 }}>Swings</div>
+          </div>
+        </div>
+
+        {/* Canvas */}
+        <div style={{ position: "relative", height: 200, background: "#0d1f13", overflow: "hidden" }}>
+          <canvas ref={swingRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
+          <span style={{ position: "absolute", top: 8, left: 10, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: G.muted }}>Swing path</span>
+          {score !== null && (
+            <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center", pointerEvents: "none" }}>
+              <div style={{ fontFamily: "'Playfair Display', 'Libre Baskerville', Georgia, serif", fontSize: 52, fontWeight: 700, lineHeight: 1, color: scoreColor }}>{score}</div>
+              <div style={{ fontSize: 9, letterSpacing: "0.15em", color: G.muted, marginTop: 4, textTransform: "uppercase" }}>swing score</div>
+            </div>
+          )}
+          {phase === "start" && (
+            <div style={{ position: "absolute", inset: 0, background: "rgba(8,15,10,0.92)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={startReal} style={{ background: G.green, color: "#fff", border: "none", borderRadius: 6, padding: "11px 20px", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", fontFamily: G.mono }}>
+                  Start tracking
+                </button>
+                <button onClick={startDemo} style={{ background: "#1a2e1f", color: G.muted, border: "1px solid #2a4030", borderRadius: 6, padding: "11px 20px", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", fontFamily: G.mono }}>
+                  Demo
+                </button>
+              </div>
+              <p style={{ fontSize: 10, color: "#2a4030", textAlign: "center", maxWidth: 240, lineHeight: 1.6 }}>
+                iOS: tap Start tracking for permission prompt<br />
+                Android: requires HTTPS to access sensors
+              </p>
+            </div>
+          )}
+          {phase === "error" && (
+            <div style={{ position: "absolute", inset: 0, background: "rgba(8,15,10,0.92)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: "1rem" }}>
+              <p style={{ fontSize: 11, color: "#f09080", textAlign: "center", lineHeight: 1.6 }}>No motion data received.<br />Try Demo mode or open over HTTPS.</p>
+              <button onClick={startDemo} style={{ background: "#1a3a55", color: "#e8f0e3", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", fontFamily: G.mono }}>
+                Demo mode
+              </button>
+            </div>
+          )}
+          {phase === "waiting" && (
+            <div style={{ position: "absolute", bottom: 8, left: 0, right: 0, textAlign: "center" }}>
+              <span style={{ fontSize: 9, letterSpacing: "0.1em", color: "#2a4030", textTransform: "uppercase" }}>Hold still 3 sec to calibrate · then swing</span>
+            </div>
+          )}
+        </div>
+
+        {/* Stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", borderTop: "1px solid #1e3325", borderBottom: "1px solid #1e3325" }}>
+          {[["Tempo BPM", stats.tempo, stats.tempoGood], ["Straight", stats.straight, stats.straightGood], ["Rhythm", stats.rhythm, stats.rhythmGood]].map(([k, v, good]) => (
+            <div key={k} style={{ padding: "8px 10px", borderRight: "1px solid #1e3325" }}>
+              <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1, color: v === "—" ? G.text : good ? G.green : G.amber }}>{v}</div>
+              <div style={{ fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: G.muted, marginTop: 3 }}>{k}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Rhythm canvas */}
+        <div style={{ padding: "6px 12px 4px", borderBottom: "1px solid #1e3325" }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: G.muted, marginBottom: 3 }}>Swing rhythm</div>
+          <canvas ref={rhythmRef} style={{ width: "100%", height: 36, display: "block" }} />
+        </div>
+
+        {/* Controls */}
+        <div style={{ padding: "10px 14px", display: "flex", gap: 10 }}>
+          <button onClick={toggleRecord} disabled={!isLive}
+            style={{ flex: 1, padding: "11px 8px", border: "none", borderRadius: 4, fontFamily: G.mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", cursor: isLive ? "pointer" : "not-allowed", background: recoding ? "#7a2020" : G.green, color: "#fff", opacity: isLive ? 1 : 0.4, transition: "background 0.15s" }}>
+            {recoding ? "Stop recording" : "Record swing"}
+          </button>
+          <button onClick={clearAll} disabled={!isLive || (swingCnt === 0 && stats.tempo === "—")}
+            style={{ flex: 1, padding: "11px 8px", border: "1px solid #2a4030", borderRadius: 4, fontFamily: G.mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", background: "#1a2e1f", color: G.muted, opacity: isLive ? 1 : 0.4 }}>
+            Clear
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const TOOL_COMPONENTS = { coin: CoinFlip, timer: GameTimer, hoop: HoopCount, bisque: BisqueCalc, handicap: IndexLookup, lawn: CanvasConfig, swing: SwingTracker };
 
   // Tools split into two groups: interactive tools (shown inline below the strip)
   // and reference links (open externally). The strip leads with the interactive set.
@@ -39301,6 +39753,7 @@ function SecMembersView({ onBack }) {
 
           function savePkgs(next) {
             saveClubProfile(clubId, { ...pkgProfile, membershipPackages: next });
+            setTick(t => t + 1);
           }
           function addPackage() {
             savePkgs([...pkgs, { name: "", subtitle: "", fee: "", period: "per year", description: "", includes: [""], note: "", contactPrompt: "", icon: pkgs.length === 0 ? "ti-award" : "ti-seedling" }]);
@@ -46791,13 +47244,10 @@ function ShareModal({ game, onClose, shareUrl: shareUrlProp, label: labelProp, h
   const gameLabel = labelProp || ([game?.playerAB, game?.playerRY].filter(Boolean).join(" vs ") || `Game ${(game?.id || "").slice(-4)}`);
 
   React.useEffect(() => {
-    if (typeof QRCode === "undefined") return;
     QRCode.toDataURL(shareUrl, {
       width: 240, margin: 2,
       color: { dark: "#1A4A2E", light: "#FAFFF7" },
-    }, (err, url) => {
-      if (!err) setQrDataUrl(url);
-    });
+    }).then(url => setQrDataUrl(url)).catch(() => {});
   }, [shareUrl]);
 
   function copyUrl() {
@@ -46838,7 +47288,7 @@ function ShareModal({ game, onClose, shareUrl: shareUrlProp, label: labelProp, h
             ) : (
               <div style={{ width: 200, height: 200, borderRadius: 10, border: `1.5px dashed ${T.lawn}`, background: T.greenPale, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, color: T.textMuted, fontSize: 12 }}>
                 <i className="ti ti-qrcode" style={{ fontSize: 32, color: T.greenMid }} aria-hidden="true" />
-                {typeof QRCode === "undefined" ? "QR unavailable offline" : "Generating…"}
+                {"Generating…"}
               </div>
             )}
             <p style={{ margin: "10px 0 0", fontSize: 11, color: T.textFaint, textAlign: "center" }}>Scan to open this game</p>
@@ -58467,7 +58917,6 @@ function GamePDFExportModal({ game, grassStyle, grassColor, grassLength, grubLev
       // Give React a moment to paint the hidden snapshot SVGs
       await new Promise(r => setTimeout(r, 300));
 
-      const { jsPDF } = window.jspdf;
       const PW = 210, PH = 297;  // A4 mm
       const ML = 14, MR = 14, MT = 0, MB = 8;
       const CW_PDF = PW - ML - MR;   // content width mm
