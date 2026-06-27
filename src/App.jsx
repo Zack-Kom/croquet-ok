@@ -36128,7 +36128,6 @@ function CroquetOKTrackRow({ selected, setSelected, itemCount = CROQUETOK_BROADC
             active={active} intensity={intensity}
             sparkSpeed={sparkSpeed} animStagger={animStagger} />
         </span>
-        <span style={{ fontSize: 9, color: waveColor, fontWeight: 700, opacity: active ? 1 : 0.4 }}>{itemCount}</span>
       </button>
 
       {/* Single special node */}
@@ -36506,6 +36505,27 @@ function circuitEntityLabel(item) {
   if (item.entity === "club") return (item.name || "").replace(/\s+Croquet\s+Club$/i, "").replace(/\s+CC$/i, "");
   // player: first name
   return (item.name || "").split(" ")[0];
+}
+
+// Single source of truth for the Circuit unread badge — used by all three views
+function getCircuitUnreadCount() {
+  try {
+    const ps  = JSON.parse(localStorage.getItem("following_players") || "[]");
+    const cs  = JSON.parse(localStorage.getItem("following_clubs")   || "[]");
+    const act = getCircuitActivity(ps, cs);
+    const seen      = new Set(JSON.parse(localStorage.getItem("circuit_seen")      || "[]"));
+    const dismissed = new Set(JSON.parse(localStorage.getItem("circuit_dismissed") || "[]"));
+    const cqokDismissed = new Set(JSON.parse(localStorage.getItem("cqok_dismissed") || "[]"));
+    const now = Date.now();
+    const actUnread = act.filter(a => {
+      const key     = a.entityKey || a.key;
+      const ageH    = (now - a.ts) / 3600000;
+      const itemKey = `${key}:${a.ts}`;
+      return ageH < circuitHideAge(a.entity) * 24 && !seen.has(itemKey) && !dismissed.has(itemKey);
+    }).length;
+    const cqokUnread = CROQUETOK_BROADCAST.filter(item => !cqokDismissed.has(item.id)).length;
+    return actUnread + cqokUnread;
+  } catch { return 0; }
 }
 
 // ── SwipeableDismiss — wraps a signal row with left-swipe to dismiss ───────────
@@ -36889,8 +36909,8 @@ function TrackWaveBar({ intensities = {}, height = 44, sparks = true, sameAxis =
             const ys = td.cy + (y - td.cy) * breathe;
             i === 0 ? ctx.moveTo(x, ys) : ctx.lineTo(x, ys);
           });
-          ctx.strokeStyle = rgba(active ? 0.55 : 0.20);
-          ctx.lineWidth = active ? 0.9 : 0.6;
+          ctx.strokeStyle = rgba(active ? 0.60 : 0.22);
+          ctx.lineWidth = active ? 1.5 : 0.9;
           ctx.stroke();
 
         } else {
@@ -37068,7 +37088,8 @@ function CircuitView({ onBack, onNavigate }) {
   const gamesUnread  = React.useMemo(() => countUnread(gameNodes),  [gameNodes,  activity, seen, dismissed]);
   const visibleBroadcast = CROQUETOK_BROADCAST.filter(item => !dismissedBroadcast.has(item.id));
   const cqokUnread = visibleBroadcast.length;
-  const totalUnread  = cqokUnread + peopleUnread + clubsUnread + eventsUnread + gamesUnread;
+  // Unified badge count — same formula as CircuitStripCard and micro card
+  const totalUnread = React.useMemo(() => getCircuitUnreadCount(), [seen, dismissed, dismissedBroadcast]);
 
   // Auto-select first node only when no filter is active
   React.useEffect(() => {
@@ -37629,7 +37650,6 @@ function CircuitStripCard({ onClick }) {
     try {
       const ps = JSON.parse(localStorage.getItem("following_players") || "[]");
       const cs = JSON.parse(localStorage.getItem("following_clubs") || "[]");
-      const act = getCircuitActivity(ps, cs);
       const all = [
         ...ps.map(p => ({ name: typeof p === "string" ? p : p.name, color: T.greenMid })),
         ...cs.map(c => {
@@ -37638,17 +37658,8 @@ function CircuitStripCard({ onClick }) {
           return { name, color: seed ? seed.color : T.greenMid };
         }),
       ];
-      const now = Date.now();
-      const seen = new Set(JSON.parse(localStorage.getItem("circuit_seen") || "[]"));
-      const dismissed = new Set(JSON.parse(localStorage.getItem("circuit_dismissed") || "[]"));
-      const unread = act.filter(a => {
-        const key = a.entityKey || a.key;
-        const ageH = (now - a.ts) / 3600000;
-        const hideH = circuitHideAge(a.entity) * 24;
-        return ageH < hideH && !seen.has(`${key}:${a.ts}`) && !dismissed.has(`${key}:${a.ts}`);
-      }).length;
       setNodes(all.slice(0, 5));
-      setActivityCount(unread);
+      setActivityCount(getCircuitUnreadCount());
     } catch {}
   }
 
@@ -37727,33 +37738,25 @@ function CircuitStripCard({ onClick }) {
         <circle cx="100" cy="48" r="2" fill={TRACE} />
       </svg>
 
-      {/* Avatar cluster */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5, position: "relative" }}>
-        {isEmpty ? (
-          <span style={{ width: 22, height: 22, borderRadius: "50%", border: `1.5px dashed #E8D99A`, display: "flex", alignItems: "center", justifyContent: "center", color: "#C9A227", fontSize: 11 }}>
-            <i className="ti ti-plus" />
-          </span>
-        ) : (
-          <div style={{ display: "flex" }}>
-            {nodes.slice(0, 4).map((n, i) => (
-              <span key={i} style={{ width: 20, height: 20, borderRadius: "50%", background: n.color, display: "flex", alignItems: "center", justifyContent: "center", marginLeft: i > 0 ? -6 : 0, border: `2px solid ${BG}`, fontSize: 6.5, fontWeight: 800, color: "#fff", flexShrink: 0, zIndex: 5 - i }}>
-                {(n.name || "?").replace(/\s+Croquet\s+Club$/i, "").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
-              </span>
-            ))}
-            {nodes.length > 4 && <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#E8D99A", border: `2px solid ${BG}`, marginLeft: -6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 6.5, fontWeight: 800, color: "#5C4300", flexShrink: 0 }}>+{nodes.length - 4}</span>}
-          </div>
-        )}
-        <span style={{ flex: 1 }} />
-        {activityCount > 0 && <span style={{ fontSize: 8, fontWeight: 800, color: "#fff", background: CIRCUIT_SPARK, borderRadius: 20, padding: "1px 6px" }}>{activityCount}</span>}
+      {/* Icon row — matches LiveStripCard height footprint */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative" }}>
+        <span style={{ width: 24, height: 24, borderRadius: 6, background: CIRCUIT_SPARK + "1A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <i className="ti ti-antenna-bars-5" style={{ fontSize: 13, color: CIRCUIT_SPARK }} aria-hidden="true" />
+        </span>
       </div>
 
       <span style={{ fontSize: 12, fontWeight: 700, color: T.text, lineHeight: 1.3, position: "relative" }}>The Circuit</span>
-      <span style={{ fontSize: 11, color: "#9A8040", lineHeight: 1.3, position: "relative" }}>
+
+      {/* Subtitle + badge inline */}
+      <span style={{ fontSize: 11, color: "#9A8040", lineHeight: 1.3, position: "relative", display: "flex", alignItems: "center", gap: 5 }}>
         {isEmpty ? "Follow players & clubs" : "Stay connected"}
+        {activityCount > 0 && (
+          <span style={{ fontSize: 8, fontWeight: 800, color: "#fff", background: CIRCUIT_SPARK, borderRadius: 20, padding: "1px 5px", lineHeight: 1.6 }}>{activityCount}</span>
+        )}
       </span>
 
-      {/* Micro wave bar — 5-track at-a-glance density signal */}
-      <div style={{ position: "relative", marginTop: 2 }}>
+      {/* Micro wave bar — absolutely positioned at bottom, doesn't add card height */}
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 20, overflow: "hidden" }}>
         <CircuitMicroBar intensities={trackIntensities} />
       </div>
     </button>
