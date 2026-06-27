@@ -19782,12 +19782,23 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
         )}
 
         {/* ── Branded hero ── */}
-        {!lockTab && (() => { const heroPhoto = (profile.photos || []).filter(Boolean)[0] || null; return (
+        {!lockTab && (() => {
+          const heroPhoto = (profile.photos || []).filter(Boolean)[0] || null;
+          const heroYtId = (() => { const m = (profile.headerVideo || "").match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{11})/); return m ? m[1] : null; })();
+          return (
         <div style={{ position: "relative", borderRadius: 16, overflow: "hidden", marginBottom: 12, boxShadow: "0 4px 18px rgba(26,74,46,0.16)" }}>
-          {/* First club photo as banner (if set) */}
-          {heroPhoto && <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${heroPhoto})`, backgroundSize: "cover", backgroundPosition: profile.photoPosition || "50% 50%" }} />}
-          {/* When photo: subtle dark scrim so white UI elements stay legible. When no photo: brand gradient + lawn stripes. */}
-          {heroPhoto
+          {/* Video banner — iframes can't use object-fit, so size to fill width at 16:9 and center vertically */}
+          {heroYtId && (
+            <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+              <iframe src={`https://www.youtube.com/embed/${heroYtId}?autoplay=1&mute=1&loop=1&playlist=${heroYtId}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&playsinline=1`}
+                style={{ position: "absolute", width: "100%", aspectRatio: "16/9", top: "50%", transform: "translateY(-50%)", border: "none" }}
+                allow="autoplay; encrypted-media" title="Club header video" />
+            </div>
+          )}
+          {/* Photo banner (if no video) */}
+          {!heroYtId && heroPhoto && <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${heroPhoto})`, backgroundSize: "cover", backgroundPosition: profile.photoPosition || "50% 50%" }} />}
+          {/* When video or photo: subtle dark scrim. When neither: brand gradient + lawn stripes. */}
+          {(heroYtId || heroPhoto)
             ? <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.38) 100%)" }} />
             : <><div style={{ position: "absolute", inset: 0, background: `linear-gradient(135deg, ${accent} 0%, ${accent}d9 55%, ${accent}b0 100%)` }} />
                <div style={{ position: "absolute", inset: 0, opacity: 0.10, backgroundImage: `repeating-linear-gradient(115deg, #fff 0 22px, transparent 22px 44px)` }} /></>
@@ -23152,6 +23163,35 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                     })()}
                   </div>
                   <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Header video</label>
+                    {(() => {
+                      const ytId = (() => { const m = (draft.headerVideo || "").match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{11})/); return m ? m[1] : null; })();
+                      return (
+                      <>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <input type="url" placeholder="Paste a YouTube URL…" value={draft.headerVideo || ""}
+                            onChange={e => setDraft(d => ({ ...d, headerVideo: e.target.value || undefined }))}
+                            style={{ flex: 1, minWidth: 0 }} />
+                          {draft.headerVideo && (
+                            <button type="button" onClick={() => setDraft(d => ({ ...d, headerVideo: undefined }))}
+                              style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.card, color: T.textMuted, cursor: "pointer", display: "flex", alignItems: "center" }}>
+                              <i className="ti ti-x" style={{ fontSize: 14 }} aria-hidden="true" />
+                            </button>
+                          )}
+                        </div>
+                        {ytId && (
+                          <div style={{ marginTop: 8, height: 88, borderRadius: 9, overflow: "hidden", border: `1px solid ${T.cardBorder}`, position: "relative", background: "#000" }}>
+                            <iframe src={`https://www.youtube.com/embed/${ytId}?controls=0&modestbranding=1&rel=0`}
+                              style={{ position: "absolute", width: "100%", aspectRatio: "16/9", top: "50%", transform: "translateY(-50%)", border: "none" }}
+                              title="Header video preview" allow="encrypted-media" />
+                          </div>
+                        )}
+                        <p style={{ margin: "5px 0 0", fontSize: 11, color: T.textFaint }}>A YouTube video plays silently as the club banner. Takes priority over a banner photo.</p>
+                      </>
+                      );
+                    })()}
+                  </div>
+                  <div>
                     {(() => {
                       const makeEmbed = q => `<iframe src="https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed" width="100%" height="240" style="border:0;"></iframe>`;
                       const currentSrc = (() => { if (!draft.mapEmbed) return null; const m = draft.mapEmbed.match(/src="([^"]+)"/); return m ? m[1] : null; })();
@@ -23409,6 +23449,25 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                         const lbl = field.label || fieldId;
                         const opts = field.options || [];
                         const req2 = field.required;
+                        if (fieldId === "facility") return (
+                          <div key="facility">
+                            <label style={lblStyle}>{lbl}{req2 && <span style={{ color: "#B83232", marginLeft: 3 }}>*</span>}</label>
+                            {field.helpText && <p style={{ margin: "0 0 5px", fontSize: 10.5, color: T.textFaint }}>{field.helpText}</p>}
+                            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                              {[{o:"Clubhouse only",icon:"ti-building"},{o:"Clubhouse + Lawns",icon:"ti-building-community"},{o:"Lawns only",icon:"ti-leaf"}].filter(({o}) => opts.includes(o)).map(({o,icon}) => {
+                                const on = formState.facility === o;
+                                return (
+                                  <label key={o} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer", fontSize:13,
+                                      padding:"9px 12px", borderRadius:9, border:`1.5px solid ${on ? accent : T.cardBorder}`,
+                                      background: on ? accent : T.pageBg, color: on ? "#fff" : T.text, fontWeight: on ? 700 : 400 }}>
+                                    <input type="radio" name="facility" value={o} checked={on} onChange={() => setF("facility", o)} style={{ accentColor: on ? "#fff" : accent }} />
+                                    <i className={`ti ${icon}`} style={{ fontSize:15 }} aria-hidden="true" />{o}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
                         if (fieldId === "nature") return (
                           <div key="nature">
                             <label style={lblStyle}>{lbl}{req2 && <span style={{ color: "#B83232", marginLeft: 3 }}>*</span>}</label>
@@ -23805,7 +23864,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                       Dates the club is reserved for a private booking and <strong style={{ color: accent }}>unavailable for general play</strong>.
                     </p>
                     {isClubAdmin && (
-                      <button onClick={() => { setBookingsSubTab("private"); setPeForm({ date: "", start: "09:00", end: "17:00", label: "", assisting: [] }); }}
+                      <button onClick={() => { setBookingsSubTab("private"); setPeForm({ date: "", start: "09:00", end: "17:00", label: "", facility: "Clubhouse only", assisting: [] }); }}
                         style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: 7, cursor: "pointer", background: accent + "14", border: `1px solid ${accent}33`, color: accent, fontFamily: "inherit", flexShrink: 0, marginLeft: 10 }}>
                         <i className="ti ti-plus" style={{ fontSize: 12 }} /> Add
                       </button>
@@ -23837,6 +23896,22 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                         <input type="text" value={peForm.label} onChange={e => setPeForm(f => ({ ...f, label: e.target.value }))}
                           placeholder="e.g. Smith 50th birthday" style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: "6px 10px", borderRadius: 7, border: `1px solid ${T.cardBorder}`, fontFamily: "inherit" }} />
                       </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 5 }}>Facility</label>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {[{o:"Clubhouse only",icon:"ti-building"},{o:"Clubhouse + Lawns",icon:"ti-building-community"},{o:"Lawns only",icon:"ti-leaf"}].map(({o,icon}) => {
+                            const on = (peForm.facility || "Clubhouse only") === o;
+                            return (
+                              <button key={o} type="button" onClick={() => setPeForm(f => ({ ...f, facility: o }))}
+                                style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 11px", borderRadius:20, cursor:"pointer", fontFamily:"inherit", fontSize:12,
+                                  border:`1.5px solid ${on ? accent : T.cardBorder}`, background: on ? accent+"12" : "transparent",
+                                  color: on ? accent : T.textMuted, fontWeight: on ? 700 : 400 }}>
+                                <i className={`ti ${icon}`} style={{ fontSize:12 }} aria-hidden="true" />{o}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                         <button onClick={() => setPeForm(null)} style={{ padding: "6px 14px", borderRadius: 7, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                         <button onClick={peAdd} style={{ padding: "6px 16px", borderRadius: 7, border: "none", background: accent, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Save</button>
@@ -23861,7 +23936,12 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                               <div style={{ fontSize: 9, fontWeight: 700, color: T.textFaint, textTransform: "uppercase" }}>{new Date(e.date + "T00:00:00").toLocaleDateString("en-AU", { month: "short" })}</div>
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: T.text }}>{e.label}</p>
+                              <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                                <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: T.text }}>{e.label}</p>
+                                {e.facility && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20, background:accent+"14", color:accent, display:"inline-flex", alignItems:"center", gap:4 }}>
+                                  <i className={`ti ${e.facility==="Lawns only"?"ti-leaf":e.facility==="Clubhouse + Lawns"?"ti-building-community":"ti-building"}`} style={{ fontSize:10 }} aria-hidden="true" />{e.facility}
+                                </span>}
+                              </div>
                               <p style={{ margin: "1px 0 0", fontSize: 11, color: T.textFaint }}>{fmtPeDate(e.date)} · {peTimeRange(e)}</p>
                               {isClubMember && assisting.length > 0 && (
                                 <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6, flexWrap: "wrap" }}>
@@ -23912,7 +23992,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                               {en.phone && <span style={{ marginLeft: 10 }}><i className="ti ti-phone" style={{ fontSize: 11, marginRight: 3 }} />{en.phone}</span>}
                             </div>
                             <div style={{ fontSize: 11.5, color: T.textFaint, marginTop: 2 }}>
-                              {[en.date && fmtPeDate(en.date), en.guests && `${en.guests} guests`, en.nature].filter(Boolean).join(" · ")}
+                              {[en.date && fmtPeDate(en.date), en.guests && `${en.guests} guests`, en.facility, en.nature].filter(Boolean).join(" · ")}
                             </div>
                             {en.notes && <p style={{ margin: "6px 0 0", fontSize: 12, color: T.textMuted, lineHeight: 1.45 }}>{en.notes}</p>}
                           </div>
@@ -24052,6 +24132,25 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 const lbl = field.label || fieldId;
                 const opts = field.options || [];
 
+                if (fieldId === "facility") return (
+                  <div key="facility">
+                    <label style={lblStyle}>{lbl}{req && <span style={{ color: "#B83232", marginLeft: 3 }}>*</span>}</label>
+                    {field.helpText && <p style={{ margin: "0 0 5px", fontSize: 10.5, color: T.textFaint }}>{field.helpText}</p>}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                      {[{o:"Clubhouse only",icon:"ti-building"},{o:"Clubhouse + Lawns",icon:"ti-building-community"},{o:"Lawns only",icon:"ti-leaf"}].filter(({o}) => opts.includes(o)).map(({o,icon}) => {
+                        const on = formState.facility === o;
+                        return (
+                          <button key={o} type="button" onClick={() => setF("facility", o)}
+                            style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 13px", borderRadius:9, cursor:"pointer", fontFamily:"inherit", fontSize:13, textAlign:"left",
+                              border:`1.5px solid ${on ? accent : T.cardBorder}`, background: on ? accent : T.pageBg,
+                              color: on ? "#fff" : T.text, fontWeight: on ? 700 : 400 }}>
+                            <i className={`ti ${icon}`} style={{ fontSize:16, flexShrink:0 }} aria-hidden="true" />{o}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
                 if (fieldId === "nature") return (
                   <div key="nature">
                     <label style={lblStyle}>{lbl}{req && <span style={{ color: "#B83232", marginLeft: 3 }}>*</span>}</label>
@@ -29242,37 +29341,31 @@ function DirectoryView({ tab, onTabChange, onBack, events, games, initialClub, o
       {!detailOpen && (
         <>
           <PageHeader height={72} label="Croquet? OK!" title="Directory" onBack={onBack} />
-          {/* Livestrip-style switcher — each section is a card, mirroring Games/Events */}
-          <div style={{ maxWidth: 640, margin: "0 auto" }}>
-            <SwipeFade fadeColor={T.pageBg} leftWidth={28} rightWidth={36}
-              trackStyle={{ padding: "10px 16px", cursor: "grab" }}>
-              <div style={{ display: "flex", gap: 8, minWidth: "min-content" }}>
+          <div style={{ background: T.green + "0D", borderBottom: `1px solid ${T.green}1F` }}>
+            <div style={{ maxWidth: 640, margin: "0 auto" }}>
+              <SwipeFade fadeColor="transparent" leftWidth={22} rightWidth={28}
+                trackStyle={{ gap: 6, alignItems: "stretch", padding: "8px 12px", cursor: "grab" }}>
                 {TABS.map(t => {
                   const active = tab === t.id;
                   return (
-                    <button key={t.id} onClick={() => onTabChange(t.id)} style={{
-                      background: active ? T.green : T.card,
-                      border: active ? `1px solid ${T.green}` : `1px solid ${T.cardBorder}`,
-                      borderTop: active ? `3px solid ${T.green}` : `1px solid ${T.cardBorder}`,
-                      borderRadius: 10, padding: "10px 12px",
-                      minWidth: 104, flexShrink: 0,
-                      textAlign: "left", cursor: "pointer",
-                      WebkitTapHighlightColor: "transparent",
-                      display: "flex", flexDirection: "column", gap: 6,
-                      fontFamily: "inherit",
-                      boxShadow: "0 1px 4px rgba(26,74,46,0.07)",
-                    }}>
-                      <span style={{ width: 26, height: 26, borderRadius: 7,
-                        background: active ? "rgba(255,255,255,0.2)" : T.green + "15",
-                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <i className={`ti ${t.icon}`} style={{ fontSize: 15, color: active ? "#fff" : T.green }} aria-hidden="true" />
-                      </span>
-                      <span style={{ fontSize: 12.5, fontWeight: 700, color: active ? "#fff" : T.text, lineHeight: 1.2 }}>{t.label}</span>
+                    <button key={t.id} onClick={() => onTabChange(t.id)}
+                      style={{
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                        gap: 4, flexShrink: 0, minWidth: 62,
+                        background: active ? T.green + "18" : "transparent",
+                        border: "none", borderRadius: 9, padding: "4px 6px",
+                        cursor: "pointer", fontFamily: "inherit",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                      onMouseEnter={e => { if (!active) e.currentTarget.style.background = T.green + "0E"; }}
+                      onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}>
+                      <i className={`ti ${t.icon}`} style={{ fontSize: 19, color: T.green }} aria-hidden="true" />
+                      <span style={{ fontSize: 10, fontWeight: active ? 700 : 600, color: active ? T.green : T.text, lineHeight: 1.15, textAlign: "center", whiteSpace: "nowrap" }}>{t.label}</span>
                     </button>
                   );
                 })}
-              </div>
-            </SwipeFade>
+              </SwipeFade>
+            </div>
           </div>
         </>
       )}
@@ -35528,36 +35621,31 @@ function ToolsView({ onBack }) {
       <PageHeader label="Croquet? OK!" title="Tools" onBack={onBack} />
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "8px 0 3rem" }}>
 
-        {/* Tool picker — horizontal strip of cards; selection drives the inline preview */}
-        <SwipeFade fadeColor={T.pageBg} leftWidth={28} rightWidth={36}
-          trackStyle={{ padding: "10px 16px", cursor: "grab" }}>
-          <div style={{ display: "flex", gap: 8, minWidth: "min-content" }}>
+        {/* Tool picker — horizontal strip matching homepage top nav style */}
+        <div style={{ background: T.green + "0D", borderBottom: `1px solid ${T.green}1F`, margin: "0 -0px" }}>
+          <SwipeFade fadeColor="transparent" leftWidth={22} rightWidth={28}
+            trackStyle={{ gap: 6, alignItems: "stretch", padding: "8px 12px", cursor: "grab" }}>
             {interactiveTools.map(tool => {
               const active = selected && selected.id === tool.id;
               return (
-                <button key={tool.id} onClick={() => setActiveTool(tool.id)} style={{
-                  background: active ? T.green : T.card,
-                  border: active ? `1px solid ${T.green}` : `1px solid ${T.cardBorder}`,
-                  borderTop: active ? `3px solid ${T.green}` : `1px solid ${T.cardBorder}`,
-                  borderRadius: 10, padding: "10px 12px",
-                  minWidth: 92, flexShrink: 0,
-                  textAlign: "left", cursor: "pointer",
-                  WebkitTapHighlightColor: "transparent",
-                  display: "flex", flexDirection: "column", gap: 4,
-                  fontFamily: "inherit",
-                  boxShadow: "0 1px 4px rgba(26,74,46,0.07)",
-                }}>
-                  <span style={{ width: 24, height: 24, borderRadius: 6,
-                    background: active ? "rgba(255,255,255,0.2)" : T.green + "15",
-                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <i className={`ti ${tool.icon}`} style={{ fontSize: 13, color: active ? "#fff" : T.green }} aria-hidden="true" />
-                  </span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: active ? "#fff" : T.text, lineHeight: 1.3, whiteSpace: "nowrap" }}>{tool.label}</span>
+                <button key={tool.id} onClick={() => setActiveTool(tool.id)}
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    gap: 4, flexShrink: 0, minWidth: 62,
+                    background: active ? T.green + "18" : "transparent",
+                    border: "none", borderRadius: 9, padding: "4px 6px",
+                    cursor: "pointer", fontFamily: "inherit",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = T.green + "0E"; }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}>
+                  <i className={`ti ${tool.icon}`} style={{ fontSize: 19, color: T.green }} aria-hidden="true" />
+                  <span style={{ fontSize: 10, fontWeight: active ? 700 : 600, color: active ? T.green : T.text, lineHeight: 1.15, textAlign: "center", whiteSpace: "nowrap" }}>{tool.label}</span>
                 </button>
               );
             })}
-          </div>
-        </SwipeFade>
+          </SwipeFade>
+        </div>
 
         {/* Inline preview of the selected tool — no page navigation */}
         <div style={{ padding: "0 1rem" }}>
@@ -40290,10 +40378,24 @@ var PE_DEFAULT_CONFIG = {
   // Custom fields added by the secretary (array, each has id/label/type/helpText/options/required)
   customFields: [],
 
+  // Per-facility rate overrides (used when facilityPricingEnabled is true)
+  facilityPricingEnabled: false,
+  facilityRates: {
+    "Clubhouse only":    { bookingFee: 0, guestFee: 0, minimumCharge: 0 },
+    "Clubhouse + Lawns": { bookingFee: 0, guestFee: 0, minimumCharge: 0 },
+    "Lawns only":        { bookingFee: 0, guestFee: 0, minimumCharge: 0 },
+  },
+
   // Form fields — each has enabled, required, and optionally options[]
   // Order array controls display order (drag-and-drop mutates this)
-  fieldOrder: ["nature", "howHeard", "guests", "datetime", "duration", "externalVendors", "notes"],
+  fieldOrder: ["facility", "nature", "howHeard", "guests", "datetime", "duration", "externalVendors", "notes"],
   fields: {
+    facility: {
+      enabled: true, required: true,
+      label: "What would you like to hire?",
+      helpText: "",
+      options: ["Clubhouse only", "Clubhouse + Lawns", "Lawns only"],
+    },
     nature: {
       enabled: true, required: true,
       label: "Nature of your event",
@@ -40347,11 +40449,33 @@ function peLoadConfig() {
     Object.keys(PE_DEFAULT_CONFIG.fields).forEach(k => {
       merged.fields[k] = { ...PE_DEFAULT_CONFIG.fields[k], ...(saved.fields || {})[k] };
     });
+    // Add any new default fields missing from saved fieldOrder (prepend so they appear first)
+    const knownFields = Object.keys(PE_DEFAULT_CONFIG.fields);
+    knownFields.forEach(k => { if (!merged.fieldOrder.includes(k)) merged.fieldOrder.unshift(k); });
+    // Merge facilityRates per-facility
+    merged.facilityRates = { ...PE_DEFAULT_CONFIG.facilityRates };
+    if (saved.facilityRates) {
+      Object.keys(PE_DEFAULT_CONFIG.facilityRates).forEach(f => {
+        merged.facilityRates[f] = { ...PE_DEFAULT_CONFIG.facilityRates[f], ...(saved.facilityRates[f] || {}) };
+      });
+    }
     return merged;
   } catch { return JSON.parse(JSON.stringify(PE_DEFAULT_CONFIG)); }
 }
 function peSaveConfig(cfg) {
   try { localStorage.setItem(peConfigKey(), JSON.stringify(cfg)); } catch {}
+}
+
+function peRatesForFacility(cfg, facility) {
+  if (cfg.facilityPricingEnabled && facility && cfg.facilityRates && cfg.facilityRates[facility]) {
+    const fr = cfg.facilityRates[facility];
+    return {
+      bookingFee:    fr.bookingFee    != null ? fr.bookingFee    : (cfg.bookingFee    || 0),
+      guestFee:      fr.guestFee      != null ? fr.guestFee      : (cfg.guestFee      || 0),
+      minimumCharge: fr.minimumCharge != null ? fr.minimumCharge : (cfg.minimumCharge || 0),
+    };
+  }
+  return { bookingFee: cfg.bookingFee || 0, guestFee: cfg.guestFee || 0, minimumCharge: cfg.minimumCharge || 0 };
 }
 
 
@@ -41436,13 +41560,14 @@ function SecPrivateEventsView({ onBack }) {
 
         {tab === "configure" && (() => {
           const fieldMeta = {
-            nature:          { icon: "ti-tag",            label: "Event nature",      hasOptions: true  },
-            howHeard:        { icon: "ti-ear",            label: "How they heard",    hasOptions: true  },
-            guests:          { icon: "ti-users",          label: "Guest count",       hasOptions: false },
-            datetime:        { icon: "ti-calendar-event", label: "Date & start time", hasOptions: false },
-            duration:        { icon: "ti-clock",          label: "Duration",          hasOptions: true  },
-            externalVendors: { icon: "ti-truck",          label: "External vendors",  hasOptions: false },
-            notes:           { icon: "ti-note",           label: "Free-text notes",   hasOptions: false },
+            facility:        { icon: "ti-building",       label: "Hire type (facility)", hasOptions: true  },
+            nature:          { icon: "ti-tag",            label: "Event nature",         hasOptions: true  },
+            howHeard:        { icon: "ti-ear",            label: "How they heard",       hasOptions: true  },
+            guests:          { icon: "ti-users",          label: "Guest count",          hasOptions: false },
+            datetime:        { icon: "ti-calendar-event", label: "Date & start time",    hasOptions: false },
+            duration:        { icon: "ti-clock",          label: "Duration",             hasOptions: true  },
+            externalVendors: { icon: "ti-truck",          label: "External vendors",     hasOptions: false },
+            notes:           { icon: "ti-note",           label: "Free-text notes",      hasOptions: false },
           };
 
           // Drag-and-drop reorder helpers
@@ -41875,6 +42000,43 @@ function SecPrivateEventsView({ onBack }) {
                         </div>
                       )}
 
+                      {/* Per-facility rates */}
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingTop:4, borderTop:`1px solid ${T.cardBorder}` }}>
+                        <div>
+                          <p style={{ margin:0, fontSize:10, fontWeight:700, color:T.textFaint, letterSpacing:"0.07em", textTransform:"uppercase" }}>Per-facility rates</p>
+                          <p style={{ margin:"1px 0 0", fontSize:10, color:T.textFaint }}>{config.facilityPricingEnabled ? "Each facility shows its own rate card." : "All facilities use the base rates above."}</p>
+                        </div>
+                        <button onClick={() => setCfg("facilityPricingEnabled", !config.facilityPricingEnabled)}
+                          style={{ width:38, height:22, borderRadius:11, border:"none", padding:2, cursor:"pointer", flexShrink:0,
+                            background: config.facilityPricingEnabled ? accent : T.cardBorder,
+                            display:"flex", alignItems:"center", justifyContent: config.facilityPricingEnabled ? "flex-end" : "flex-start", transition:"background 0.2s" }}>
+                          <span style={{ width:18, height:18, borderRadius:"50%", background:"#fff", boxShadow:"0 1px 2px rgba(0,0,0,0.2)" }} />
+                        </button>
+                      </div>
+                      {config.facilityPricingEnabled && (
+                        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                          {[{key:"Clubhouse only",icon:"ti-building"},{key:"Clubhouse + Lawns",icon:"ti-building-community"},{key:"Lawns only",icon:"ti-leaf"}].map(({key:fac,icon}) => {
+                            const fr = (config.facilityRates || {})[fac] || {};
+                            function setFr(field, val) { saveConfig({ ...config, facilityRates: { ...(config.facilityRates||{}), [fac]: { ...(config.facilityRates||{})[fac], [field]: val } } }); }
+                            return (
+                              <div key={fac} style={{ background:T.pageBg, border:`1px solid ${T.cardBorder}`, borderRadius:9, padding:"10px 11px", display:"flex", flexDirection:"column", gap:7 }}>
+                                <p style={{ margin:0, fontSize:11, fontWeight:700, color:T.text, display:"flex", alignItems:"center", gap:6 }}>
+                                  <i className={`ti ${icon}`} style={{ fontSize:13, color:accent }} aria-hidden="true" />{fac}
+                                </p>
+                                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
+                                  {[["bookingFee","Booking ($)"],["guestFee","Per person ($)"],["minimumCharge","Minimum ($)"]].map(([f,lbl2]) => (
+                                    <div key={f}>
+                                      <label style={lbl}>{lbl2}</label>
+                                      <input type="number" min="0" value={fr[f] != null ? fr[f] : ""} onChange={e => setFr(f, parseFloat(e.target.value)||0)} placeholder="0" style={{ ...inp, width:"100%" }} />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
                       {/* Pricing notes */}
                       <div style={{ paddingTop: 4, borderTop: `1px solid ${T.cardBorder}` }}>
                         <label style={lbl}>Additional pricing notes <span style={{ fontWeight: 400, color: T.textFaint }}>(shown on form)</span></label>
@@ -42172,6 +42334,26 @@ function SecPrivateEventsView({ onBack }) {
                 {config.fieldOrder.filter(fid => config.fields[fid] && config.fields[fid].enabled).map(fieldId => {
                   const field = config.fields[fieldId];
                   const req = field.required;
+
+                  if (fieldId === "facility") return (
+                    <div key="facility">
+                      <label style={labelStyle}>{field.label}{req && <span style={{ color: "#B83232", marginLeft: 3 }}>*</span>}</label>
+                      {field.helpText && <p style={{ margin: "0 0 5px", fontSize: 10.5, color: T.textFaint }}>{field.helpText}</p>}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                        {[{o:"Clubhouse only",icon:"ti-building"},{o:"Clubhouse + Lawns",icon:"ti-building-community"},{o:"Lawns only",icon:"ti-leaf"}].filter(({o}) => (field.options||[]).includes(o)).map(({o,icon}) => {
+                          const on = draft.facility === o;
+                          return (
+                            <button key={o} type="button" onClick={() => set("facility", o)}
+                              style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 12px", borderRadius:9, cursor:"pointer", fontFamily:"inherit", fontSize:13, textAlign:"left",
+                                border:`1.5px solid ${on ? accent : T.cardBorder}`, background: on ? accent+"12" : "transparent",
+                                color: on ? accent : T.text, fontWeight: on ? 700 : 400 }}>
+                              <i className={`ti ${icon}`} style={{ fontSize:15, flexShrink:0, color: on ? accent : T.textFaint }} aria-hidden="true" />{o}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
 
                   if (fieldId === "nature") return (
                     <div key="nature">
