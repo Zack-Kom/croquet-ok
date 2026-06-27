@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/browser": "^8.0.3",
     "@clerk/clerk-react": "^5.61.8",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.1",
@@ -16,6 +17,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@vitejs/plugin-react": "^4.4.1",
     "vite": "^5.4.0"
   }

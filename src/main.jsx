@@ -7,7 +7,7 @@ import './index.css';
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  React.createElement(ClerkProvider, { publishableKey: PUBLISHABLE_KEY },
+  React.createElement(ClerkProvider, { publishableKey: PUBLISHABLE_KEY, afterSignInUrl: '/', afterSignUpUrl: '/' },
     React.createElement(React.Fragment, null,
       React.createElement(SignedOut, null,
         React.createElement('div', {
