@@ -3,6 +3,65 @@ import ReactDOM from 'react-dom';
 import QRCode from 'qrcode';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { LocalNotifications } from '@capacitor/local-notifications';
+
+// ─── Notification utilities ───────────────────────────────────────────────────
+let _notifIdCounter = Date.now() % 2147483647;
+function _nextNotifId() { _notifIdCounter = (_notifIdCounter + 1) % 2147483647; return _notifIdCounter; }
+
+function cqNotifPrefs() {
+  try { return JSON.parse(localStorage.getItem("cq-notif-prefs") || "null") || {}; } catch { return {}; }
+}
+
+function cqSaveNotifPrefs(prefs) {
+  try { localStorage.setItem("cq-notif-prefs", JSON.stringify(prefs)); } catch {}
+}
+
+async function cqRequestNotifPermission() {
+  try {
+    const { display } = await LocalNotifications.requestPermissions();
+    const granted = display === "granted";
+    cqSaveNotifPrefs({ ...cqNotifPrefs(), permissionGranted: granted });
+    return granted;
+  } catch { return false; }
+}
+
+async function cqCheckNotifPermission() {
+  try {
+    const { display } = await LocalNotifications.checkPermissions();
+    return display === "granted";
+  } catch { return false; }
+}
+
+async function cqFireNotif(title, body) {
+  const prefs = cqNotifPrefs();
+  if (prefs.enabled === false) return;
+  try {
+    const granted = await cqCheckNotifPermission();
+    if (!granted) return;
+    await LocalNotifications.schedule({ notifications: [{ id: _nextNotifId(), title, body, schedule: { at: new Date(Date.now() + 500) } }] });
+  } catch {}
+}
+
+async function cqScheduleReminder(id, title, body, at) {
+  const prefs = cqNotifPrefs();
+  if (prefs.enabled === false || prefs.eventReminder === false) return;
+  if (!(at instanceof Date) || at.getTime() <= Date.now()) return;
+  try {
+    const granted = await cqCheckNotifPermission();
+    if (!granted) return;
+    const notifId = Math.abs(id.split("").reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0)) % 2000000 + 1;
+    await LocalNotifications.cancel({ notifications: [{ id: notifId }] });
+    await LocalNotifications.schedule({ notifications: [{ id: notifId, title, body, schedule: { at } }] });
+  } catch {}
+}
+
+async function cqCancelReminder(id) {
+  try {
+    const notifId = Math.abs(id.split("").reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0)) % 2000000 + 1;
+    await LocalNotifications.cancel({ notifications: [{ id: notifId }] });
+  } catch {}
+}
 
 const OPENING_DIAGRAMS = {};
 const LEAVE_DIAGRAMS = {};
@@ -8847,6 +8906,18 @@ function EventDetailView({ event, games, onBack, onOpenGame, onUpdateEvent, onNe
   const [expandedRounds, setExpandedRounds] = useState(new Set());
   const [schedOpenRound, setSchedOpenRound] = useState(null);
   const [schedPos, setSchedPos] = useState({ top: 0, left: 0 });
+
+  // Schedule event reminder notification when viewing a future event
+  useEffect(() => {
+    const prefs = cqNotifPrefs();
+    if (!event?.startDate || eventStatus(event) === "completed" || prefs.eventReminder === false) return;
+    const lead = (prefs.eventReminderLead ?? 60) * 60 * 1000;
+    const startStr = event.startDate + "T" + (event.rcStart || "09:00") + ":00";
+    const at = new Date(new Date(startStr).getTime() - lead);
+    const label = event.name || "Event";
+    cqScheduleReminder("ev-remind-" + event.id, "Coming up: " + label, (event.venue ? event.venue + " · " : "") + "Starts at " + (event.rcStart || "9:00am"), at);
+  }, [event?.id, event?.startDate, event?.rcStart]);
+
   useEffect(() => {
     if (schedOpenRound === null) return;
     const close = () => setSchedOpenRound(null);
@@ -11302,6 +11373,7 @@ function EventDetailView({ event, games, onBack, onOpenGame, onUpdateEvent, onNe
                     return Object.assign({}, f, meta[f.id]||{});
                   });
                   onUpdateEvent(Object.assign({}, event, { fixtures: regen }));
+                  if (cqNotifPrefs().drawPublished !== false) cqFireNotif("Draw published", (event.name || "Event") + " — all rounds generated.");
                 }
 
                 function generateOpenRound() {
@@ -11625,6 +11697,7 @@ function EventDetailView({ event, games, onBack, onOpenGame, onUpdateEvent, onNe
                   if (singlesCount > 0) summary.push(singlesCount + " singles match" + (singlesCount !== 1 ? "es" : ""));
                   if (byeCount > 0) summary.push(byeCount + " bye" + (byeCount !== 1 ? "s" : ""));
                   setRoundMgmtMsg({ type: "ok", text: "Round " + targetRound + " generated — " + (summary.length > 0 ? summary.join(", ") : "no matches") + "." });
+                  if (cqNotifPrefs().drawPublished !== false) cqFireNotif("Round " + targetRound + " draw ready", (event.name || "Event") + " — " + (summary.length > 0 ? summary.join(", ") : "no matches") + ".");
                 }
 
                 function generateSwissNextRound() {
@@ -11842,6 +11915,7 @@ function EventDetailView({ event, games, onBack, onOpenGame, onUpdateEvent, onNe
                   onUpdateEvent(Object.assign({}, event, { fixtures: (event.fixtures||[]).concat(allNewFix) }));
                   var roundsCreated = [...new Set(allNewFix.map(function(f){return f.round;}))].length;
                   setRoundMgmtMsg({ type: "ok", text: roundsCreated + " round" + (roundsCreated !== 1 ? "s" : "") + " scheduled (" + allNewFix.length + " matches) — rounds will appear in sequence below." });
+                  if (cqNotifPrefs().drawPublished !== false) cqFireNotif("Draw published", (event.name || "Event") + " — " + roundsCreated + " round" + (roundsCreated !== 1 ? "s" : "") + " scheduled.");
                 }
 
                 var genLabel = isOpen
@@ -32472,9 +32546,28 @@ function NotificationsView({ onBack, onNavigate }) {
     { id: "n6", type: "system",   title: "Welcome to Croquet OK!", body: "Your account is set up. Explore clubs, events and games.", ts: new Date(Date.now() - 14 * 86400000).toISOString(), read: true },
   ];
 
+  const [tab, setTab] = useState("inbox");
   const [notifs, setNotifs] = useState(() => {
     try { return JSON.parse(localStorage.getItem("cq-notifications") || "null") || SAMPLE; } catch { return SAMPLE; }
   });
+  const [prefs, setPrefsState] = useState(() => cqNotifPrefs());
+  const [permStatus, setPermStatus] = useState("unknown"); // "unknown"|"granted"|"denied"
+  const [permRequesting, setPermRequesting] = useState(false);
+
+  useEffect(() => {
+    cqCheckNotifPermission().then(g => setPermStatus(g ? "granted" : "denied"));
+  }, []);
+
+  function savePrefs(next) { setPrefsState(next); cqSaveNotifPrefs(next); }
+  function togglePref(key) { savePrefs({ ...prefs, [key]: !(prefs[key] !== false) }); }
+
+  async function requestPerm() {
+    setPermRequesting(true);
+    const granted = await cqRequestNotifPermission();
+    setPermStatus(granted ? "granted" : "denied");
+    if (granted) savePrefs({ ...prefs, enabled: true });
+    setPermRequesting(false);
+  }
 
   function save(next) { setNotifs(next); try { localStorage.setItem("cq-notifications", JSON.stringify(next)); } catch {} }
   function markRead(id)    { save(notifs.map(n => n.id === id ? { ...n, read: true }  : n)); }
@@ -32490,72 +32583,177 @@ function NotificationsView({ onBack, onNavigate }) {
     return new Date(ts).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
   };
 
+  const masterEnabled = prefs.enabled !== false && permStatus === "granted";
+
+  const LEAD_OPTIONS = [
+    { value: 15,   label: "15 min before" },
+    { value: 30,   label: "30 min before" },
+    { value: 60,   label: "1 hour before" },
+    { value: 120,  label: "2 hours before" },
+    { value: 1440, label: "1 day before" },
+  ];
+
+  function SettingRow({ icon, label, sublabel, checked, onChange, disabled }) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${T.cardBorder}` }}>
+        <i className={`ti ${icon}`} style={{ fontSize: 18, color: disabled ? T.textFaint : T.greenMid, width: 24, textAlign: "center", flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: disabled ? T.textFaint : T.text }}>{label}</p>
+          {sublabel && <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textFaint }}>{sublabel}</p>}
+        </div>
+        <button onClick={onChange} disabled={disabled}
+          style={{ width: 44, height: 26, borderRadius: 13, border: "none", cursor: disabled ? "default" : "pointer", padding: 0, flexShrink: 0,
+            background: checked && !disabled ? T.green : T.cardBorder, transition: "background 0.2s", position: "relative" }}>
+          <span style={{ position: "absolute", top: 3, left: checked && !disabled ? 21 : 3, width: 20, height: 20, borderRadius: "50%",
+            background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: T.pageBg, minHeight: "100vh" }}>
       <PageHeader height={72} title="Notifications" onBack={onBack} />
+
+      {/* Tab bar */}
+      <div style={{ display: "flex", borderBottom: `2px solid ${T.cardBorder}`, background: T.card, position: "sticky", top: 0, zIndex: 10 }}>
+        {[{ key: "inbox", label: "Inbox", badge: unread || null }, { key: "settings", label: "Settings" }].map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            style={{ flex: 1, padding: "12px 0", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit",
+              fontSize: 13, fontWeight: tab === t.key ? 700 : 500,
+              color: tab === t.key ? T.greenMid : T.textMuted,
+              borderBottom: `2px solid ${tab === t.key ? T.greenMid : "transparent"}`, marginBottom: -2,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            {t.label}
+            {t.badge ? <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10, background: T.green, color: "#fff" }}>{t.badge}</span> : null}
+          </button>
+        ))}
+      </div>
+
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "1rem 1rem 3rem" }}>
 
-        {/* Header row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          {unread > 0 && (
-            <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: T.green, color: "#fff" }}>{unread} new</span>
+        {/* ── Inbox tab ── */}
+        {tab === "inbox" && (<>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            {unread > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: T.green, color: "#fff" }}>{unread} new</span>
+            )}
+            <div style={{ flex: 1 }} />
+            {unread > 0 && (
+              <button onClick={markAllRead} style={{ fontSize: 12, color: T.greenMid, background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: 0 }}>
+                Mark all read
+              </button>
+            )}
+          </div>
+
+          {notifs.length === 0 && (
+            <div style={{ textAlign: "center", padding: "3rem 1rem", background: T.card, borderRadius: 12, border: `1px solid ${T.cardBorder}` }}>
+              <i className="ti ti-bell-off" style={{ fontSize: 36, color: T.textFaint, display: "block", marginBottom: 10 }} />
+              <p style={{ margin: 0, fontSize: 14, color: T.textFaint }}>You're all caught up</p>
+            </div>
           )}
-          <div style={{ flex: 1 }} />
-          {unread > 0 && (
-            <button onClick={markAllRead} style={{ fontSize: 12, color: T.greenMid, background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: 0 }}>
-              Mark all read
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {notifs.map(n => {
+              const nt = NOTIF_TYPES[n.type] || NOTIF_TYPES.system;
+              return (
+                <div key={n.id}
+                  style={{ background: T.card, border: `1.5px solid ${n.read ? T.cardBorder : nt.color + "55"}`, borderRadius: 10, overflow: "hidden",
+                    display: "flex", alignItems: "stretch", cursor: "pointer" }}
+                  onClick={() => markRead(n.id)}>
+                  <div style={{ width: 4, flexShrink: 0, background: n.read ? T.cardBorder : nt.color }} />
+                  <div style={{ width: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: n.read ? T.card : nt.color + "0D" }}>
+                    <i className={`ti ${nt.icon}`} style={{ fontSize: 18, color: n.read ? T.textFaint : nt.color }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, padding: "10px 8px 10px 4px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: n.read ? 500 : 700, color: n.read ? T.textMuted : T.text, flex: 1, lineHeight: 1.3 }}>{n.title}</p>
+                      {!n.read && <span style={{ width: 8, height: 8, borderRadius: "50%", background: nt.color, flexShrink: 0, marginTop: 3 }} />}
+                    </div>
+                    <p style={{ margin: "3px 0 0", fontSize: 11, color: T.textFaint, lineHeight: 1.4 }}>{n.body}</p>
+                    <p style={{ margin: "4px 0 0", fontSize: 10, color: T.textFaint, display: "flex", alignItems: "center", gap: 4 }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 8, background: T.greenPale, color: T.greenMid, textTransform: "uppercase", letterSpacing: "0.05em" }}>{nt.label}</span>
+                      {fmtTs(n.ts)}
+                    </p>
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); dismiss(n.id); }}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: "0 12px", color: T.textFaint, fontSize: 16, flexShrink: 0, alignSelf: "center" }}
+                    aria-label="Dismiss">×</button>
+                </div>
+              );
+            })}
+          </div>
+
+          {notifs.some(n => n.read) && notifs.length > 0 && (
+            <button onClick={() => save(notifs.filter(n => !n.read))}
+              style={{ marginTop: 16, width: "100%", padding: "9px", borderRadius: 9, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12, cursor: "pointer" }}>
+              Clear read notifications
             </button>
           )}
-        </div>
+        </>)}
 
-        {notifs.length === 0 && (
-          <div style={{ textAlign: "center", padding: "3rem 1rem", background: T.card, borderRadius: 12, border: `1px solid ${T.cardBorder}` }}>
-            <i className="ti ti-bell-off" style={{ fontSize: 36, color: T.textFaint, display: "block", marginBottom: 10 }} />
-            <p style={{ margin: 0, fontSize: 14, color: T.textFaint }}>You're all caught up</p>
-          </div>
-        )}
+        {/* ── Settings tab ── */}
+        {tab === "settings" && (<>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {notifs.map(n => {
-            const nt = NOTIF_TYPES[n.type] || NOTIF_TYPES.system;
-            return (
-              <div key={n.id}
-                style={{ background: T.card, border: `1.5px solid ${n.read ? T.cardBorder : nt.color + "55"}`, borderRadius: 10, overflow: "hidden",
-                  display: "flex", alignItems: "stretch", cursor: "pointer" }}
-                onClick={() => markRead(n.id)}>
-                {/* Colour strip */}
-                <div style={{ width: 4, flexShrink: 0, background: n.read ? T.cardBorder : nt.color }} />
-                {/* Icon */}
-                <div style={{ width: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: n.read ? T.card : nt.color + "0D" }}>
-                  <i className={`ti ${nt.icon}`} style={{ fontSize: 18, color: n.read ? T.textFaint : nt.color }} />
-                </div>
-                {/* Content */}
-                <div style={{ flex: 1, minWidth: 0, padding: "10px 8px 10px 4px" }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: n.read ? 500 : 700, color: n.read ? T.textMuted : T.text, flex: 1, lineHeight: 1.3 }}>{n.title}</p>
-                    {!n.read && <span style={{ width: 8, height: 8, borderRadius: "50%", background: nt.color, flexShrink: 0, marginTop: 3 }} />}
-                  </div>
-                  <p style={{ margin: "3px 0 0", fontSize: 11, color: T.textFaint, lineHeight: 1.4 }}>{n.body}</p>
-                  <p style={{ margin: "4px 0 0", fontSize: 10, color: T.textFaint, display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 8, background: T.greenPale, color: T.greenMid, textTransform: "uppercase", letterSpacing: "0.05em" }}>{nt.label}</span>
-                    {fmtTs(n.ts)}
-                  </p>
-                </div>
-                {/* Dismiss */}
-                <button onClick={e => { e.stopPropagation(); dismiss(n.id); }}
-                  style={{ background: "none", border: "none", cursor: "pointer", padding: "0 12px", color: T.textFaint, fontSize: 16, flexShrink: 0, alignSelf: "center" }}
-                  aria-label="Dismiss">×</button>
+          {/* Permission banner */}
+          {permStatus !== "granted" && (
+            <div style={{ background: "#FFF8E7", border: "1px solid #E6C87A", borderRadius: 10, padding: "14px 16px", marginBottom: 16, display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <i className="ti ti-bell-exclamation" style={{ fontSize: 22, color: "#B87700", marginTop: 1, flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "#7A4800" }}>Notifications are off</p>
+                <p style={{ margin: "0 0 10px", fontSize: 12, color: "#92600A" }}>Allow Croquet OK to send system notifications to your device.</p>
+                <button onClick={requestPerm} disabled={permRequesting}
+                  style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: T.green, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  {permRequesting ? "Requesting…" : "Enable notifications"}
+                </button>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          )}
 
-        {notifs.some(n => n.read) && notifs.length > 0 && (
-          <button onClick={() => save(notifs.filter(n => !n.read))}
-            style={{ marginTop: 16, width: "100%", padding: "9px", borderRadius: 9, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12, cursor: "pointer" }}>
-            Clear read notifications
-          </button>
-        )}
+          {/* Master toggle */}
+          <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 10, padding: "0 16px", marginBottom: 16 }}>
+            <SettingRow icon="ti-bell" label="All notifications" sublabel={permStatus === "granted" ? "System notifications enabled on this device" : "Grant permission above first"}
+              checked={prefs.enabled !== false} onChange={() => togglePref("enabled")} disabled={permStatus !== "granted"} />
+          </div>
+
+          {/* Per-type settings */}
+          <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: T.greenMid, textTransform: "uppercase", letterSpacing: "0.07em" }}>What to notify me about</p>
+          <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 10, padding: "0 16px", marginBottom: 16 }}>
+            <SettingRow icon="ti-trophy" label="Draw published"
+              sublabel="When a round draw or event draw is generated"
+              checked={prefs.drawPublished !== false} onChange={() => togglePref("drawPublished")} disabled={!masterEnabled} />
+            <SettingRow icon="ti-clock" label="Event reminders"
+              sublabel="Before an event you're involved in starts"
+              checked={prefs.eventReminder !== false} onChange={() => togglePref("eventReminder")} disabled={!masterEnabled} />
+          </div>
+
+          {/* Reminder lead time */}
+          {prefs.eventReminder !== false && masterEnabled && (
+            <>
+              <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: T.greenMid, textTransform: "uppercase", letterSpacing: "0.07em" }}>Reminder timing</p>
+              <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
+                <p style={{ margin: "0 0 10px", fontSize: 12, color: T.textMuted }}>How far ahead to remind you</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {LEAD_OPTIONS.map(opt => {
+                    const sel = (prefs.eventReminderLead ?? 60) === opt.value;
+                    return (
+                      <button key={opt.value} onClick={() => savePrefs({ ...prefs, eventReminderLead: opt.value })}
+                        style={{ padding: "6px 14px", borderRadius: 20, border: `1.5px solid ${sel ? T.green : T.cardBorder}`,
+                          background: sel ? T.greenPale : "transparent", color: sel ? T.greenMid : T.textMuted,
+                          fontSize: 12, fontWeight: sel ? 700 : 500, cursor: "pointer", fontFamily: "inherit" }}>
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+
+          <p style={{ margin: "16px 0 0", fontSize: 11, color: T.textFaint, textAlign: "center" }}>
+            More notification types — including game assignments and results — coming soon.
+          </p>
+        </>)}
       </div>
     </div>
   );
@@ -33896,6 +34094,7 @@ function ToolsView({ onBack }) {
     { id: "hoop",     label: "Hoop Ticker",       icon: "ti-circle-check", desc: "Quick score tracker" },
     { id: "lawn",     label: "Snapshot",          icon: "ti-layout",       desc: "Record ball positions" },
     { id: "swing",    label: "Swing Tracker",     icon: "ti-rotate-clockwise", desc: "Map mallet path & tempo" },
+    { id: "mapper",   label: "Ball Mapper",       icon: "ti-camera-plus",  desc: "Map balls from a photo" },
   ];
 
   // ── Coin Flip ────────────────────────────────────────────────────────────
@@ -35223,7 +35422,76 @@ function ToolsView({ onBack }) {
     );
   }
 
-  const TOOL_COMPONENTS = { coin: CoinFlip, timer: GameTimer, hoop: HoopCount, bisque: BisqueCalc, handicap: IndexLookup, lawn: CanvasConfig, swing: SwingTracker };
+  // ── Ball Mapper ──────────────────────────────────────────────────────────
+  // Loads the standalone ball-mapper.html tool in a fullscreen overlay.
+  // The iframe is only mounted when open (avoids camera permission pre-prompt).
+  function BallMapper() {
+    const [open, setOpen] = React.useState(false);
+
+    if (open) {
+      return (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 2000,
+          background: "#121A14", display: "flex", flexDirection: "column",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 14px", background: "#1b271f",
+            borderBottom: "1px solid #2D6B45", flexShrink: 0,
+          }}>
+            <i className="ti ti-camera-plus" style={{ fontSize: 18, color: "#7fd99a" }} aria-hidden="true" />
+            <span style={{ fontSize: 15, fontWeight: 700, color: "#e8efe9", fontFamily: "'Libre Baskerville', Georgia, serif", flex: 1 }}>Ball Mapper</span>
+            <button
+              onClick={() => setOpen(false)}
+              style={{ background: "none", border: "1px solid #3a4a3f", borderRadius: 8, color: "#9fb3a6", fontSize: 13, padding: "6px 12px", cursor: "pointer" }}>
+              ✕ Close
+            </button>
+          </div>
+          <iframe
+            src="/ball-mapper.html"
+            style={{ flex: 1, border: "none", width: "100%" }}
+            title="Ball Mapper"
+            allow="camera"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ padding: "1.5rem 1rem", display: "flex", flexDirection: "column", alignItems: "center", gap: 16, textAlign: "center" }}>
+        <div style={{ width: 64, height: 64, borderRadius: 16, background: T.green + "20", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <i className="ti ti-camera-plus" style={{ fontSize: 30, color: T.green }} aria-hidden="true" />
+        </div>
+        <div>
+          <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: T.text }}>Ball Mapper</p>
+          <p style={{ margin: 0, fontSize: 13, color: T.textMuted, lineHeight: 1.5, maxWidth: 280 }}>
+            Take or upload a photo of the lawn, trace a hoop and the near boundary, then tap each ball to map its position to the diagram.
+          </p>
+        </div>
+        <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 10, padding: "10px 14px", maxWidth: 300, textAlign: "left" }}>
+          <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Works best when</p>
+          {["You can see at least one hoop clearly", "The near sideline is visible", "You're standing at the edge of the lawn"].map(tip => (
+            <div key={tip} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 4 }}>
+              <i className="ti ti-check" style={{ fontSize: 12, color: T.green, flexShrink: 0, marginTop: 2 }} aria-hidden="true" />
+              <p style={{ margin: 0, fontSize: 12, color: T.text, lineHeight: 1.4 }}>{tip}</p>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => setOpen(true)}
+          style={{
+            background: T.green, color: "#fff", border: "none", borderRadius: 10,
+            padding: "14px 28px", fontSize: 15, fontWeight: 700, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+          <i className="ti ti-camera-plus" style={{ fontSize: 18 }} aria-hidden="true" />
+          Open Ball Mapper
+        </button>
+      </div>
+    );
+  }
+
+  const TOOL_COMPONENTS = { coin: CoinFlip, timer: GameTimer, hoop: HoopCount, bisque: BisqueCalc, handicap: IndexLookup, lawn: CanvasConfig, swing: SwingTracker, mapper: BallMapper };
 
   // Tools split into two groups: interactive tools (shown inline below the strip)
   // and reference links (open externally). The strip leads with the interactive set.
