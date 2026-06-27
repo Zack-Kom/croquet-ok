@@ -8612,8 +8612,8 @@ function QueuePlayerPanel({ activePlayers, queuePlayers, restingPlayers, absentP
                 return (
                   <button key={action.key}
                     onClick={function() { setPlayerStatus(selectedPlayer.id, action.key); closeModal(); }}
-                    style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: isCurrent ? 700 : 500, padding: "9px 12px", borderRadius: 9, border: "1.5px solid " + (isCurrent ? action.color : T.cardBorder), background: isCurrent ? action.color + "18" : T.card, color: isCurrent ? action.color : T.text, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-                    <i className={"ti " + action.icon} style={{ fontSize: 15, color: isCurrent ? action.color : T.textFaint, flexShrink: 0 }} />
+                    style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: isCurrent ? 700 : 500, padding: "9px 12px", borderRadius: 9, border: "1.5px solid " + (isCurrent ? action.color : T.cardBorder), background: isCurrent ? action.color : T.card, color: isCurrent ? "#fff" : T.text, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                    <i className={"ti " + action.icon} style={{ fontSize: 15, color: isCurrent ? "#fff" : T.textFaint, flexShrink: 0 }} />
                     <span style={{ flex: 1 }}>{action.label}</span>
                     {isCurrent && <i className="ti ti-check" style={{ fontSize: 13, color: action.color }} />}
                   </button>
@@ -30783,9 +30783,9 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
                     <button className="seg-btn seg-btn--on-dark" data-active={active} key={t.id} onClick={function() { setDevTab(t.id); }}
                       style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                         padding: "7px 4px 6px", borderRadius: 9, cursor: "pointer",
-                        border: active ? "1.5px solid rgba(255,255,255,0.6)" : "1.5px solid transparent",
-                        background: active ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.07)",
-                        color: active ? "#fff" : "rgba(255,255,255,0.55)",
+                        border: active ? "1.5px solid rgba(255,255,255,0.9)" : "1.5px solid transparent",
+                        background: active ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.07)",
+                        color: active ? "#1A4A2E" : "rgba(255,255,255,0.55)",
                         transition: "background 0.15s, color 0.15s" }}>
                       <i className={`ti ${t.icon}`} style={{ fontSize: 16 }} aria-hidden="true" />
                       <span style={{ fontSize: 10, fontWeight: active ? 700 : 600, letterSpacing: "0.01em", whiteSpace: "nowrap" }}>{t.label}</span>
@@ -30830,9 +30830,9 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
                     <button className="seg-btn seg-btn--on-dark" data-active={active} key={t.id} onClick={function() { setTab(t.id); }}
                       style={{ flex: "1 0 auto", minWidth: 62, display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                         padding: "7px 8px 6px", borderRadius: 9, cursor: "pointer",
-                        border: active ? "1.5px solid rgba(255,255,255,0.6)" : "1.5px solid transparent",
-                        background: active ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.07)",
-                        color: active ? "#fff" : "rgba(255,255,255,0.55)",
+                        border: active ? "1.5px solid rgba(255,255,255,0.9)" : "1.5px solid transparent",
+                        background: active ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.07)",
+                        color: active ? "#1A4A2E" : "rgba(255,255,255,0.55)",
                         transition: "background 0.15s, color 0.15s" }}>
                       <i className={`ti ${t.icon}`} style={{ fontSize: 16 }} aria-hidden="true" />
                       <span style={{ fontSize: 10, fontWeight: active ? 700 : 600, letterSpacing: "0.01em", whiteSpace: "nowrap" }}>{t.label}</span>
@@ -54282,8 +54282,8 @@ function BallPositionRecorder({ game, onSave, onCancel, onRequestCancel, grassSt
           lineHeight: 1, willChange: "background",
         };
         const btnInactive = { background: "#1A4A2E" };
-        const btnActive   = { background: "rgba(255,255,255,0.18)" };
-        const btnErase    = { background: eraseActive ? "rgba(184,50,50,0.25)" : "#1A4A2E" };
+        const btnActive   = { background: "rgba(255,255,255,0.9)", color: "#1A4A2E" };
+        const btnErase    = { background: eraseActive ? "#B83232" : "#1A4A2E" };
 
         const iconStyle = { fontSize: 22, lineHeight: 1, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center", height: 22 };
 
