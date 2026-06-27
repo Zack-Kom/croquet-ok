@@ -36130,27 +36130,6 @@ function CroquetOKTrackRow({ selected, setSelected, itemCount = CROQUETOK_BROADC
         </span>
       </button>
 
-      {/* Single special node */}
-      <div style={{ padding: "6px 12px 4px" }}>
-        <button
-          onClick={() => setSelected(sel => sel === CQOK_KEY ? null : CQOK_KEY)}
-          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "6px 5px 4px", flexShrink: 0, fontFamily: "inherit" }}
-        >
-          <span style={{
-            width: 48, height: 48, borderRadius: 12, flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            background: TRACK_COLORS.cqok,
-            boxShadow: shadow,
-            transition: "box-shadow 0.25s",
-            animation: isSelected ? "circuit-select-pulse 1.8s ease-out infinite" : "none",
-          }}>
-            <i className="ti ti-mallet" style={{ fontSize: 22, color: "#fff" }} aria-hidden="true" />
-          </span>
-          <span style={{ fontSize: 9, fontWeight: 800, color: isSelected ? TRACK_COLORS.cqok : T.textFaint, textTransform: "uppercase", letterSpacing: "0.03em" }}>
-            What's Hot
-          </span>
-        </button>
-      </div>
     </div>
   );
 }
@@ -36899,18 +36878,18 @@ function TrackWaveBar({ intensities = {}, height = 44, sparks = true, sameAxis =
         const active = intensity > 0.01;
 
         if (!sparks) {
-          // ── Micro mode: gently undulating wave, no spark ──────────────────
-          // Amplitude breathes slowly; each track has a different phase offset
-          const breathe = active
-            ? 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(ts / 2000 + stagger * Math.PI * 2.5))
-            : 0.15;
+          // ── Micro mode: always-breathing wave, amplitude scales with intensity ──
+          // Idle tracks breathe gently; active tracks breathe wide
+          const swing  = 0.20 + intensity * 0.72; // range of oscillation
+          const base   = 0.08 + intensity * 0.12;  // minimum amplitude
+          const breathe = base + swing * (0.5 + 0.5 * Math.sin(ts / 1300 + stagger * Math.PI * 2.5));
           ctx.beginPath();
           pts.forEach(([x, y], i) => {
             const ys = td.cy + (y - td.cy) * breathe;
             i === 0 ? ctx.moveTo(x, ys) : ctx.lineTo(x, ys);
           });
-          ctx.strokeStyle = rgba(active ? 0.60 : 0.22);
-          ctx.lineWidth = active ? 1.5 : 0.9;
+          ctx.strokeStyle = rgba(0.18 + intensity * 0.42);
+          ctx.lineWidth = 0.9 + intensity * 0.6;
           ctx.stroke();
 
         } else {
@@ -36975,7 +36954,7 @@ function CircuitView({ onBack, onNavigate }) {
     try { return JSON.parse(localStorage.getItem("circuit_seed_loaded") || "false"); } catch { return false; }
   });
   const [selected, setSelected] = React.useState(null);
-  const [tracksOpen, setTracksOpen] = React.useState(true);
+  const [tracksOpen, setTracksOpen] = React.useState(false);
   const [trackFilter, setTrackFilter] = React.useState(null); // null | "cqok" | "people" | "clubs" | "events" | "games"
   const [dismissedBroadcast, setDismissedBroadcast] = React.useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("cqok_dismissed") || "[]")); } catch { return new Set(); }
@@ -37307,6 +37286,8 @@ function CircuitView({ onBack, onNavigate }) {
               const isActive = tab.key === null
                 ? (!trackFilter && !isCQOKSelected && !selectedNode)
                 : trackFilter === tab.key || (tab.key === "cqok" && isCQOKSelected && !selectedNode);
+              const tabCount = tab.key === null ? totalUnread
+                : { cqok: cqokUnread, people: peopleUnread, clubs: clubsUnread, events: eventsUnread, games: gamesUnread }[tab.key] || 0;
               return (
                 <button key={tab.key ?? "all"}
                   onClick={() => handleSetTrackFilter(tab.key)}
@@ -37320,6 +37301,14 @@ function CircuitView({ onBack, onNavigate }) {
                   }}>
                   {tab.color && <span style={{ width: 5, height: 5, borderRadius: "50%", background: isActive ? "rgba(255,255,255,0.65)" : tab.color, flexShrink: 0 }} />}
                   {tab.label}
+                  {tabCount > 0 && (
+                    <span style={{
+                      fontSize: 9, fontWeight: 800, lineHeight: 1.5,
+                      padding: "0 4px", borderRadius: 10,
+                      background: isActive ? "rgba(255,255,255,0.25)" : (tab.color || T.green) + "22",
+                      color: isActive ? "#fff" : (tab.color || T.green),
+                    }}>{tabCount}</span>
+                  )}
                 </button>
               );
             })}
@@ -37738,13 +37727,7 @@ function CircuitStripCard({ onClick }) {
         <circle cx="100" cy="48" r="2" fill={TRACE} />
       </svg>
 
-      {/* Icon row — matches LiveStripCard height footprint */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative" }}>
-        <span style={{ width: 24, height: 24, borderRadius: 6, background: CIRCUIT_SPARK + "1A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <i className="ti ti-antenna-bars-5" style={{ fontSize: 13, color: CIRCUIT_SPARK }} aria-hidden="true" />
-        </span>
-      </div>
-
+      {/* Title row */}
       <span style={{ fontSize: 12, fontWeight: 700, color: T.text, lineHeight: 1.3, position: "relative" }}>The Circuit</span>
 
       {/* Subtitle + badge inline */}
