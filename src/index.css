@@ -1,0 +1,113 @@
+    html, body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #E2EDD8;
+      overscroll-behavior: none;
+      -webkit-text-size-adjust: 100%;
+    }
+    * { box-sizing: border-box; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.3); }
+    }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes rolesheet-overlay { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes rolesheet-up { from { transform: translateY(100%); } to { transform: none; } }
+    @keyframes checkin-toast-in { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+    @keyframes checkin-pulse { 0%, 100% { opacity: 0.35; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
+    @keyframes circuit-pulse { 0%, 100% { opacity: 0; transform: translateX(-50%) scale(0.88); } 50% { opacity: 0.7; transform: translateX(-50%) scale(1.12); } }
+    @keyframes circuit-dash-flow { 0%, 100% { opacity: 0.85; } 50% { opacity: 1; } }
+    @keyframes circuit-select-pulse { 0% { box-shadow: 0 0 0 0 rgba(26,74,46,0.4); } 70% { box-shadow: 0 0 0 7px rgba(26,74,46,0); } 100% { box-shadow: 0 0 0 0 rgba(26,74,46,0); } }
+    @keyframes spark-breathe { 0%, 100% { transform: scale(0.82); } 50% { transform: scale(1.12); } }
+    @keyframes circuit-signal { 0% { left: -12px; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { left: calc(100% + 12px); opacity: 0; } }
+    @keyframes circuit-signal-dash { 0% { left: -12px; opacity: 0; } 5% { opacity: 1; } 40% { left: calc(100% + 12px); opacity: 1; } 41% { opacity: 0; left: calc(100% + 12px); } 100% { opacity: 0; left: calc(100% + 12px); } }
+    @keyframes circuit-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes circuit-slide-out { to { transform: translateX(-110%); opacity: 0; } }
+    @keyframes spin-dash {
+      from { stroke-dashoffset: 0; }
+      to   { stroke-dashoffset: -20; }
+    }
+    @keyframes bip-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.65; }
+    }
+    .ball-select-pulse { animation: ball-select-glow 2s ease-in-out infinite; }
+    @keyframes ball-select-glow {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(0.88); }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    @keyframes march {
+      from { stroke-dashoffset: 0; }
+      to   { stroke-dashoffset: -1800; }
+    }
+    @keyframes flow {
+      from { stroke-dashoffset: 0; }
+      to   { stroke-dashoffset: -900; }
+    }
+    @keyframes mic-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.5); }
+      50%       { box-shadow: 0 0 0 6px rgba(255,255,255,0); }
+    }
+    @keyframes fadeInRight {
+      from { opacity: 0; transform: translateY(-50%) translateX(6px); }
+      to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+    }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+    /* Marching dashes around the "choose a turn" ball ring */
+    @keyframes dash-march {
+      to { stroke-dashoffset: -16; }
+    }
+    /* Gentle background pulse for the choose-a-turn ball buttons — bg colour only */
+    @keyframes turn-bg-pulse {
+      0%, 100% { background-color: var(--pulse-bg-rest); }
+      50%      { background-color: var(--pulse-bg-mid); }
+    }
+    .turn-bg-pulse { animation: turn-bg-pulse 1.8s ease-in-out infinite; }
+    /* Animated "..." dots that appear one-by-one */
+    .waiting-dots::after {
+      content: "";
+      animation: waiting-dots 1.4s steps(1, end) infinite;
+    }
+    @keyframes waiting-dots {
+      0%   { content: ""; }
+      25%  { content: "."; }
+      50%  { content: ".."; }
+      75%  { content: "..."; }
+      100% { content: ""; }
+    }
+
+    /* ── Segmented / tab / switcher controls — site-wide active-state contrast ──
+       Many tab, filter and switcher buttons set their own inline background/colour
+       for the active state. On some surfaces (notably mobile) those backgrounds
+       resolved to white while the text stayed white, making the label vanish.
+       Adding class "seg-btn" and data-active routes the active state through these
+       rules, which force a brand-green background with white text (guaranteed
+       contrast) and override any clashing inline colour via !important.
+       Variant "seg-btn--on-dark" is for controls sitting on a coloured header,
+       where the active state should read as a translucent-white pill instead. */
+    .seg-btn[data-active="true"] {
+      background: var(--seg-active-bg, #1A4A2E) !important;
+      color: var(--seg-active-fg, #ffffff) !important;
+      border-color: var(--seg-active-border, #1A4A2E) !important;
+    }
+    .seg-btn[data-active="true"] i,
+    .seg-btn[data-active="true"] span {
+      color: var(--seg-active-fg, #ffffff) !important;
+    }
+    .seg-btn--on-dark[data-active="true"] {
+      background: rgba(255,255,255,0.18) !important;
+      color: #ffffff !important;
+      border-color: rgba(255,255,255,0.6) !important;
+    }
+    .seg-btn--on-dark[data-active="true"] i,
+    .seg-btn--on-dark[data-active="true"] span {
+      color: #ffffff !important;
+    }
