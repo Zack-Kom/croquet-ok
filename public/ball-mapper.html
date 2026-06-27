@@ -1,0 +1,3135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Ball Mapper — Croquet OK</title>
+<style>
+  :root{--green:#2D6B45;--bg:#121A14;--panel:#1b271f;--line:#3a4a3f;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:#e8efe9;padding-bottom:env(safe-area-inset-bottom,0);}
+  header{padding:12px 16px;background:var(--panel);border-bottom:1px solid var(--line);}
+  header h1{font-size:16px;margin:0 0 2px;}header p{font-size:12px;margin:0;color:#9fb3a6;}
+  .bar{display:flex;gap:8px;padding:10px 16px;flex-wrap:wrap;align-items:center;}
+  button{background:var(--green);color:#fff;border:0;border-radius:8px;padding:9px 13px;font-size:13px;}
+  button.ghost{background:transparent;border:1px solid var(--line);color:#cfe;}
+  button.active{outline:2px solid #7fd99a;background:#16301f;}
+  button:disabled{opacity:.4;}
+  .modes{display:flex;gap:8px;padding:4px 16px;}
+  .modes button{flex:1;}
+  .stage{position:relative;margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;touch-action:none;}
+  canvas{display:block;width:100%;}
+  .hint{font-size:13px;color:#a9c3b3;padding:6px 16px 0;min-height:20px;}
+  .conf{font-size:13px;padding:6px 12px;margin:8px 16px;border-radius:8px;border:1px solid var(--line);}
+  .conf.high{background:#16301f;color:#7fd99a;}.conf.medium{background:#2a2a16;color:#d9d27f;}
+  .conf.low,.conf.insufficient{background:#30221a;color:#e6a86b;}
+  .tools{display:flex;gap:6px;padding:4px 16px;flex-wrap:wrap;}
+  .tools button{font-size:12px;padding:7px 10px;}
+  .loupe{position:absolute;width:120px;height:120px;border-radius:50%;border:2px solid #fff;pointer-events:none;display:none;overflow:hidden;z-index:5;box-shadow:0 2px 8px rgba(0,0,0,.5);}
+  .loupe::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:14px;transform:translate(-50%,-50%);border:1px solid #fff;border-radius:50%;}
+  .ballrow{display:flex;gap:8px;padding:6px 16px;}
+  .chip{flex:1;text-align:center;padding:8px 0;border-radius:8px;font-size:13px;border:2px solid transparent;color:#fff;}
+  .chip.sel{border-color:#fff;}
+  .sideBtn:active{transform:scale(0.95);filter:brightness(1.3);}
+  button:active{filter:brightness(1.2);}
+  .ballchip{flex:1;border:0;border-radius:8px;padding:14px 0;font-size:15px;color:#fff;font-weight:600;opacity:0.55;transition:opacity .15s;}
+  .ballchip.sel{opacity:1;box-shadow:0 0 0 3px #fff;}
+  .snap{margin:0;border:1px solid var(--line);border-radius:10px;padding:8px;background:#0d150f;}
+  .snap h3{font-size:13px;margin:2px 0 8px;color:#9fb3a6;}
+  .cols{display:flex;gap:14px;align-items:flex-start;padding:8px 16px 100px;}
+  .col-photo{flex:1 1 60%;min-width:0;}
+  .col-snap{flex:1 1 40%;min-width:0;position:sticky;top:8px;}
+  .snap-placeholder{border:1px dashed var(--line);border-radius:10px;padding:24px 12px;color:#6f8377;text-align:center;font-size:13px;background:#0d150f;}
+  @media (max-width:760px){ .cols{flex-direction:column;} .col-photo,.col-snap{flex:1 1 100%;width:100%;position:static;} }
+  /* ── Live camera overlay ── */
+  #camOverlay{display:none;position:fixed;inset:0;z-index:500;background:#000;flex-direction:column;}
+  #camOverlay video{flex:1;width:100%;object-fit:cover;display:block;}
+  #camOverlay .cam-bar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:14px 24px calc(14px + env(safe-area-inset-bottom,0));background:rgba(0,0,0,0.65);}
+  #camOverlay .shutter{width:72px;height:72px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,0.35);cursor:pointer;flex-shrink:0;transition:transform .1s;}
+  #camOverlay .shutter:active{transform:scale(0.9);}
+  #camOverlay .cam-cancel{color:#fff;font-size:14px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.3);border-radius:8px;padding:9px 16px;cursor:pointer;min-width:72px;text-align:center;}
+  #camOverlay .cam-tip{color:rgba(255,255,255,0.6);font-size:11px;text-align:center;max-width:140px;line-height:1.4;}
+  /* ── Outdoor wizard bar ── */
+  #wizard{display:none;position:fixed;bottom:0;left:0;right:0;z-index:40;background:rgba(18,26,20,0.97);border-top:2px solid var(--green);padding:8px 8px calc(8px + env(safe-area-inset-bottom,0));backdrop-filter:blur(8px);}
+  #wizard .wiz-row{display:flex;align-items:stretch;gap:0;}
+  .wiz-step{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;opacity:.32;transition:opacity .2s;}
+  .wiz-step.wiz-active{opacity:1;}
+  .wiz-step.wiz-done{opacity:.6;}
+  .wiz-num{width:26px;height:26px;border-radius:50%;background:#1e3020;color:#6f8377;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:2px solid #2a4030;transition:all .2s;}
+  .wiz-step.wiz-active .wiz-num{background:var(--green);border-color:var(--green);color:#fff;}
+  .wiz-step.wiz-done .wiz-num{background:#7fd99a;border-color:#7fd99a;color:#1a3020;}
+  .wiz-label{font-size:11px;color:#6f8377;text-align:center;line-height:1.3;}
+  .wiz-step.wiz-active .wiz-label{color:#e8efe9;font-weight:600;}
+  .wiz-step.wiz-done .wiz-label{color:#9fb3a6;}
+  .wiz-sep{width:1px;background:var(--line);align-self:stretch;margin:4px 0;}
+  /* ── Outdoor tip banner ── */
+  #outdoorBanner{display:none;background:#16301f;border:1px solid #2D6B45;border-radius:8px;margin:6px 16px;padding:10px 36px 10px 12px;font-size:13px;color:#a9c3b3;line-height:1.5;position:relative;}
+  #outdoorBanner .bn-dismiss{position:absolute;top:6px;right:8px;background:none;border:none;color:#6f8377;font-size:18px;cursor:pointer;padding:2px 6px;line-height:1;}
+</style>
+</head>
+<body>
+<div id="modalBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#13241a;border:1px solid #2e5740;border-radius:14px;max-width:420px;width:calc(100% - 48px);padding:22px 22px 18px;box-shadow:0 12px 40px rgba(0,0,0,0.5)">
+    <div id="modalIcon" style="font-size:30px;line-height:1;margin-bottom:8px">💡</div>
+    <div id="modalTitle" style="font-size:18px;font-weight:700;color:#eaf3ec;margin-bottom:8px">Title</div>
+    <div id="modalBody" style="font-size:14px;line-height:1.5;color:#bcd2c2;margin-bottom:18px">Body</div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button id="modalSecondary" style="display:none;background:#24382c;color:#cfe;border:none;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer"></button>
+      <button id="modalPrimary" onclick="closeModal()" style="background:#2D6B45;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer">Got it</button>
+    </div>
+  </div>
+</div>
+<!-- Live camera overlay -->
+<div id="camOverlay">
+  <div style="position:relative;flex:1;overflow:hidden;display:flex;">
+    <video id="camVideo" autoplay playsinline muted style="flex:1;width:100%;object-fit:cover;display:block;"></video>
+    <canvas id="camDetectCanvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;"></canvas>
+  </div>
+  <div class="cam-bar">
+    <button class="cam-cancel" onclick="cancelCamera()">Cancel</button>
+    <button class="shutter" onclick="captureCamera()" aria-label="Take photo"></button>
+    <div class="cam-tip" id="camTip">Aim at lawn.<br>Tap to capture.</div>
+  </div>
+</div>
+
+<header>
+  <h1>Ball Mapper</h1>
+  <p>Tap a hoop to calibrate · tap each ball to place it on the diagram</p>
+</header>
+
+<div class="bar">
+  <input id="file" type="file" accept="image/*,video/*" style="display:none">
+  <button onclick="startCamera()" style="background:#2D6B45;font-weight:600">📷 Live Camera</button>
+  <button class="ghost" onclick="document.getElementById('file').click()">🖼 Photo / Video</button>
+  <button class="ghost" onclick="reset()">Reset</button>
+  <button class="ghost" onclick="renderSnapshot()">Build snapshot ▸</button>
+</div>
+
+<!-- Outdoor tip banner (shown after photo loads, dismissable) -->
+<div id="outdoorBanner">
+  <button class="bn-dismiss" onclick="document.getElementById('outdoorBanner').style.display='none';sessionStorage.setItem('bannerDismissed','1')">×</button>
+  📍 <strong>Outdoor tip:</strong> Stand at the near sideline looking up the lawn. Mark that edge first (✏️ Boundary), then trace the nearest hoop (⛳↥). That pair is enough to solve the position.
+</div>
+
+<div class="modes">
+  <button id="mManual" class="ghost active" onclick="setBoundaryMode('manual')">✏️ Draw boundaries</button>
+  <button id="mAuto" class="ghost" onclick="setBoundaryMode('auto')">⚡ Auto-detect</button>
+</div>
+
+<div class="tools" id="sidePicker" style="display:none;background:#2a2a16;border-radius:8px;margin:6px 16px;padding:10px;flex-direction:column;gap:8px">
+  <span id="sidePickerTitle" style="font-size:14px;color:#e6c200;font-weight:600">✓ Line drawn — which edge of YOUR lawn is it?</span>
+  <div style="display:flex;gap:8px;width:100%;flex-wrap:wrap">
+    <button class="sideBtn" ontouchstart="" onclick="pickSide('S')" style="flex:1;min-width:120px;background:#2D6B45;padding:14px 0;font-size:15px">South edge</button>
+    <button class="sideBtn" onclick="pickSide('N')" style="flex:1;min-width:120px;background:#2D6B45;padding:14px 0;font-size:15px">North edge</button>
+    <button class="sideBtn" onclick="pickSide('W')" style="flex:1;min-width:120px;background:#3a5a30;padding:14px 0;font-size:15px">West edge</button>
+    <button class="sideBtn" onclick="pickSide('E')" style="flex:1;min-width:120px;background:#3a5a30;padding:14px 0;font-size:15px">East edge</button>
+  </div>
+  <span style="font-size:11px;color:#b0a060">Use YOUR lawn's own compass naming — whatever you'd call this edge standing on the court. As long as you're consistent with how you name the hoops, it'll line up. Hoops are the most reliable anchor; the boundary is a helper.</span>
+  <button class="ghost" onclick="undoLast()" style="font-size:12px;padding:6px 0">✗ Cancel this line</button>
+</div>
+
+<div class="tools">
+  <span style="font-size:12px;color:#9fb3a6;align-self:center">Tool:</span>
+  <button class="ghost active" data-mode="boundary" onclick="setMode(this,'boundary')" id="boundaryBtn">✏️ Boundary</button>
+  <button class="ghost" data-mode="hoop" onclick="setMode(this,'hoop')">⛳ Hoop</button>
+  <button class="ghost" data-mode="hoopv" onclick="setMode(this,'hoopv')" title="Tap left leg, right leg, then crown top — uses the hoop as a level reference">⛳↥ Hoop+crown</button>
+  <button class="ghost" data-mode="corner" onclick="setMode(this,'corner')">⌟ Corner</button>
+  <button class="ghost" data-mode="ball" onclick="setMode(this,'ball')" id="ballBtn">● Ball</button>
+  <button class="ghost" data-mode="shadow" onclick="setMode(this,'shadow')" id="shadowBtn" title="Tap a vertical's base then its shadow tip — uses the sun to orient the lawn">☀ Shadow</button>
+  <button class="ghost" data-mode="structure" onclick="setMode(this,'structure')" id="structBtn" title="Trace any straight man-made edge (shed, fence, wall) to recover camera orientation">🏠 Structure</button>
+  <button class="ghost" onclick="undoLast()">↶ Undo</button>
+  <button class="ghost" id="zoomBtn" onclick="cycleZoom()" title="Magnifier strength for precise taps on distant hoops">🔍 Zoom 8×</button>
+</div>
+
+<div class="tools" id="hoopPicker" style="display:none;background:#2a1a30;border-radius:8px;margin:6px 16px;padding:10px;flex-direction:column;gap:8px;align-items:center">
+  <span style="font-size:14px;color:#d8a0ff;font-weight:600">✓ Hoop captured — tap which hoop it is on the lawn diagram:</span>
+  <svg id="hoopMap" width="220" height="270" viewBox="0 0 220 270" style="background:#1d6b3a;border-radius:6px;touch-action:manipulation">
+    <!-- lawn 28x35 -> 220x270 (10px border). North is UP. -->
+    <rect x="14" y="14" width="192" height="242" fill="none" stroke="#bfe8c8" stroke-width="2"/>
+    <line x1="14" y1="135" x2="206" y2="135" stroke="#7fb88f" stroke-width="1" stroke-dasharray="4 4"/>
+    <!-- hoops: nx*192+14 , (1-ny)*242+14  (ny y-up) -->
+    <!-- 1 SW (7,7) -->   <g class="hpick" onclick="pickHoop(1)" style="cursor:pointer"><circle cx="62" cy="208" r="16" fill="#185FA5"/><text x="62" y="213" font-size="14" fill="#fff" text-anchor="middle" font-weight="bold">1</text></g>
+    <!-- 2 NW (7,28) --> <g class="hpick" onclick="pickHoop(2)" style="cursor:pointer"><circle cx="62" cy="62" r="16" fill="#3a5a6a"/><text x="62" y="67" font-size="14" fill="#fff" text-anchor="middle" font-weight="bold">2</text></g>
+    <!-- 3 NE (21,28) --> <g class="hpick" onclick="pickHoop(3)" style="cursor:pointer"><circle cx="158" cy="62" r="16" fill="#3a5a6a"/><text x="158" y="67" font-size="14" fill="#fff" text-anchor="middle" font-weight="bold">3</text></g>
+    <!-- 4 SE (21,7) --> <g class="hpick" onclick="pickHoop(4)" style="cursor:pointer"><circle cx="158" cy="208" r="16" fill="#3a5a6a"/><text x="158" y="213" font-size="14" fill="#fff" text-anchor="middle" font-weight="bold">4</text></g>
+    <!-- 5 Rover (14,14) --> <g class="hpick" onclick="pickHoop(5)" style="cursor:pointer"><circle cx="110" cy="159" r="15" fill="#B83232"/><text x="110" y="164" font-size="13" fill="#fff" text-anchor="middle" font-weight="bold">5</text></g>
+    <!-- 6 Penult (14,21) --> <g class="hpick" onclick="pickHoop(6)" style="cursor:pointer"><circle cx="110" cy="111" r="15" fill="#3a5a6a"/><text x="110" y="116" font-size="13" fill="#fff" text-anchor="middle" font-weight="bold">6</text></g>
+    <text x="110" y="11" font-size="9" fill="#bfe8c8" text-anchor="middle">NORTH</text>
+    <text x="110" y="266" font-size="9" fill="#bfe8c8" text-anchor="middle">SOUTH</text>
+    <text x="8" y="138" font-size="9" fill="#bfe8c8" text-anchor="middle" transform="rotate(-90 8 138)">WEST</text>
+    <text x="212" y="138" font-size="9" fill="#bfe8c8" text-anchor="middle" transform="rotate(90 212 138)">EAST</text>
+  </svg>
+  <span style="font-size:11px;color:#9b8aa6;text-align:center">Hoop 1 has the blue clip and sits in a corner; 5 (Rover, red) &amp; 6 are the centre pair. Match the one you tapped.</span>
+</div>
+
+<div class="tools" id="structPicker" style="display:none;background:#1a2230;border-radius:8px;margin:6px 16px;padding:10px;flex-direction:column;gap:8px">
+  <span style="font-size:14px;color:#7fb0e6;font-weight:600">✓ Edge traced — which direction is it in the real world?</span>
+  <div style="display:flex;gap:8px;width:100%;flex-wrap:wrap">
+    <button class="ghost" onclick="pickAxis('V')" style="flex:1;background:#2a4a6a;padding:12px 0;font-size:14px">↕ Vertical (post, corner)</button>
+    <button class="ghost" onclick="pickAxis('H1')" style="flex:1;background:#2a4a6a;padding:12px 0;font-size:14px">↔ Horizontal A (roof, fence)</button>
+    <button class="ghost" onclick="pickAxis('H2')" style="flex:1;background:#2a4a6a;padding:12px 0;font-size:14px">⤢ Horizontal B (perpendicular)</button>
+  </div>
+  <button class="ghost" onclick="cancelStruct()" style="font-size:12px;padding:6px 0">✗ Cancel this edge</button>
+</div>
+
+<div class="tools" id="flipBar" style="display:none;background:#16301f;border-radius:8px;margin:6px 16px;padding:8px 10px;align-items:center">
+  <span style="font-size:13px;color:#7fd99a;align-self:center">Red lawn area on the wrong side / mirrored?</span>
+  <button class="ghost" onclick="toggleFlip('y')">⇅ Flip near/far</button>
+  <button class="ghost" onclick="toggleFlip('x')">⇄ Flip left/right</button>
+  <button class="ghost" onclick="resetFlip()">↺ Auto</button>
+</div>
+
+<div class="hint" id="hint">① Load a photo. ② Draw the NEAR edge (one boundary) + trace the hoop (⛳↥) and say which it is. ③ Tap each ball.</div>
+<div class="conf insufficient" id="conf">Load a photo to begin.</div>
+
+<div class="cols">
+  <div class="col-photo">
+    <div class="stage" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="loupe" id="loupe"><canvas id="loupeCv" width="120" height="120"></canvas></div>
+    </div>
+
+    <div id="ballrow" style="display:none;margin:6px 0;background:#16301f;border-radius:8px;padding:10px">
+      <div style="font-size:13px;color:#7fd99a;margin-bottom:8px;font-weight:600">Tap a colour, then tap the ball's GROUND contact, then its TOP — place only the balls you can see:</div>
+      <div style="display:flex;gap:8px">
+        <button class="ballchip sel" data-c="blue"   style="background:#185FA5" onclick="pickBall(this)">Blue</button>
+        <button class="ballchip" data-c="red"    style="background:#B83232" onclick="pickBall(this)">Red</button>
+        <button class="ballchip" data-c="black"  style="background:#333" onclick="pickBall(this)">Black</button>
+        <button class="ballchip" data-c="yellow" style="background:#C9A227;color:#000" onclick="pickBall(this)">Yellow</button>
+      </div>
+      <button onclick="renderSnapshot()" style="width:100%;margin-top:10px;background:#2D6B45;padding:12px;font-size:15px;font-weight:600">📸 Build snapshot ▸</button>
+    </div>
+  </div>
+
+  <div class="col-snap">
+    <div class="snap" id="snapWrap" style="display:none">
+      <h3>Full-lawn snapshot (pictured area highlighted)</h3>
+      <div id="snapHost"></div>
+    </div>
+    <div class="snap-placeholder" id="snapPlaceholder">The lawn snapshot will appear here once you build it.</div>
+  </div>
+</div>
+
+<script>
+/* ===== inlined: lawn-homography.js ===== */
+/* =============================================================================
+ * lawn-homography.js  —  Camera-tap ball mapping for Croquet OK
+ *
+ * Maps a tap on a lawn PHOTO (pixel coords) to a normalised lawn position
+ * (nx, ny in 0..1) — the same coordinate space the app already stores ball
+ * positions in.
+ *
+ * No LiDAR / ToF / GPS required. Works on any S24 (base, +, or Ultra) and in
+ * fact any phone with a camera. A croquet lawn is a flat plane, so the exact
+ * map from photo pixels to lawn coordinates is a 3x3 homography — a closed-form,
+ * sub-inch-accurate solution that depth sensing cannot beat on a planar target.
+ *
+ * CALIBRATION: the user taps the known reference points in the photo. You only
+ * need 4, but using all 6 hoops (+ peg) over-determines the fit and averages out
+ * tapping error. Reference points come straight from HOOP_POSITIONS — already
+ * defined in the app as normalised nx/ny.
+ *
+ * After calibration, every ball tap is one tap -> exact lawn coordinate.
+ * ===========================================================================*/
+
+/* ---- The known reference points, in normalised lawn space (0..1) -----------
+ * Mirrors HOOP_POSITIONS from croquet-ok.html. Peg is lawn centre.            */
+const LAWN_REFERENCE_POINTS = {
+  // ny is y-UP (0 = south edge, 1 = north). Matches the app's hoop NAMING:
+  // hoop1 = SW (south-west), hoop2 = NW, hoop3 = NE, hoop4 = SE, hoop5/6 centre.
+  hoop1: { nx: 7 / 28,  ny: 7 / 35 },     // SW
+  hoop2: { nx: 7 / 28,  ny: 28 / 35 },    // NW
+  hoop3: { nx: 21 / 28, ny: 28 / 35 },    // NE
+  hoop4: { nx: 21 / 28, ny: 7 / 35 },     // SE
+  hoop5: { nx: 14 / 28, ny: 10.5 / 35 },  // Rover (S of peg)
+  hoop6: { nx: 14 / 28, ny: 24.5 / 35 },  // Penult (N of peg)
+  peg:   { nx: 0.5,     ny: 0.5 },
+};
+
+/* ===========================================================================
+ * Solve a homography H (3x3) mapping source points -> destination points.
+ * src/dst are arrays of [x, y]. Minimum 4 correspondences; more = least-squares.
+ * Here: src = photo pixels, dst = normalised lawn coords.
+ * Uses the DLT algorithm: build a 2N x 9 matrix A, find the null vector of
+ * A^T A via Jacobi eigen-decomposition (smallest eigenvalue's eigenvector).
+ * ===========================================================================*/
+function solveHomography(src, dst) {
+  const n = src.length;
+  if (n < 4) throw new Error("Need at least 4 point correspondences");
+  if (dst.length !== n) throw new Error("src and dst length mismatch");
+
+  // Normalise both point sets (Hartley) for numerical stability.
+  const [Ns, src2] = normalisePoints(src);
+  const [Nd, dst2] = normalisePoints(dst);
+
+  // Build A (2n x 9).
+  const A = [];
+  for (let i = 0; i < n; i++) {
+    const [x, y] = src2[i];
+    const [u, v] = dst2[i];
+    A.push([-x, -y, -1, 0, 0, 0, u * x, u * y, u]);
+    A.push([0, 0, 0, -x, -y, -1, v * x, v * y, v]);
+  }
+
+  // h = null vector of A  ->  smallest eigenvector of A^T A (9x9).
+  const AtA = matTmul(A, A);
+  const h = smallestEigenvector(AtA); // length 9
+
+  let Hn = [
+    [h[0], h[1], h[2]],
+    [h[3], h[4], h[5]],
+    [h[6], h[7], h[8]],
+  ];
+
+  // Denormalise: H = Nd^-1 * Hn * Ns
+  const H = mat3mul(mat3mul(inv3(Nd), Hn), Ns);
+
+  // Scale so H[2][2] = 1 for readability.
+  const s = H[2][2] || 1;
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) H[r][c] /= s;
+  return H;
+}
+
+/* Apply homography H to a point [x, y] -> [x', y']. */
+function applyHomography(H, x, y) {
+  const X = H[0][0] * x + H[0][1] * y + H[0][2];
+  const Y = H[1][0] * x + H[1][1] * y + H[1][2];
+  const W = H[2][0] * x + H[2][1] * y + H[2][2];
+  return [X / W, Y / W];
+}
+
+/* ---- Hartley normalisation: translate centroid to origin, scale to mean
+ *      distance sqrt(2). Returns [T (3x3), normalisedPoints].               */
+function normalisePoints(pts) {
+  const n = pts.length;
+  let cx = 0, cy = 0;
+  for (const [x, y] of pts) { cx += x; cy += y; }
+  cx /= n; cy /= n;
+  let mean = 0;
+  for (const [x, y] of pts) mean += Math.hypot(x - cx, y - cy);
+  mean /= n;
+  const s = mean > 0 ? Math.SQRT2 / mean : 1;
+  const T = [[s, 0, -s * cx], [0, s, -s * cy], [0, 0, 1]];
+  const out = pts.map(([x, y]) => [s * (x - cx), s * (y - cy)]);
+  return [T, out];
+}
+
+/* ---- small linear-algebra helpers ---------------------------------------- */
+function matTmul(A, B) { // A^T * B  (A is m x k -> returns k_A x k_B... here A^T A)
+  const m = A.length, kA = A[0].length, kB = B[0].length;
+  const out = Array.from({ length: kA }, () => new Array(kB).fill(0));
+  for (let i = 0; i < kA; i++)
+    for (let j = 0; j < kB; j++) {
+      let s = 0;
+      for (let r = 0; r < m; r++) s += A[r][i] * B[r][j];
+      out[i][j] = s;
+    }
+  return out;
+}
+function mat3mul(A, B) {
+  const out = [[0,0,0],[0,0,0],[0,0,0]];
+  for (let i=0;i<3;i++) for (let j=0;j<3;j++){let s=0;for(let k=0;k<3;k++)s+=A[i][k]*B[k][j];out[i][j]=s;}
+  return out;
+}
+function inv3(m) {
+  const a=m[0][0],b=m[0][1],c=m[0][2],d=m[1][0],e=m[1][1],f=m[1][2],g=m[2][0],h=m[2][1],i=m[2][2];
+  const A=e*i-f*h,B=-(d*i-f*g),C=d*h-e*g;
+  const det=a*A+b*B+c*C;
+  if (Math.abs(det)<1e-12) throw new Error("singular matrix");
+  const id=1/det;
+  return [
+    [A*id, (c*h-b*i)*id, (b*f-c*e)*id],
+    [B*id, (a*i-c*g)*id, (c*d-a*f)*id],
+    [C*id, (b*g-a*h)*id, (a*e-b*d)*id],
+  ];
+}
+/* Smallest-eigenvalue eigenvector of a symmetric matrix via cyclic Jacobi. */
+function smallestEigenvector(M) {
+  const n = M.length;
+  const a = M.map(r => r.slice());
+  const V = Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>i===j?1:0));
+  for (let sweep=0; sweep<100; sweep++){
+    let off=0;
+    for(let p=0;p<n;p++)for(let q=p+1;q<n;q++)off+=a[p][q]*a[p][q];
+    if(off<1e-20)break;
+    for(let p=0;p<n;p++)for(let q=p+1;q<n;q++){
+      if(Math.abs(a[p][q])<1e-18)continue;
+      const theta=(a[q][q]-a[p][p])/(2*a[p][q]);
+      const t=Math.sign(theta)/(Math.abs(theta)+Math.sqrt(theta*theta+1));
+      const cph=1/Math.sqrt(t*t+1), sph=t*cph;
+      for(let i=0;i<n;i++){
+        const aip=a[i][p],aiq=a[i][q];
+        a[i][p]=cph*aip-sph*aiq; a[i][q]=sph*aip+cph*aiq;
+      }
+      for(let i=0;i<n;i++){
+        const api=a[p][i],aqi=a[q][i];
+        a[p][i]=cph*api-sph*aqi; a[q][i]=sph*api+cph*aqi;
+      }
+      for(let i=0;i<n;i++){
+        const vip=V[i][p],viq=V[i][q];
+        V[i][p]=cph*vip-sph*viq; V[i][q]=sph*vip+cph*viq;
+      }
+    }
+  }
+  // smallest diagonal -> its eigenvector column
+  let idx=0,min=a[0][0];
+  for(let i=1;i<n;i++) if(a[i][i]<min){min=a[i][i];idx=i;}
+  return V.map(row=>row[idx]);
+}
+
+/* ===========================================================================
+ * PUBLIC API — the two functions the app actually calls.
+ * ===========================================================================*/
+
+/* Build a calibration from tapped reference points.
+ * taps: { hoop1:{px,py}, hoop2:{px,py}, ... }  — pixel coords of taps on photo.
+ * Returns a calibration object you keep for the session / store with the photo. */
+function calibrateFromTaps(taps) {
+  const src = [], dst = [], used = [];
+  for (const key of Object.keys(taps)) {
+    const ref = LAWN_REFERENCE_POINTS[key];
+    if (!ref) continue;
+    src.push([taps[key].px, taps[key].py]);
+    dst.push([ref.nx, ref.ny]);
+    used.push(key);
+  }
+  if (src.length < 4) throw new Error("Tap at least 4 reference points (hoops/peg)");
+  const H = solveHomography(src, dst);
+
+  // Residual check: how well does H reproduce the taps? (sanity / UI feedback)
+  let maxErr = 0;
+  for (let i = 0; i < src.length; i++) {
+    const [nx, ny] = applyHomography(H, src[i][0], src[i][1]);
+    maxErr = Math.max(maxErr, Math.hypot(nx - dst[i][0], ny - dst[i][1]));
+  }
+  return { H, used, maxResidualFrac: maxErr };
+}
+
+/* Convert one ball tap (pixel coords on the photo) to lawn position.
+ * Returns {nx, ny} clamped to the lawn, matching how the app stores positions. */
+function tapToLawnPosition(calibration, px, py) {
+  let [nx, ny] = applyHomography(calibration.H, px, py);
+  nx = Math.max(0, Math.min(1, nx));
+  ny = Math.max(0, Math.min(1, ny));
+  return { nx, ny };
+}
+
+/* ===========================================================================
+ * MIXED ANCHORS  —  the real-world case.
+ *
+ * Most croquet photos are candid and ground-level: ONE hoop, maybe a corner,
+ * maybe a stretch of visible boundary line. Pure 4-hoop calibration almost
+ * never happens. So we accept any combination of anchor types and solve the
+ * best homography the geometry allows, then classify how much to trust it.
+ *
+ * Anchor types (all give a pixel<->lawn point correspondence):
+ *   hoop1..hoop6, peg   — as before (LAWN_REFERENCE_POINTS)
+ *   cornerSW/SE/NE/NW   — lawn boundary corners, known at (0,1)/(1,1)/(1,0)/(0,0)
+ *   edge:{side, frac}   — a tapped point ON a boundary line. side in
+ *                         N/S/E/W; frac is position along it (0..1). Two taps
+ *                         along the same visible line pin that line exactly.
+ *
+ * Corner mapping uses the SAME screen convention as the SVG: ny is stored as
+ * (1 - inset/35) so high ny = north = top. In lawn-frac dst space we use the
+ * raw normalised (nx, ny) the app already stores, so:
+ *   NW=(0,1)  NE=(1,1)  SE=(1,0)  SW=(0,0)
+ * ===========================================================================*/
+const CORNER_POINTS = {
+  cornerSW: { nx: 0, ny: 0 },
+  cornerSE: { nx: 1, ny: 0 },
+  cornerNE: { nx: 1, ny: 1 },
+  cornerNW: { nx: 0, ny: 1 },
+};
+
+/* Resolve an edge anchor {side, frac} to a lawn-frac point. */
+/* ---- Orientation flips -----------------------------------------------------
+ * A boundary tapped end-to-end can leave the solved lawn extending the WRONG
+ * way (the playing surface ends up "outside" 0..1, or mirrored). A flip is just
+ * composing H with a mirror in lawn space. flipX: nx->1-nx, flipY: ny->1-ny.
+ * applyFlip returns a NEW homography; the original is untouched. */
+function applyFlip(H, flipX, flipY) {
+  if (!flipX && !flipY) return H;
+  // Mirror matrix M in lawn space, then H' = M * H so output coords get mirrored.
+  const M = [
+    [flipX ? -1 : 1, 0, flipX ? 1 : 0],
+    [0, flipY ? -1 : 1, flipY ? 1 : 0],
+    [0, 0, 1],
+  ];
+  return mat3mul(M, H);
+}
+
+/* Given a calibrated H and an INTERIOR pixel point known to be inside the lawn
+ * (e.g. a placed hoop or ball), return {flipX, flipY} that would put that point
+ * inside 0..1. This auto-corrects the common wrong-side / mirrored solve. */
+function detectFlip(H, interiorPx, expected) {
+  const [nx, ny] = applyHomography(H, interiorPx.px, interiorPx.py);
+  // If we KNOW where this point should be (e.g. a traced hoop's true lawn pos),
+  // choose the flip that lands it closest to that known target. Far more reliable
+  // than pulling toward centre (a corner hoop SHOULD be off-centre).
+  const target = expected && expected.nx != null ? expected : { nx: 0.5, ny: 0.5 };
+  const fx = 1 - nx, fy = 1 - ny;
+  const cands = [
+    { flipX: false, flipY: false, x: nx, y: ny },
+    { flipX: true,  flipY: false, x: fx, y: ny },
+    { flipX: false, flipY: true,  x: nx, y: fy },
+    { flipX: true,  flipY: true,  x: fx, y: fy },
+  ];
+  let best = cands[0], bestD = Infinity;
+  for (const c of cands) {
+    const d = Math.hypot(c.x - target.nx, c.y - target.ny);
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  return { flipX: best.flipX, flipY: best.flipY };
+}
+
+/* ---- Orientation flips end ----------------------------------------------- */
+
+function edgeToLawnPoint(side, frac) {
+  const f = Math.max(0, Math.min(1, frac));
+  switch (side) {
+    case "S": return { nx: f, ny: 0 };
+    case "N": return { nx: f, ny: 1 };
+    case "W": return { nx: 0, ny: f };
+    case "E": return { nx: 1, ny: f };
+    default: throw new Error("edge side must be N/S/E/W");
+  }
+}
+
+/* Build a calibration from a flexible anchor list.
+ * anchors: array of
+ *   { kind:"ref",    key:"hoop1"|...|"peg", px, py }
+ *   { kind:"corner", key:"cornerSW"|...,    px, py }
+ *   { kind:"edge",   side:"N"|"S"|"E"|"W", frac:0..1, px, py }
+ * Returns { H, used, count, maxResidualFrac, confidence, advice }. */
+function calibrateFromAnchors(anchors) {
+  const src = [], dst = [], used = [];
+  let hoopCount = 0, cornerCount = 0, edgeCount = 0, refCount = 0;
+
+  for (const a of anchors) {
+    let p;
+    if (a.kind === "ref")    { p = a.lawn || LAWN_REFERENCE_POINTS[a.key]; if (a.key === "peg") refCount++; else hoopCount++; }
+    else if (a.kind === "corner") { p = CORNER_POINTS[a.key]; cornerCount++; }
+    else if (a.kind === "edge")   { p = edgeToLawnPoint(a.side, a.frac); edgeCount++; }
+    if (!p) continue;
+    src.push([a.px, a.py]);
+    dst.push([p.nx, p.ny]);
+    used.push(a.key || `${a.side}@${a.frac.toFixed(2)}`);
+  }
+
+  if (src.length < 4) {
+    return {
+      H: null, used, count: src.length, maxResidualFrac: null,
+      confidence: "insufficient",
+      advice: `Only ${src.length} anchor${src.length === 1 ? "" : "s"} found. Need at least 4. ` +
+              `Tap more: additional hoops, lawn corners, or points along a visible boundary line.`,
+    };
+  }
+
+  let H;
+  try {
+    H = solveHomography(src, dst);
+  } catch (err) {
+    return {
+      H: null, used, count: src.length, maxResidualFrac: null,
+      confidence: "insufficient",
+      advice: "The reference points are nearly in a line (degenerate geometry) — " +
+              "the lawn shape can't be solved. Make your two boundary lines clearly " +
+              "PERPENDICULAR (one running across, one running away from you), or add a " +
+              "hoop/corner well off to the side.",
+      degenerate: true,
+    };
+  }
+  if (!H || H.some(row => row.some(v => !isFinite(v)))) {
+    return {
+      H: null, used, count: src.length, maxResidualFrac: null,
+      confidence: "insufficient",
+      advice: "Geometry too flat to solve — reference points nearly collinear. " +
+              "Add an anchor off that line (a perpendicular boundary, a hoop, or a corner).",
+      degenerate: true,
+    };
+  }
+
+  let maxErr = 0;
+  for (let i = 0; i < src.length; i++) {
+    const [nx, ny] = applyHomography(H, src[i][0], src[i][1]);
+    maxErr = Math.max(maxErr, Math.hypot(nx - dst[i][0], ny - dst[i][1]));
+  }
+
+  // Geometric spread of anchors: a homography is only trustworthy if the
+  // anchors aren't bunched in one region. Compute the bounding-box area they
+  // cover in lawn-frac space; tiny coverage => extrapolation is unreliable.
+  const nxs = dst.map(d => d[0]), nys = dst.map(d => d[1]);
+  const cover = (Math.max(...nxs) - Math.min(...nxs)) * (Math.max(...nys) - Math.min(...nys));
+
+  // Detect near-parallel boundary lines in the PHOTO (the common low-angle trap):
+  // if the user drew two edges that point nearly the same direction in pixel space,
+  // the homography is poorly conditioned even though it "solves".
+  let parallelWarning = null;
+  const edgeAnchors = anchors.filter(a => a.kind === "edge");
+  if (edgeAnchors.length >= 4) {
+    // group by side, compute each line's pixel direction
+    const bySide = {};
+    for (const a of edgeAnchors) (bySide[a.side] = bySide[a.side] || []).push(a);
+    const dirs = [];
+    for (const side in bySide) {
+      const pts = bySide[side];
+      if (pts.length >= 2) {
+        const dx = pts[1].px - pts[0].px, dy = pts[1].py - pts[0].py;
+        const len = Math.hypot(dx, dy) || 1;
+        dirs.push({ side, ux: dx / len, uy: dy / len });
+      }
+    }
+    if (dirs.length >= 2) {
+      // smallest angle between any two line directions
+      let minAng = Math.PI;
+      for (let i = 0; i < dirs.length; i++) for (let j = i + 1; j < dirs.length; j++) {
+        let dot = Math.abs(dirs[i].ux * dirs[j].ux + dirs[i].uy * dirs[j].uy);
+        dot = Math.min(1, dot);
+        minAng = Math.min(minAng, Math.acos(dot));
+      }
+      if (minAng < 0.30) { // < ~17° apart in the image
+        parallelWarning = "Your boundary lines run almost the same direction in the photo, " +
+          "so the lawn shape is poorly pinned. Draw one line running ACROSS your view and " +
+          "another running AWAY toward the far end — or add a hoop near the far end.";
+      }
+    }
+  }
+
+  const confidence = classifyConfidence({ count: src.length, maxErr, cover, hoopCount, cornerCount, edgeCount });
+  const advice = parallelWarning ? parallelWarning : confidence.advice;
+  const level = parallelWarning ? "low" : confidence.level;
+  return { H, used, count: src.length, maxResidualFrac: maxErr, coverage: cover, confidence: level, advice, parallelWarning: !!parallelWarning };
+}
+
+/* Turn the raw geometry into a human-facing trust level. Thresholds are tuned
+ * to the lawn (~32yd): 0.01 frac ≈ 12in, 0.03 frac ≈ 35in. */
+function classifyConfidence({ count, maxErr, cover, hoopCount, cornerCount, edgeCount }) {
+  const errIn = maxErr * 32 * 36;
+  if (cover < 0.06) {
+    return { level: "low", advice:
+      `Anchors are clustered in one part of the lawn (low spread). Positions far ` +
+      `from them — especially near the opposite end — may be off by feet. Add an ` +
+      `anchor on the far side if you can.` };
+  }
+  if (count >= 6 && errIn < 12) return { level: "high", advice: `Strong fit (~${errIn.toFixed(0)}in residual, ${count} well-spread anchors).` };
+  if (count >= 4 && errIn < 36) return { level: "medium", advice:
+    `Usable fit (~${errIn.toFixed(0)}in residual). Good enough for a snapshot; ` +
+    `add a hoop or corner for survey accuracy.` };
+  return { level: "low", advice:
+    `Weak fit (~${errIn.toFixed(0)}in residual). Treat positions as approximate. ` +
+    `A flatter angle or more spread-out anchors would help — but ground-level is fine if anchors span the lawn.` };
+}
+
+/* TWO-TAP boundary: user taps the two visible ENDS of a named boundary line
+ * (works for paint, mow-seam, soft edge — any boundary). We map each end to the
+ * lawn-frac endpoints of that edge. If an end is also a corner the caller can
+ * pass cornerKey to pin it exactly; otherwise ends default to the edge's 0 and
+ * 1 fractions. Returns two anchor objects ready for calibrateFromAnchors. */
+function boundaryTapToAnchors(side, end0Px, end1Px, opts = {}) {
+  const s = String(side).toUpperCase();
+  // Which lawn-frac points are the ends of this edge?
+  const ends = {
+    S: [{ nx: 0, ny: 0 }, { nx: 1, ny: 0 }],
+    N: [{ nx: 0, ny: 1 }, { nx: 1, ny: 1 }],
+    W: [{ nx: 0, ny: 0 }, { nx: 0, ny: 1 }],
+    E: [{ nx: 1, ny: 0 }, { nx: 1, ny: 1 }],
+  }[s];
+  if (!ends) throw new Error("side must be N/S/E/W");
+  // frac along the edge: end0 -> 0, end1 -> 1 (caller taps in that order)
+  return [
+    { kind: "edge", side: s, frac: opts.frac0 != null ? opts.frac0 : 0, px: end0Px.px, py: end0Px.py },
+    { kind: "edge", side: s, frac: opts.frac1 != null ? opts.frac1 : 1, px: end1Px.px, py: end1Px.py },
+  ];
+}
+
+/* Single-hoop SCALE helper: when only one hoop is visible, you can't solve a
+ * full homography, but the hoop's known interior width (0.097 m ≈ 3.83% of a
+ * 32yd lawn width is ~0.0033 nx) gives LOCAL scale near the hoop. This lets the
+ * tool offer a "place balls relative to this hoop" fallback mode rather than
+ * failing outright. Returns metres-per-pixel near the hoop. */
+const HOOP_INTERIOR_M = 0.097;
+function hoopLocalScale(hoopLeftPx, hoopRightPx) {
+  const widthPx = Math.hypot(hoopRightPx.px - hoopLeftPx.px, hoopRightPx.py - hoopLeftPx.py);
+  if (widthPx < 1) return null;
+  return HOOP_INTERIOR_M / widthPx; // metres per pixel at the hoop's depth
+}
+/* ===== inlined: lawn-detect.js ===== */
+/* =============================================================================
+ * lawn-detect.js  —  In-browser, offline auto-detection for Croquet OK.
+ *
+ * Runs entirely client-side on a <canvas> (no server, works on the S24 in the
+ * field with no signal). Given a lawn photo, it proposes:
+ *   - boundary LINE candidates (white paint on grass, via a light Hough vote)
+ *   - HOOP candidates (bright vertical pairs against grass)
+ *   - the grass PLAYING-REGION bbox (for "mark the pictured area")
+ * and crucially flags when there is NOTHING reliable to detect, so the caller
+ * can route to the relative-to-hoop fallback instead of guessing.
+ *
+ * Philosophy: detector PROPOSES, user CONFIRMS with one tap. We tested the
+ * raw detector on real club photos and it will happily lock onto a clubhouse
+ * base or a hedge edge instead of a court line — so every proposal carries a
+ * confidence and is meant to be shown as a one-tap-confirm overlay, never
+ * applied silently.
+ * ===========================================================================*/
+
+/* Downscale the source image into an offscreen canvas for fast pixel work.
+ * Returns {data, w, h, scaleToSource}. */
+function sampleImage(imgOrCanvas, maxW = 480) {
+  const sw = imgOrCanvas.naturalWidth || imgOrCanvas.width;
+  const sh = imgOrCanvas.naturalHeight || imgOrCanvas.height;
+  const scale = Math.min(1, maxW / sw);
+  const w = Math.round(sw * scale), h = Math.round(sh * scale);
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const cx = c.getContext("2d", { willReadFrequently: true });
+  cx.drawImage(imgOrCanvas, 0, 0, w, h);
+  const data = cx.getImageData(0, 0, w, h).data;
+  return { data, w, h, scaleToSource: 1 / scale };
+}
+
+/* Per-pixel grass test: green channel dominant, mid brightness. */
+function isGrass(r, g, b) {
+  return g > r * 1.02 && g > b * 1.05 && g > 50 && g < 250;
+}
+/* Per-pixel white-paint test. */
+function isWhite(r, g, b, thr) {
+  return r > thr && g > thr && b > thr;
+}
+
+/* Build grass mask + white-near-grass mask in one pass. Returns Uint8 arrays. */
+function buildMasks(s, whiteThr = 150) {
+  const { data, w, h } = s;
+  const grass = new Uint8Array(w * h);
+  const white = new Uint8Array(w * h);
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    if (isGrass(r, g, b)) grass[p] = 1;
+    if (isWhite(r, g, b, whiteThr)) white[p] = 1;
+  }
+  // white-on-grass: white pixels with grass in a small neighbourhood
+  const won = new Uint8Array(w * h);
+  const R = 4;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x;
+      if (!white[p]) continue;
+      let nearGrass = false;
+      for (let dy = -R; dy <= R && !nearGrass; dy += R) {
+        for (let dx = -R; dx <= R; dx += R) {
+          const yy = y + dy, xx = x + dx;
+          if (yy >= 0 && yy < h && xx >= 0 && xx < w && grass[yy * w + xx]) { nearGrass = true; break; }
+        }
+      }
+      if (nearGrass) won[p] = 1;
+    }
+  }
+  return { grass, white: won };
+}
+
+/* Grass playing-region bbox: the dominant connected-ish green area.
+ * Cheap approximation: rows/cols where grass coverage exceeds a fraction. */
+function grassRegion(grass, w, h) {
+  const rowCov = new Float32Array(h), colCov = new Float32Array(w);
+  for (let y = 0; y < h; y++) {
+    let c = 0; for (let x = 0; x < w; x++) c += grass[y * w + x];
+    rowCov[y] = c / w;
+  }
+  for (let x = 0; x < w; x++) {
+    let c = 0; for (let y = 0; y < h; y++) c += grass[y * w + x];
+    colCov[x] = c / h;
+  }
+  const yk = [], xk = [];
+  for (let y = 0; y < h; y++) if (rowCov[y] > 0.25) yk.push(y);
+  for (let x = 0; x < w; x++) if (colCov[x] > 0.20) xk.push(x);
+  if (!yk.length || !xk.length) return null;
+  return { x0: xk[0], y0: yk[0], x1: xk[xk.length - 1], y1: yk[yk.length - 1] };
+}
+
+/* Light randomised Hough on the white-on-grass mask. Returns merged line
+ * proposals as {angleDeg, rho, votes, p1, p2} in SAMPLED pixel space. */
+function detectLines(white, w, h, opts = {}) {
+  const nTheta = opts.nTheta || 180;
+  const maxLines = opts.maxLines || 8;
+  const pts = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (white[y * w + x]) pts.push([x, y]);
+  if (pts.length < 30) return [];
+
+  const thetas = new Float32Array(nTheta), cos = new Float32Array(nTheta), sin = new Float32Array(nTheta);
+  for (let t = 0; t < nTheta; t++) { const a = -Math.PI / 2 + (Math.PI * t) / (nTheta - 1); thetas[t] = a; cos[t] = Math.cos(a); sin[t] = Math.sin(a); }
+  const diag = Math.ceil(Math.hypot(w, h));
+  const acc = new Int32Array(2 * diag * nTheta);
+
+  const sample = Math.min(4000, pts.length);
+  for (let k = 0; k < sample; k++) {
+    const [x, y] = pts[(Math.random() * pts.length) | 0];
+    for (let t = 0; t < nTheta; t++) {
+      const rho = Math.round(x * cos[t] + y * sin[t]) + diag;
+      acc[rho * nTheta + t]++;
+    }
+  }
+  const minVotes = sample * 0.05;
+  const raw = [];
+  const accCopy = acc.slice();
+  for (let n = 0; n < maxLines; n++) {
+    let best = 0, bi = -1;
+    for (let i = 0; i < accCopy.length; i++) if (accCopy[i] > best) { best = accCopy[i]; bi = i; }
+    if (best < minVotes) break;
+    const rho = (bi / nTheta | 0) - diag, t = bi % nTheta;
+    raw.push({ rho, theta: thetas[t], votes: best });
+    // suppress neighbourhood
+    for (let dr = -15; dr <= 15; dr++) for (let dt = -8; dt <= 8; dt++) {
+      const rr = (bi / nTheta | 0) + dr, tt = t + dt;
+      if (rr >= 0 && rr < 2 * diag && tt >= 0 && tt < nTheta) accCopy[rr * nTheta + tt] = 0;
+    }
+  }
+  // merge near-duplicates
+  const merged = [];
+  for (const L of raw.sort((a, b) => b.votes - a.votes)) {
+    if (merged.some(o => Math.abs(o.rho - L.rho) < 25 && Math.abs(o.theta - L.theta) < (6 * Math.PI / 180))) continue;
+    merged.push(L);
+  }
+  // turn into endpoints for drawing
+  return merged.map(L => {
+    const a = Math.cos(L.theta), b = Math.sin(L.theta);
+    let p1, p2;
+    if (Math.abs(b) > 1e-3) { p1 = [0, L.rho / b]; p2 = [w, (L.rho - w * a) / b]; }
+    else { p1 = [L.rho / a, 0]; p2 = [L.rho / a, h]; }
+    return { angleDeg: L.theta * 180 / Math.PI, rho: L.rho, votes: L.votes, p1, p2 };
+  });
+}
+
+/* MAIN entry. Pass an <img> or <canvas>. Returns a structured proposal set
+ * scaled back to SOURCE pixel coordinates, plus an overall recommendation. */
+function autoDetect(imgOrCanvas, opts = {}) {
+  const s = sampleImage(imgOrCanvas, opts.maxW || 480);
+  const { grass, white } = buildMasks(s, opts.whiteThr || 150);
+  const region = grassRegion(grass, s.w, s.h);
+  const grassFrac = grass.reduce((a, v) => a + v, 0) / (s.w * s.h);
+  const lines = detectLines(white, s.w, s.h, opts);
+
+  const k = s.scaleToSource;
+  const linesSrc = lines.map(L => ({
+    angleDeg: L.angleDeg, votes: L.votes,
+    p1: [L.p1[0] * k, L.p1[1] * k], p2: [L.p2[0] * k, L.p2[1] * k],
+    confidence: L.votes > 200 ? "strong" : L.votes > 90 ? "medium" : "weak",
+  }));
+  const regionSrc = region ? { x0: region.x0 * k, y0: region.y0 * k, x1: region.x1 * k, y1: region.y1 * k } : null;
+
+  // Recommendation logic — deliberately CONSERVATIVE. Testing on real club
+  // photos showed boundaries come in four visual forms (white paint, dark
+  // mow-seams, soft texture edges, none) and a single classical detector fires
+  // silently-wrong on most. So we only AUTO-PROPOSE a line when it's a strong
+  // white-paint vote; otherwise we say so honestly and let the manual
+  // two-tap-the-ends flow take over (works on every boundary type).
+  let recommendation, needs, autoUsable;
+  const strongLines = linesSrc.filter(L => L.confidence === "strong");
+  if (grassFrac < 0.12) {
+    recommendation = "not_a_lawn"; autoUsable = false;
+    needs = "This doesn't look like a lawn photo — very little grass detected.";
+  } else if (strongLines.length === 0) {
+    recommendation = "manual_boundary"; autoUsable = false;
+    needs = "No boundary I'm confident about. Tap the two ENDS of any line or lawn edge you can see — works for paint, mow-seams, soft edges alike. Then tap hoops/corners.";
+  } else {
+    recommendation = "confirm_auto"; autoUsable = true;
+    needs = `Found ${strongLines.length} confident line${strongLines.length > 1 ? "s" : ""}. Tap to confirm (or reject and place manually), then add hoops/corners.`;
+  }
+
+  return { lines: linesSrc, strongLines, region: regionSrc, grassFrac,
+           recommendation, needs, autoUsable, sampledSize: { w: s.w, h: s.h } };
+}
+/* ===== inlined: lawn-snap.js ===== */
+/* =============================================================================
+ * lawn-snap.js  —  Tap-assisted snap-to-hoop for Croquet OK.
+ *
+ * The reliable automation: the USER taps roughly near a hoop (eliminating every
+ * confuser — people, fences, mallets, buildings — that defeats full-auto
+ * detection), and this finds the PRECISE hoop centre within a small local
+ * window. Tested on real club photos: snaps to the upright(s) where full-frame
+ * detection sprayed boxes on bystanders.
+ *
+ * Degrades gracefully: two visible uprights -> refine to their midpoint (high
+ * confidence); a single/edge-on upright -> use its centroid (medium). If the
+ * window has no bright vertical structure, returns null and the raw tap stands.
+ * Runs on a <canvas>, offline, no server.
+ * ===========================================================================*/
+
+/* snapToHoop(canvas, tapX, tapY, R) -> {cx,cy,x1,x2,width,mode,confidence} | null
+ * Coordinates are in the canvas's pixel space (same space as the source image).*/
+function snapToHoop(canvas, tapX, tapY, R = 60) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const W = canvas.width, H = canvas.height;
+  const x0 = Math.max(0, Math.round(tapX - R)), xe = Math.min(W, Math.round(tapX + R));
+  const y0 = Math.max(0, Math.round(tapY - R)), ye = Math.min(H, Math.round(tapY + R));
+  const w = xe - x0, h = ye - y0;
+  if (w < 6 || h < 6) return null;
+  const img = ctx.getImageData(x0, y0, w, h).data;
+
+  // luminance + median
+  const lum = new Float32Array(w * h);
+  for (let i = 0, p = 0; i < img.length; i += 4, p++) lum[p] = (img[i] + img[i + 1] + img[i + 2]) / 3;
+  const sorted = Float32Array.from(lum).sort();
+  const base = sorted[(sorted.length / 2) | 0];
+
+  // bright mask + per-column counts
+  const col = new Float32Array(w);
+  let maxCol = 0;
+  for (let x = 0; x < w; x++) {
+    let c = 0;
+    for (let y = 0; y < h; y++) {
+      const p = y * w + x, i = p * 4;
+      if (lum[p] > base + 22 && img[i] > 95 && img[i + 1] > 95 && img[i + 2] > 95) c++;
+    }
+    col[x] = c; if (c > maxCol) maxCol = c;
+  }
+  if (maxCol < 4) return null;
+  // smooth (3-tap)
+  const sm = new Float32Array(w);
+  for (let x = 0; x < w; x++) sm[x] = (col[Math.max(0, x - 1)] + col[x] + col[Math.min(w - 1, x + 1)]) / 3;
+
+  const thr = maxCol * 0.4;
+  const peaks = [];
+  for (let x = 1; x < w - 1; x++) if (sm[x] > thr && sm[x] >= sm[x - 1] && sm[x] >= sm[x + 1]) peaks.push(x);
+  if (!peaks.length) return null;
+  peaks.sort((a, b) => sm[b] - sm[a]);
+
+  // try a plausible PAIR
+  let pair = null;
+  for (let i = 0; i < peaks.length; i++)
+    for (let j = i + 1; j < peaks.length; j++) {
+      const dx = Math.abs(peaks[i] - peaks[j]);
+      if (dx >= 6 && dx <= R * 1.6) {
+        const sc = sm[peaks[i]] + sm[peaks[j]];
+        if (!pair || sc > pair.sc) pair = { sc, a: Math.min(peaks[i], peaks[j]), b: Math.max(peaks[i], peaks[j]) };
+      }
+    }
+
+  let px1, px2, mode, confidence;
+  if (pair) { px1 = pair.a; px2 = pair.b; mode = "pair"; confidence = 0.9; }
+  else {
+    // single upright: bright run around dominant peak
+    let lo = w, hi = 0;
+    for (let x = 0; x < w; x++) if (sm[x] > thr) { lo = Math.min(lo, x); hi = Math.max(hi, x); }
+    if (hi - lo < 3) { lo = peaks[0] - 2; hi = peaks[0] + 2; }
+    px1 = Math.max(0, lo); px2 = Math.min(w - 1, hi); mode = "single"; confidence = 0.6;
+  }
+
+  // vertical centre from bright rows in the upright band
+  let rowLo = h, rowHi = 0;
+  for (let y = 0; y < h; y++) {
+    let any = false;
+    for (let x = Math.max(0, px1 - 1); x <= Math.min(w - 1, px2 + 1) && !any; x++) {
+      const p = y * w + x, i = p * 4;
+      if (lum[p] > base + 22 && img[i] > 95) any = true;
+    }
+    if (any) { rowLo = Math.min(rowLo, y); rowHi = Math.max(rowHi, y); }
+  }
+  const cyLocal = rowHi >= rowLo ? ((rowLo + rowHi) / 2) | 0 : (h / 2) | 0;
+
+  return {
+    cx: x0 + (((px1 + px2) / 2) | 0), cy: y0 + cyLocal,
+    x1: x0 + px1, x2: x0 + px2, width: px2 - px1, mode, confidence,
+  };
+}
+
+if (typeof module !== "undefined") module.exports = { snapToHoop };
+/* ===== inlined: lawn-hoop-vertical.js ===== */
+/* =============================================================================
+ * lawn-hoop-vertical.js
+ *
+ * THE CROWN-AS-LEVELLER INSIGHT
+ * -----------------------------
+ * A croquet hoop is a known-height rigid object standing vertically on the
+ * ground plane:
+ *   - the BOTTOM of the legs sits ON the ground (the plane we calibrate)
+ *   - the TOP of the crown is exactly 12 inches vertically above the ground,
+ *     centred between the legs
+ *
+ * Consequences we exploit:
+ *   1. Leg-bottoms are extra GROUND points (precise — the hoop footprint).
+ *   2. Each leg-bottom -> crown-top segment is a VERTICAL in the world. All
+ *      verticals converge to the vertical vanishing point (VVP). Two or more
+ *      hoops (or one hoop + any other plumb vertical) give the VVP.
+ *   3. The VVP fixes the camera's tilt, hence the HORIZON of the ground plane.
+ *      This stabilises calibration when ground boundary lines are near-parallel
+ *      (the common low-angle croquet photo) — the vertical supplies the missing
+ *      orthogonal constraint.
+ *   4. The crown's pixel height is a metric ruler (12 in) at that depth.
+ *
+ * Standard hoop geometry (AC / Association):
+ *   crown height above ground: 12 in
+ *   internal gauge (leg spacing): 3.75 in
+ *   ball diameter: 3.625 in
+ * ===========================================================================*/
+
+const HOOP_CROWN_IN = 12.0;
+const HOOP_GAUGE_IN = 3.75;
+const LAWN_W_IN = 28 * 36;  // 1008
+const LAWN_L_IN = 35 * 36;  // 1260
+
+/* homogeneous line through two image points */
+function lineThrough(a, b) {
+  return cross3([a[0], a[1], 1], [b[0], b[1], 1]);
+}
+function cross3(u, v) {
+  return [u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]];
+}
+function intersect(l1, l2) {
+  const p = cross3(l1, l2);
+  if (Math.abs(p[2]) < 1e-9) return null; // parallel in image (VP at infinity)
+  return [p[0]/p[2], p[1]/p[2]];
+}
+
+/* A tapped hoop with vertical info:
+ *   { legL:{px,py}, legR:{px,py}, crown:{px,py} }  (crown = top-centre of crown)
+ * legL/legR are the two leg-bottoms ON THE GROUND; crown is 12" above their midpoint.
+ * Returns the ground footprint centre and the vertical segment (base->crown). */
+function hoopVertical(tap) {
+  const baseMid = { px: (tap.legL.px + tap.legR.px) / 2, py: (tap.legL.py + tap.legR.py) / 2 };
+  // crown top-centre: use traced corners' midpoint if available, else the single crown tap
+  const crownMid = (tap.crownL && tap.crownR)
+    ? { px: (tap.crownL.px + tap.crownR.px) / 2, py: (tap.crownL.py + tap.crownR.py) / 2 }
+    : tap.crown;
+  const v = {
+    baseMid,
+    base: [baseMid.px, baseMid.py],
+    top: [crownMid.px, crownMid.py],
+    legL: [tap.legL.px, tap.legL.py],
+    legR: [tap.legR.px, tap.legR.py],
+    verticalLine: lineThrough([baseMid.px, baseMid.py], [crownMid.px, crownMid.py]),
+  };
+  // when both corners are traced, expose the two per-leg verticals too (more info)
+  if (tap.crownL && tap.crownR) {
+    v.legVerticals = [
+      lineThrough([tap.legL.px, tap.legL.py], [tap.crownL.px, tap.crownL.py]),
+      lineThrough([tap.legR.px, tap.legR.py], [tap.crownR.px, tap.crownR.py]),
+    ];
+  }
+  return v;
+}
+
+/* Compute the vertical vanishing point from >=2 hoop verticals (or 1 hoop + any
+ * other supplied plumb vertical line). Returns {vvp:[x,y]|null, atInfinity:bool}. */
+function verticalVanishingPoint(hoopVerticals, extraVerticalLines = []) {
+  let lines = [];
+  for (const h of hoopVerticals) {
+    if (h.legVerticals) lines.push(...h.legVerticals); // two real per-leg verticals
+    else lines.push(h.verticalLine);
+  }
+  lines = lines.concat(extraVerticalLines);
+  if (lines.length < 2) return { vvp: null, atInfinity: false, count: lines.length };
+  // robust-ish: average all pairwise intersections that are finite
+  const pts = [];
+  for (let i = 0; i < lines.length; i++)
+    for (let j = i + 1; j < lines.length; j++) {
+      const p = intersect(lines[i], lines[j]);
+      if (p) pts.push(p);
+    }
+  if (!pts.length) return { vvp: null, atInfinity: true, count: lines.length };
+  const vvp = [
+    pts.reduce((s, p) => s + p[0], 0) / pts.length,
+    pts.reduce((s, p) => s + p[1], 0) / pts.length,
+  ];
+  // spread = how consistent the verticals are (small = good)
+  const spread = Math.sqrt(pts.reduce((s, p) => s + (p[0]-vvp[0])**2 + (p[1]-vvp[1])**2, 0) / pts.length);
+  return { vvp, atInfinity: false, count: lines.length, spread };
+}
+
+/* The horizon of the ground plane is the image line of the plane's points at
+ * infinity. Given the vertical vanishing point and the camera principal point
+ * (approx image centre), the horizon is the line through the principal point
+ * perpendicular (in image) to the principal-point→VVP direction. This is exact
+ * for a camera with square pixels and no roll, a good approximation otherwise. */
+function horizonFromVVP(vvp, principal) {
+  if (!vvp) return null;
+  const dx = vvp[0] - principal[0], dy = vvp[1] - principal[1];
+  const n = Math.hypot(dx, dy) || 1;
+  // horizon passes through principal point with normal = (dx,dy)/n
+  // line: nx*(x-px) + ny*(y-py) = 0  ->  [nx, ny, -(nx*px+ny*py)]
+  const nx = dx/n, ny = dy/n;
+  return [nx, ny, -(nx*principal[0] + ny*principal[1])];
+}
+
+/* Build extra GROUND anchors from hoop footprints. Each hoop's leg-bottoms map to
+ * the known hoop lawn position (nx,ny in y-UP frac), offset by ±gauge/2 in x.
+ * These are precise ground points to feed the homography alongside boundaries. */
+function hoopGroundAnchors(tap, hoopLawn) {
+  // hoopLawn = {nx, ny} of the hoop centre (y-up). Gauge offset in lawn-frac:
+  const half = (HOOP_GAUGE_IN / 2) / LAWN_W_IN;
+  return [
+    { kind: "ref", key: tap.key + "_L", px: tap.legL.px, py: tap.legL.py, lawn: { nx: hoopLawn.nx - half, ny: hoopLawn.ny } },
+    { kind: "ref", key: tap.key + "_R", px: tap.legR.px, py: tap.legR.py, lawn: { nx: hoopLawn.nx + half, ny: hoopLawn.ny } },
+  ];
+}
+
+/* Sanity check a candidate ground homography against the verticals: project a
+ * known-height test and see whether the crown sits where the VVP predicts. Returns
+ * a 0..1 consistency score (1 = verticals agree perfectly with the ground solve). */
+function verticalConsistency(vvpResult) {
+  if (!vvpResult || !vvpResult.vvp) return null;
+  if (vvpResult.atInfinity) return 0.5; // verticals parallel in image (camera level) — fine but uninformative
+  // tighter spread => more consistent verticals => more trustworthy
+  const s = vvpResult.spread || 0;
+  return Math.max(0, Math.min(1, 1 - s / 400));
+}
+
+/* CONSISTENCY GATE (safe, read-only): given a solved ground homography H and the
+ * crown verticals, check whether H's *implied* vertical axis agrees with the axis
+ * the crowns observe. Agreement => the ground solve is trustworthy. Disagreement
+ * => the ground solve is suspect (typically the near-parallel-boundary case), so
+ * confidence should be lowered and the user warned. This only READS H; it never
+ * modifies it, so it cannot destabilise the solve.
+ *
+ * Returns { checked:bool, agree:bool, angleDeg:number } or {checked:false}.
+ * Needs intrinsics K (approx: principal point = image centre, focal ~ image width). */
+function verticalAgreement(H, hoopVerticals, imgW, imgH) {
+  if (!H || hoopVerticals.length < 2) return { checked: false };
+  const vv = verticalVanishingPoint(hoopVerticals.map(h => (h.verticalLine ? h : hoopVertical(h))));
+  if (!vv.vvp) return { checked: false };
+  // approximate intrinsics
+  const f = imgW; // rough focal in px (~ a normal phone FOV)
+  const cx = imgW / 2, cy = imgH / 2;
+  const Kinv = [[1/f,0,-cx/f],[0,1/f,-cy/f],[0,0,1]];
+  // crown vertical axis in camera frame
+  const vvpCam = matVec(Kinv, [vv.vvp[0], vv.vvp[1], 1]);
+  const r3c = normalize(vvpCam);
+  // implied vertical from H: r3 = (Kinv h1) x (Kinv h2)
+  const h1 = [H[0][0], H[1][0], H[2][0]], h2 = [H[0][1], H[1][1], H[2][1]];
+  const a = matVec(Kinv, h1), b = matVec(Kinv, h2);
+  const r3h = normalize(cross3(a, b));
+  if (!r3c || !r3h) return { checked: false };
+  let dot = Math.abs(r3c[0]*r3h[0] + r3c[1]*r3h[1] + r3c[2]*r3h[2]);
+  dot = Math.min(1, dot);
+  const angleDeg = Math.acos(dot) * 180 / Math.PI;
+  return { checked: true, agree: angleDeg < 12, angleDeg };
+}
+function matVec(M, v) { return [M[0][0]*v[0]+M[0][1]*v[1]+M[0][2]*v[2], M[1][0]*v[0]+M[1][1]*v[1]+M[1][2]*v[2], M[2][0]*v[0]+M[2][1]*v[1]+M[2][2]*v[2]]; }
+function normalize(v) { const n = Math.hypot(v[0],v[1],v[2]); if (n < 1e-9) return null; let r = [v[0]/n,v[1]/n,v[2]/n]; if (r[2] < 0) r = [-r[0],-r[1],-r[2]]; return r; }
+
+/* BALL-AS-RULER scale check. A ball is 3.625in regardless of where it sits, so its
+ * apparent pixel diameter encodes the local scale. Given the homography and a ball's
+ * pixel position + measured pixel radius, predict what physical size the homography
+ * implies for that pixel span and compare to 3.625in. ratio ~1 = consistent.
+ * Near balls (big in pixels) are reliable; far balls (few pixels) are noisy, so the
+ * caller should weight by pixel size. Returns {checked, ratio, inPerPx}. */
+function ballScaleCheck(applyH, H, ballPx, pixelRadius) {
+  if (!H || !pixelRadius || pixelRadius < 2) return { checked: false };
+  // map ball centre and a point one pixel-radius to the side, measure lawn span
+  const c = applyH(H, ballPx.px, ballPx.py);
+  const e = applyH(H, ballPx.px + pixelRadius, ballPx.py);
+  if (!c || !e) return { checked: false };
+  const spanFrac = Math.hypot(e[0] - c[0], e[1] - c[1]); // half-diameter in lawn-frac
+  const realHalfFrac = (3.625 / 2) / LAWN_W_IN;
+  if (spanFrac < 1e-7) return { checked: false };
+  const ratio = spanFrac / realHalfFrac;
+  return { checked: true, ratio, ok: ratio > 0.4 && ratio < 2.5, pixelRadius };
+}
+
+/* KNOWN-SIZE SCALE CHECK (read-only validator).
+ * A traced hoop's leg-to-leg gauge is 3.75in in reality. Map both leg bases through
+ * the homography to lawn-frac, measure the span, and compare to the real gauge as a
+ * fraction of lawn width. ratio ~1 => homography scale matches reality at the hoop.
+ * Needs applyHomography passed in (kept dependency-free here). */
+function scaleSanity(applyH, H, tracedHoop) {
+  if (!H || !tracedHoop || !tracedHoop.legL || !tracedHoop.legR) return { checked: false };
+  const gaugePx = Math.hypot(tracedHoop.legR.px - tracedHoop.legL.px, tracedHoop.legR.py - tracedHoop.legL.py);
+  if (gaugePx < 2) return { checked: false };
+  const a = applyH(H, tracedHoop.legL.px, tracedHoop.legL.py);
+  const b = applyH(H, tracedHoop.legR.px, tracedHoop.legR.py);
+  if (!a || !b) return { checked: false };
+  const spanFrac = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const realFrac = HOOP_GAUGE_IN / LAWN_W_IN;
+  if (spanFrac < 1e-6) return { checked: false };
+  const ratio = spanFrac / realFrac;
+  return { checked: true, ratio, ok: ratio > 0.4 && ratio < 2.5 };
+}
+
+/* ---- Manhattan-world structure lines --------------------------------------
+ * Harvest ANY man-made rectilinear edges in the photo (shed roof/walls, fences,
+ * building corners) to recover camera orientation. Each edge is tagged by axis:
+ *   'V'  = vertical (plumb) — cross-checks the hoop crowns
+ *   'H1' = one horizontal ground direction
+ *   'H2' = the perpendicular horizontal ground direction
+ * Lines sharing an axis converge to that axis's vanishing point. The two
+ * horizontal VPs define the horizon; the vertical VP fixes camera tilt. A shed
+ * supplies the perpendicular direction that near-parallel lawn lines cannot.
+ *
+ * structureLines: array of { axis:'V'|'H1'|'H2', a:{px,py}, b:{px,py} }
+ * Returns { vps:{V,H1,H2}, horizon, verticalAxis, agreesWithHoops }. */
+function solveStructure(structureLines, hoopVerticals, imgW, imgH) {
+  const byAxis = { V: [], H1: [], H2: [] };
+  for (const s of structureLines) {
+    if (!byAxis[s.axis]) continue;
+    byAxis[s.axis].push(lineThrough([s.a.px, s.a.py], [s.b.px, s.b.py]));
+  }
+  // hoop crown verticals reinforce the V axis
+  if (hoopVerticals) for (const h of hoopVerticals) {
+    if (h.legVerticals) byAxis.V.push(...h.legVerticals);
+    else if (h.verticalLine) byAxis.V.push(h.verticalLine);
+  }
+  const vpOf = (lines) => {
+    if (lines.length < 2) return null;
+    const pts = [];
+    for (let i = 0; i < lines.length; i++) for (let j = i + 1; j < lines.length; j++) {
+      const p = intersect(lines[i], lines[j]); if (p) pts.push(p);
+    }
+    if (!pts.length) return null;
+    return [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
+  };
+  const V = vpOf(byAxis.V), H1 = vpOf(byAxis.H1), H2 = vpOf(byAxis.H2);
+  const horizon = (H1 && H2) ? lineThrough(H1, H2) : null;
+  // camera vertical axis from V
+  let verticalAxis = null;
+  if (V) {
+    const f = imgW, cx = imgW / 2, cy = imgH / 2;
+    const Kinv = [[1/f,0,-cx/f],[0,1/f,-cy/f],[0,0,1]];
+    verticalAxis = normalize(matVec(Kinv, [V[0], V[1], 1]));
+  }
+  return { vps: { V, H1, H2 }, horizon, verticalAxis,
+           counts: { V: byAxis.V.length, H1: byAxis.H1.length, H2: byAxis.H2.length } };
+}
+
+/* ===== inlined: lawn-camera.js ===== */
+/* =============================================================================
+ * lawn-camera.js — use the photo's own metadata + known object sizes.
+ *
+ * Two jobs:
+ *  1. Parse just enough EXIF (focal length, 35mm-equivalent, dimensions) from a
+ *     JPEG's bytes — no library — to recover the camera's focal length in pixels.
+ *  2. Use that focal + a ball's known real diameter (3.625in) and its measured
+ *     pixel size to compute the ball's true distance, and correct its ground
+ *     position along its view ray. This is a PER-BALL correction: it never touches
+ *     the global homography, so it cannot destabilise the solve. It's most reliable
+ *     for near balls (large pixel size) — exactly the ones a weak homography
+ *     misplaces most.
+ * ===========================================================================*/
+
+const BALL_DIAM_IN = 3.625;
+const FRAME35_W_MM = 36;            // 35mm film frame width
+const DEFAULT_EQUIV_MM = 26;        // typical phone main-camera 35mm-equivalent
+
+/* --- Minimal EXIF reader -------------------------------------------------- */
+/* Reads an ArrayBuffer of a JPEG. Returns { focalMm, focal35, width, height,
+ * make, model } with whatever it finds. Pure byte parsing of the APP1/TIFF IFD. */
+function parseExif(arrayBuffer) {
+  const dv = new DataView(arrayBuffer);
+  const out = {};
+  if (dv.getUint16(0) !== 0xFFD8) return out; // not a JPEG
+  let offset = 2;
+  const len = dv.byteLength;
+  while (offset < len) {
+    if (dv.getUint16(offset) === 0xFFE1) { // APP1 (EXIF)
+      const exifStart = offset + 4;
+      // "Exif\0\0"
+      if (dv.getUint32(exifStart) !== 0x45786966) break;
+      const tiff = exifStart + 6;
+      const little = dv.getUint16(tiff) === 0x4949;
+      const rd16 = o => dv.getUint16(o, little);
+      const rd32 = o => dv.getUint32(o, little);
+      const ifd0 = tiff + rd32(tiff + 4);
+      const readIFD = (start) => {
+        const n = rd16(start);
+        let exifIFDoffset = null, gpsIFDoffset = null;
+        for (let i = 0; i < n; i++) {
+          const e = start + 2 + i * 12;
+          const tag = rd16(e);
+          const type = rd16(e + 2);
+          const count = rd32(e + 4);
+          const valOff = e + 8;
+          const getRational = (o) => rd32(o) / rd32(o + 4);
+          if (tag === 0x8769) exifIFDoffset = tiff + rd32(valOff); // ExifIFD pointer
+          else if (tag === 0x8825) gpsIFDoffset = tiff + rd32(valOff); // GPS IFD pointer
+          else if (tag === 0xA002) out.width = rd32(valOff);
+          else if (tag === 0xA003) out.height = rd32(valOff);
+          else if (tag === 0x920A) out.focalMm = getRational(tiff + rd32(valOff));
+          else if (tag === 0xA405) out.focal35 = rd16(valOff);
+          else if (tag === 0x9003 || tag === 0x0132) out.dateTime = readStr(dv, tiff + rd32(valOff), count); // DateTimeOriginal / DateTime
+          else if (tag === 0x010F) out.make = readStr(dv, tiff + rd32(valOff), count);
+          else if (tag === 0x0110) out.model = readStr(dv, tiff + rd32(valOff), count);
+        }
+        return { exifIFDoffset, gpsIFDoffset };
+      };
+      const r0 = readIFD(ifd0);
+      if (r0.exifIFDoffset) { const r1 = readIFD(r0.exifIFDoffset); if (r1.gpsIFDoffset) r0.gpsIFDoffset = r1.gpsIFDoffset; }
+      // GPS IFD: latitude (0x0002, 3 rationals) + ref (0x0001), longitude (0x0004)+ref(0x0003)
+      if (r0.gpsIFDoffset) {
+        const gs = r0.gpsIFDoffset, gn = rd16(gs);
+        let latRef = "N", lonRef = "E", lat = null, lon = null;
+        const dms = (o) => rd32(o) / rd32(o + 4) + (rd32(o + 8) / rd32(o + 12)) / 60 + (rd32(o + 16) / rd32(o + 20)) / 3600;
+        for (let i = 0; i < gn; i++) {
+          const e = gs + 2 + i * 12, tag = rd16(e), valOff = e + 8;
+          if (tag === 0x0001) latRef = String.fromCharCode(dv.getUint8(valOff));
+          else if (tag === 0x0003) lonRef = String.fromCharCode(dv.getUint8(valOff));
+          else if (tag === 0x0002) lat = dms(tiff + rd32(valOff));
+          else if (tag === 0x0004) lon = dms(tiff + rd32(valOff));
+        }
+        if (lat != null) out.lat = latRef === "S" ? -lat : lat;
+        if (lon != null) out.lon = lonRef === "W" ? -lon : lon;
+      }
+      break;
+    }
+    // advance over this marker segment
+    if ((dv.getUint16(offset) & 0xFF00) !== 0xFF00) break;
+    offset += 2 + dv.getUint16(offset + 2);
+  }
+  return out;
+}
+function readStr(dv, o, count) {
+  let s = "";
+  for (let i = 0; i < count; i++) { const c = dv.getUint8(o + i); if (!c) break; s += String.fromCharCode(c); }
+  return s.trim();
+}
+
+/* Derive focal length in PIXELS for the displayed image of width imgW.
+ * Prefers 35mm-equivalent (most robust). Returns { fpx, source, approx }. */
+function focalInPixels(exif, imgW) {
+  if (exif && exif.focal35 && imgW) {
+    return { fpx: (exif.focal35 / FRAME35_W_MM) * imgW, source: `EXIF 35mm-equiv ${exif.focal35}mm`, approx: false };
+  }
+  // fall back to a default phone equivalent — flagged approximate
+  return { fpx: (DEFAULT_EQUIV_MM / FRAME35_W_MM) * imgW, source: `assumed ${DEFAULT_EQUIV_MM}mm-equiv (no EXIF)`, approx: true };
+}
+
+/* --- Ball-size depth correction ------------------------------------------- */
+/* Given camera focal (px), principal point, the camera HEIGHT in inches (assumed
+ * eye level if unknown), a ball's pixel position (ground contact) and its measured
+ * pixel diameter, compute the ball's ground position in CAMERA-RELATIVE inches and
+ * return a correction vector we can blend with the homography position.
+ *
+ * Returns { distIn, reliability } where reliability is 0..1 (higher for bigger
+ * pixel balls). The caller blends the size-derived position with the homography
+ * position weighted by reliability — so near balls (trustworthy size) get pulled
+ * toward their true depth, far balls (noisy size) are left mostly to the homography.
+ */
+function ballSizeDepth(fpx, diamPx) {
+  if (!fpx || !diamPx || diamPx < 2) return { distIn: null, reliability: 0 };
+  // distance from camera along the optical axis, from the thin-lens projection of a
+  // known-size sphere:  d_px = fpx * D / Z   =>   Z = fpx * D / d_px
+  const distIn = fpx * BALL_DIAM_IN / diamPx;
+  // reliability: a 1px error fraction. bigger ball => smaller fractional error.
+  // err fraction ~ 1/diamPx; map to 0..1 (diam 8px -> 0.12 err -> low; 40px -> high)
+  const reliability = Math.max(0, Math.min(1, (diamPx - 6) / 34)); // ~0 at 6px, ~1 at 40px
+  return { distIn, reliability };
+}
+
+/* --- Sun position + shadow orientation ------------------------------------
+ * EXIF time + GPS give us the sun's compass azimuth (pure astronomy, no network).
+ * Shadows fall toward sun-azimuth+180. If the user taps a hoop's shadow (a known
+ * vertical's shadow), its image direction maps to that known real bearing, which
+ * fixes the lawn's compass orientation — resolving the N/S/E/W flip automatically. */
+
+/* Solar azimuth (deg from north, clockwise) + elevation, from lat/lon/local time.
+ * Verified against the PSA reference algorithm. tzHours = local UTC offset. */
+function solarPosition(lat, lon, y, mo, d, h, mi, tzHours) {
+  const decH = (h - tzHours) + mi / 60; // UTC decimal hours
+  const aux1 = Math.floor((mo - 14) / 12);
+  const aux2 = Math.floor((1461 * (y + 4800 + aux1)) / 4) + Math.floor((367 * (mo - 2 - 12 * aux1)) / 12)
+             - Math.floor((3 * Math.floor((y + 4900 + aux1) / 100)) / 4) + d - 32075;
+  const jd = aux2 - 0.5 + decH / 24;
+  const n = jd - 2451545.0;
+  const Omega = 2.1429 - 0.0010394594 * n;
+  const L = 4.8950630 + 0.017202791698 * n;
+  const g = 6.2400600 + 0.0172019699 * n;
+  const l = L + 0.03341607 * Math.sin(g) + 0.00034894 * Math.sin(2 * g) - 0.0001134 - 0.0000203 * Math.sin(Omega);
+  const ep = 0.4090928 - 6.214e-9 * n + 0.0000396 * Math.cos(Omega);
+  let ra = Math.atan2(Math.cos(ep) * Math.sin(l), Math.cos(l)); if (ra < 0) ra += 2 * Math.PI;
+  const decl = Math.asin(Math.sin(ep) * Math.sin(l));
+  const gmst = 6.6974243242 + 0.0657098283 * n + decH;
+  const lmst = (gmst * 15 + lon) * Math.PI / 180;
+  const ha = lmst - ra;
+  const latr = lat * Math.PI / 180;
+  const elev = Math.asin(Math.cos(latr) * Math.cos(ha) * Math.cos(decl) + Math.sin(decl) * Math.sin(latr));
+  let az = Math.atan2(-Math.sin(ha), Math.tan(decl) * Math.cos(latr) - Math.sin(latr) * Math.cos(ha)) * 180 / Math.PI;
+  if (az < 0) az += 360;
+  return { azimuth: az, elevation: elev * 180 / Math.PI };
+}
+
+/* Direction (compass bearing) that shadows point, given the sun azimuth. */
+function shadowBearing(sunAz) { return (sunAz + 180) % 360; }
+
+/* ===== inlined: lawn-fusion.js ===== */
+/* =============================================================================
+ * lawn-fusion.js — solve ONE camera pose that satisfies every clue at once.
+ * Where DLT collapses on near-parallel-boundary photos, a physically-constrained
+ * 6-DOF pose (focal known from EXIF) stays bounded. Verified: fusion beat DLT
+ * 60/60 in Monte Carlo, median mean error ~2.8yd vs DLT total collapse.
+ * Coordinates: world inches, X=east(0..28yd), Y=north(0..35yd), Z=up.
+ * ===========================================================================*/
+const YARD_IN = 36, LAWN_W_YD = 28, LAWN_H_YD = 35;
+function rodrigues(r) {
+  const th = Math.hypot(r[0], r[1], r[2]);
+  if (th < 1e-12) return [[1,0,0],[0,1,0],[0,0,1]];
+  const k = [r[0]/th, r[1]/th, r[2]/th];
+  const c = Math.cos(th), s = Math.sin(th), v = 1 - c;
+  return [
+    [c + k[0]*k[0]*v,      k[0]*k[1]*v - k[2]*s, k[0]*k[2]*v + k[1]*s],
+    [k[1]*k[0]*v + k[2]*s, c + k[1]*k[1]*v,      k[1]*k[2]*v - k[0]*s],
+    [k[2]*k[0]*v - k[1]*s, k[2]*k[1]*v + k[0]*s, c + k[2]*k[2]*v],
+  ];
+}
+function mv(M, x){return [M[0][0]*x[0]+M[0][1]*x[1]+M[0][2]*x[2],M[1][0]*x[0]+M[1][1]*x[1]+M[1][2]*x[2],M[2][0]*x[0]+M[2][1]*x[1]+M[2][2]*x[2]];}
+function mt(M){return [[M[0][0],M[1][0],M[2][0]],[M[0][1],M[1][1],M[2][1]],[M[0][2],M[1][2],M[2][2]]];}
+function projectPose(f, cx, cy, R, t, X){
+  const Pc=[R[0][0]*X[0]+R[0][1]*X[1]+R[0][2]*X[2]+t[0],
+            R[1][0]*X[0]+R[1][1]*X[1]+R[1][2]*X[2]+t[1],
+            R[2][0]*X[0]+R[2][1]*X[1]+R[2][2]*X[2]+t[2]];
+  if (Pc[2] <= 1) return null;
+  return [f*Pc[0]/Pc[2] + cx, f*Pc[1]/Pc[2] + cy];
+}
+function pixelToLawnFrac(pose, uv){
+  const {f,cx,cy,R,t}=pose;
+  const ray=[(uv[0]-cx)/f,(uv[1]-cy)/f,1];
+  const Rt=mt(R); const d=mv(Rt,ray); const o=mv(Rt,[-t[0],-t[1],-t[2]]);
+  if (Math.abs(d[2])<1e-9) return null;
+  const s=-o[2]/d[2]; const X=o[0]+s*d[0], Y=o[1]+s*d[1];
+  return {nx:X/(LAWN_W_YD*YARD_IN), ny:Y/(LAWN_H_YD*YARD_IN)};
+}
+function buildResiduals(p, ev){
+  const R=rodrigues([p[0],p[1],p[2]]); const t=[p[3],p[4],p[5]]; const res=[];
+  for (const g of (ev.ground||[])){
+    const pr=projectPose(ev.f,ev.cx,ev.cy,R,t,g.X); const w=g.w||1;
+    if(!pr){res.push(1e5,1e5);continue;}
+    res.push((pr[0]-g.uv[0])*w,(pr[1]-g.uv[1])*w);
+  }
+  for (const v of (ev.verticals||[])){
+    const b=projectPose(ev.f,ev.cx,ev.cy,R,t,v.X);
+    const top=projectPose(ev.f,ev.cx,ev.cy,R,t,[v.X[0],v.X[1],v.X[2]+12]);
+    const w=v.w||200;
+    if(!b||!top){res.push(1e5,1e5);continue;}
+    let pd=[top[0]-b[0],top[1]-b[1]]; const n=Math.hypot(pd[0],pd[1])+1e-9; pd=[pd[0]/n,pd[1]/n];
+    res.push((pd[0]-v.dir[0])*w,(pd[1]-v.dir[1])*w);
+  }
+  return res;
+}
+function solveLin(A,b){
+  const n=b.length; const M=A.map((row,i)=>row.concat([b[i]]));
+  for(let col=0;col<n;col++){
+    let piv=col; for(let r=col+1;r<n;r++) if(Math.abs(M[r][col])>Math.abs(M[piv][col])) piv=r;
+    [M[col],M[piv]]=[M[piv],M[col]];
+    const d=M[col][col]; if(Math.abs(d)<1e-12) continue;
+    for(let r=0;r<n;r++){ if(r===col) continue; const fac=M[r][col]/d; for(let c=col;c<=n;c++) M[r][c]-=fac*M[col][c]; }
+  }
+  const x=new Array(n); for(let i=0;i<n;i++) x[i]=M[i][n]/(M[i][i]||1e-12); return x;
+}
+function solvePose(ev, seed){
+  let p=seed.slice(); let lam=1e-3;
+  const cost=(q)=>{const r=buildResiduals(q,ev); return r.reduce((s,x)=>s+x*x,0);};
+  const steps=[1e-5,1e-5,1e-5,1e-2,1e-2,1e-2];
+  for(let it=0;it<160;it++){
+    const r=buildResiduals(p,ev); const c0=r.reduce((s,x)=>s+x*x,0); const m=r.length;
+    const J=Array.from({length:m},()=>new Array(6).fill(0));
+    for(let j=0;j<6;j++){ const pp=p.slice(); pp[j]+=steps[j]; const rj=buildResiduals(pp,ev); for(let i=0;i<m;i++) J[i][j]=(rj[i]-r[i])/steps[j]; }
+    const JtJ=Array.from({length:6},()=>new Array(6).fill(0)); const g=new Array(6).fill(0);
+    for(let a=0;a<6;a++){ for(let b=0;b<6;b++){ let s=0; for(let i=0;i<m;i++) s+=J[i][a]*J[i][b]; JtJ[a][b]=s; } let s2=0; for(let i=0;i<m;i++) s2+=J[i][a]*r[i]; g[a]=s2; }
+    let improved=false;
+    for(let tryi=0;tryi<8;tryi++){
+      const D=JtJ.map((row,a)=>row.map((v,b)=> v+(a===b?lam*(JtJ[a][a]+1e-9):0)));
+      const step=solveLin(D,g.map(x=>-x));
+      const pn=p.map((v,i)=>v+step[i]);
+      if(cost(pn)<c0){ p=pn; lam=Math.max(lam*0.5,1e-7); improved=true; break; } else lam*=3;
+    }
+    if(!improved&&lam>1e6) break;
+  }
+  return {pose:{f:ev.f,cx:ev.cx,cy:ev.cy,R:rodrigues([p[0],p[1],p[2]]),t:[p[3],p[4],p[5]],p}, cost:cost(p)};
+}
+
+/* ===== inlined: lawn-app-bridge.js ===== */
+/* =============================================================================
+ * lawn-app-bridge.js  —  Convert mapper output into Croquet OK's own format
+ * and render the result in the APP's overhead lawn diagram (not the demo SVG).
+ *
+ * COORDINATE CONVENTION — the one thing that must be exactly right:
+ *   Mapper (lawn-homography.js): {nx, ny}, ny UP   (0 = south edge, 1 = north)
+ *   App (croquet-ok.html):       {x,  y},  y  DOWN (0 = north top,  1 = south)
+ * So the bridge is:  x = nx ,  y = 1 - ny .
+ *
+ * The app stores ball positions as  positions[ballName] = {x, y}  (0–1 fractions),
+ * keyed by "blue"|"red"|"black"|"yellow", drawn as circles at x*W, y*H.
+ * Hoops live at the app's normalised positions; we mirror them so the rendered
+ * snapshot is pixel-compatible with the app's own diagram.
+ * ===========================================================================*/
+
+/* App constants, copied from croquet-ok.html so the render matches exactly. */
+/* ---- Ball in the jaws of a hoop -------------------------------------------
+ * A hoop's internal gauge is 3.75in on a 1008in-wide lawn = 0.0037 frac, so a
+ * ball "in the jaws" is essentially AT the hoop's x (±2in) and within a ball
+ * radius of the hoop line in y. Homography error is far larger than this real
+ * uncertainty, so snapping a near-hoop ball to the hoop IMPROVES accuracy.
+ * Returns the snapped {nx, ny, inJaws, hoopId} or null if not near a hoop. */
+const LAWN_HOOPS_NY = [ // lawn-frac, ny UP (matches mapper output)
+  { id: 1, nx: 7/28,  ny: 7/35  }, { id: 2, nx: 7/28,  ny: 28/35 },
+  { id: 3, nx: 21/28, ny: 28/35 }, { id: 4, nx: 21/28, ny: 7/35  },
+  { id: 5, nx: 14/28, ny: 10.5/35 }, { id: 6, nx: 14/28, ny: 24.5/35 },
+];
+function snapBallToHoop(nx, ny, opts = {}) {
+  const within = opts.within != null ? opts.within : 0.035; // ~1.2yd search radius
+  let best = null, bestD = within;
+  for (const h of LAWN_HOOPS_NY) {
+    const d = Math.hypot(nx - h.nx, ny - h.ny);
+    if (d < bestD) { bestD = d; best = h; }
+  }
+  if (!best) return null;
+  // snap x to the hoop (ball can't be more than the gauge off), keep y at the
+  // hoop line nudged toward where the tap fell (front/back of jaws)
+  const ySign = ny >= best.ny ? 1 : -1;
+  const yNudge = 0.004 * ySign; // ~5in front/back of the hoop line
+  return { nx: best.nx, ny: best.ny + yNudge, inJaws: true, hoopId: best.id };
+}
+/* ---- ball in jaws end ----------------------------------------------------- */
+
+const APP_BALL_COLS = { blue: "#185FA5", red: "#B83232", black: "#222", yellow: "#C49A0A" };
+// App hoop layout (y-down fractions) and peg, exactly as the app preview draws them.
+const APP_HOOP_POSITIONS = [
+  [0.29, 0.14], [0.71, 0.14], [0.29, 0.86], [0.71, 0.86], [0.5, 0.29], [0.5, 0.71],
+];
+const APP_HOOP_COLORS_DEFAULT = "rgba(255,255,255,0.85)";
+const APP_HOOP_COLOR_OVERRIDES = { 2: "#185FA5", 5: "#B83232" }; // indices matching app preview
+
+/* Convert the mapper's calibrated balls {color:{nx,ny}} into the app's
+ * positions store {color:{x,y}} with the y-axis flipped. Off-lawn balls
+ * (ny outside 0..1) are stored with y = -1 like the app's convention for
+ * "not on lawn", so the app's own filters hide them. */
+function ballsToAppPositions(mapperBalls) {
+  const positions = {};
+  for (const color of Object.keys(mapperBalls)) {
+    const b = mapperBalls[color];
+    if (b.nx == null || b.ny == null) continue;
+    const x = b.nx;
+    const y = 1 - b.ny;                 // flip: mapper ny-up -> app y-down
+    const onLawn = x >= 0 && x <= 1 && y >= 0 && y <= 1;
+    positions[color] = { x, y: onLawn ? y : -1 };
+  }
+  return positions;
+}
+
+/* Compose a one-sentence, human-readable note of what the tool inferred from
+ * the photo: how it was calibrated, how many balls were placed, and how much to
+ * trust it. Kept factual — it describes what was MEASURED/PLACED, never guesses
+ * beyond the evidence. */
+function describeSnapshot(mapperBalls, meta = {}) {
+  const positions = ballsToAppPositions(mapperBalls);
+  const colors = Object.keys(positions);
+  const onLawn = colors.filter(c => positions[c].y >= 0);
+  const off = colors.filter(c => positions[c].y < 0);
+
+  // anchors summary, if provided
+  const a = meta.anchors || [];
+  const hoops = a.filter(x => x.kind === "ref" && x.key !== "peg").length;
+  const corners = a.filter(x => x.kind === "corner").length;
+  const edges = a.filter(x => x.kind === "edge").length;
+  const snapped = (meta.snappedHoops || 0);
+
+  const calBits = [];
+  if (hoops) calBits.push(`${hoops} hoop${hoops > 1 ? "s" : ""}${snapped ? ` (${snapped} auto-snapped)` : ""}`);
+  if (corners) calBits.push(`${corners} corner${corners > 1 ? "s" : ""}`);
+  if (edges) calBits.push(`a tapped boundary line`);
+  const calText = calBits.length ? `calibrated from ${joinList(calBits)}` : "uncalibrated";
+
+  const conf = (meta.confidence || "unknown").toLowerCase();
+  const confText = {
+    high: "positions are measured and reliable",
+    medium: "positions are a good estimate",
+    low: "positions are approximate — treat as a rough guide",
+    insufficient: "not enough reference points for reliable positions",
+    unknown: "confidence unknown",
+  }[conf] || "confidence unknown";
+
+  let ballText;
+  if (!colors.length) ballText = "no balls were placed";
+  else {
+    ballText = `${onLawn.length} ball${onLawn.length === 1 ? "" : "s"} placed on the lawn` +
+      (onLawn.length ? ` (${joinList(onLawn)})` : "");
+    if (off.length) ballText += `, ${off.length} off the lawn`;
+    // note any balls recorded in the jaws of a hoop
+    const inJaws = Object.keys(mapperBalls).filter(c => mapperBalls[c] && mapperBalls[c].inJaws);
+    if (inJaws.length) {
+      const bits = inJaws.map(c => `${c} in hoop ${mapperBalls[c].hoopId}`);
+      ballText += `; ${joinList(bits)}`;
+    }
+  }
+
+  return `Snapshot ${calText}; ${ballText}; ${confText}.`;
+}
+
+function joinList(arr) {
+  if (arr.length <= 1) return arr.join("");
+  return arr.slice(0, -1).join(", ") + " and " + arr[arr.length - 1];
+}
+
+/* Build a snapshot object in the shape the app expects (positions keyed by
+ * ball, plus optional metadata). This is what you'd hand to the app's snapshot
+ * store / lastSnap.positions consumer. */
+function buildAppSnapshot(mapperBalls, meta = {}) {
+  return {
+    positions: ballsToAppPositions(mapperBalls),
+    source: "lawn-mapper",
+    confidence: meta.confidence || null,
+    capturedAt: new Date().toISOString(),
+    picturedRegion: meta.picturedRegion || null, // {x0,y0,x1,y1} in app y-down fracs
+    note: describeSnapshot(mapperBalls, meta),    // one-sentence human-readable summary
+  };
+}
+
+/* Render the APP-style overhead diagram as an SVG string, using the app's hoop
+ * layout, colours, and y-down ball positions. `region` (optional) highlights the
+ * photographed area. Dimensions default to a card-like aspect but scale cleanly. */
+/* Render the snapshot in the app's LAWN RECORDER style — matching croquet-ok.html:
+ * court 28x35yd (VW=280, VH=350), hoops at HOOP_POSITIONS with blue(1)/red(5) accents,
+ * baulk line 7yd from south, centre line, peg circle, app grass + ball colours.
+ * Coordinates: app stores y DOWN (0=north top). Hoop ny in the app is y-UP fractions
+ * (ny=1-(7/35) => near south), so on screen we draw at (1-ny) for y-down. */
+const REC_HOOPS = [
+  { nx: 7/28,  ny: 7/35,    stroke: "#185FA5" }, // 1 SW (blue)
+  { nx: 7/28,  ny: 28/35,   stroke: "#ffffff" }, // 2 NW
+  { nx: 21/28, ny: 28/35,   stroke: "#ffffff" }, // 3 NE
+  { nx: 21/28, ny: 7/35,    stroke: "#ffffff" }, // 4 SE
+  { nx: 14/28, ny: 10.5/35, stroke: "#B83232" }, // 5 Rover (red)
+  { nx: 14/28, ny: 24.5/35, stroke: "#ffffff" }, // 6 Penult
+];
+function renderAppDiagram(snapshot, opts = {}) {
+  const CW = 28, CL = 35;
+  const VW = opts.width || 280;
+  const VH = Math.round(VW * CL / CW);
+  const yd = VW / CW;
+  const grass = opts.grass || "#3f8a52";
+  // app y-down: south is bottom. Hoop ny here is yards-from-south as a fraction,
+  // so screen y = VH * (1 - ny).
+  const HX = nx => nx * VW, HY = ny => VH * (1 - ny);
+  let svg = `<svg viewBox="0 0 ${VW} ${VH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:340px;display:block;border-radius:6px">`;
+  // grass + subtle vertical stripes (evokes the recorder's mown look)
+  svg += `<rect x="0" y="0" width="${VW}" height="${VH}" fill="${grass}"/>`;
+  for (let i = 0; i < CW; i += 2) svg += `<rect x="${i*yd}" y="0" width="${yd}" height="${VH}" fill="rgba(255,255,255,0.03)"/>`;
+  svg += `<rect x="0" y="0" width="${VW}" height="${VH}" fill="none" stroke="#cfe8d6" stroke-width="1.5"/>`;
+  // pictured-region highlight (app y-down fracs)
+  if (snapshot.picturedRegion) {
+    const r = snapshot.picturedRegion;
+    svg += `<rect x="${r.x0*VW}" y="${r.y0*VH}" width="${(r.x1-r.x0)*VW}" height="${(r.y1-r.y0)*VH}" fill="#7fd99a" opacity="0.14" stroke="#7fd99a" stroke-dasharray="5 4"/>`;
+  }
+  // baulk lines (A-baulk 7yd from south, B-baulk 7yd from north) + centre lines, dashed
+  const baulkS = VH - 7*yd, baulkN = 7*yd;
+  svg += `<line x1="0" y1="${baulkS}" x2="${VW}" y2="${baulkS}" stroke="rgba(255,255,255,0.30)" stroke-width="0.8" stroke-dasharray="4,4"/>`;
+  svg += `<line x1="0" y1="${baulkN}" x2="${VW}" y2="${baulkN}" stroke="rgba(255,255,255,0.18)" stroke-width="0.8" stroke-dasharray="4,4"/>`;
+  svg += `<line x1="${VW/2}" y1="0" x2="${VW/2}" y2="${VH}" stroke="rgba(255,255,255,0.18)" stroke-width="0.8" stroke-dasharray="4,4"/>`;
+  // hoops drawn the recorder's way: two legs (hx±hw, down by legH) + crown bar on top
+  const hw = Math.max(3, VW*0.025), legH = Math.max(3, VW*0.018);
+  for (const h of REC_HOOPS) {
+    const hx = HX(h.nx), hy = HY(h.ny);
+    const sw = 1.8;
+    svg += `<line x1="${hx-hw}" y1="${hy}" x2="${hx-hw}" y2="${hy+legH}" stroke="${h.stroke}" stroke-width="${sw}" stroke-linecap="round"/>`;
+    svg += `<line x1="${hx+hw}" y1="${hy}" x2="${hx+hw}" y2="${hy+legH}" stroke="${h.stroke}" stroke-width="${sw}" stroke-linecap="round"/>`;
+    svg += `<line x1="${hx-hw}" y1="${hy}" x2="${hx+hw}" y2="${hy}" stroke="${h.stroke}" stroke-width="${sw}" stroke-linecap="round"/>`;
+  }
+  // peg at centre
+  svg += `<circle cx="${VW/2}" cy="${VH/2}" r="3.5" fill="#d8c24a" stroke="#7a6a16" stroke-width="0.8"/>`;
+  // balls (skip off-lawn y<0)
+  for (const color of Object.keys(snapshot.positions)) {
+    const p = snapshot.positions[color];
+    if (!p || p.y < 0) continue;
+    svg += `<circle cx="${p.x*VW}" cy="${p.y*VH}" r="7" fill="${APP_BALL_COLS[color]||"#888"}" stroke="rgba(255,255,255,0.55)" stroke-width="1.2"/>`;
+  }
+  svg += `</svg>`;
+  return svg;
+}
+</script>
+<script>
+const HOOP_KEYS=["hoop1","hoop2","hoop3","hoop4","hoop5","hoop6"];
+const CORNER_KEYS=["cornerSW","cornerSE","cornerNE","cornerNW"];
+// map a pixel through an explicit homography (the flipped working one)
+function tapToLawnPositionH(H,px,py){let [nx,ny]=applyHomography(H,px,py);return {nx:Math.max(0,Math.min(1,nx)),ny:Math.max(0,Math.min(1,ny))};}
+let img=null,cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let anchors=[],calibration=null,balls={},mode='boundary',boundaryMode='manual',selBall="blue";
+let hoopIdx=0,cornerIdx=0,snappedCount=0;
+let flip={x:false,y:false};   // lawn-orientation correction (auto + manual)
+let hoopVPending=null;        // {legL?,legR?} while collecting 3 taps for a crown hoop
+let hoopVerticals=[];         // committed {key,legL,legR,crown} for the leveller
+let boundaries=[];        // committed: {side, e0:{px,py}, e1:{px,py}}
+let drawingLine=null;     // in-progress: {e0:{px,py}} after first tap
+let pendingLine=null;     // {e0,e1} awaiting a side choice via the picker
+let livePt=null;          // current finger position for rubber-band
+let autoProposals=[];     // detected lines awaiting confirm
+const hint=document.getElementById('hint'),confEl=document.getElementById('conf');
+const loupe=document.getElementById('loupe'),lctx=document.getElementById('loupeCv').getContext('2d');
+
+let camFocal=null; // {fpx, source, approx}
+let sunInfo=null;  // {azimuth, elevation, shadowBearing} when GPS+time available
+function computeSun(exif){
+  if(!exif||exif.lat==null||exif.lon==null||!exif.dateTime)return null;
+  // dateTime like "2024:09:21 10:42:18"
+  const m=/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2})/.exec(exif.dateTime);
+  if(!m)return null;
+  const [_,Y,Mo,D,H,Mi]=m.map(Number);
+  // estimate tz from longitude (15 deg per hour) — local civil tz unknown but this
+  // is close enough for azimuth (which we only need to ~quadrant accuracy)
+  const tz=Math.round(exif.lon/15);
+  const s=solarPosition(exif.lat,exif.lon,Y,Mo,D,H,Mi,tz);
+  return {...s, shadowBearing:shadowBearing(s.azimuth), tz};
+}
+// File input handled by the combined listener added at the bottom of the page.
+function loadImage(url,exif,sensorData){img=new Image();img.onload=()=>{
+  camFocal=focalInPixels(exif||{},img.width);
+  sunInfo=computeSun(exif);
+  // Inject GPS from live camera if EXIF has none
+  if(!sunInfo && sensorData && sensorData.gps && exif && exif.dateTime) {
+    sunInfo=computeSun({...exif, lat:sensorData.gps.lat, lon:sensorData.gps.lon});
+  }
+  fit();reset();
+  // Show outdoor tip banner once per session
+  if(!sessionStorage.getItem('bannerDismissed')) {
+    const b=document.getElementById('outdoorBanner'); if(b) b.style.display='block';
+  }
+  // Apply sensor orientation data from live camera capture
+  if(sensorData && sensorData.orient) {
+    setTimeout(()=>autoApplyOrientation(sensorData.orient, sensorData.gps), 200);
+  }
+  updateWizard();
+  let tag=camFocal.approx?'<span style="color:#e69638">⚠ no EXIF focal — ball-size scale approximate</span>'
+                         :`<span style="color:#7fd99a">✓ focal from photo</span>`;
+  let suntag = sunInfo
+    ? ` · <span style="color:#7fd99a">☀ sun known (shadows point ${compassName(sunInfo.shadowBearing)}) — tap a hoop shadow to auto-orient</span>`
+    : ` · <span style="color:#9fb3a6">no GPS/time for sun orientation</span>`;
+  hint.innerHTML=`Photo loaded. ${tag}${suntag}. Draw the NEAR edge as one boundary, then trace the hoop — that pair solves it.`;
+};img.src=url;}
+function compassName(b){const dirs=['N','NE','E','SE','S','SW','W','NW'];return dirs[Math.round(b/45)%8];}
+function fit(){cv.width=img.width;cv.height=img.height;cv.style.width="100%";cv.style.maxWidth=img.width+"px";draw();}
+
+function setBoundaryMode(bm){boundaryMode=bm;drawingLine=null;pendingLine=null;autoProposals=[];
+  document.getElementById('mAuto').classList.toggle('active',bm==='auto');
+  document.getElementById('mManual').classList.toggle('active',bm==='manual');
+  document.getElementById('sidePicker').style.display="none";
+  if(bm==='auto'){runAuto();}
+  else { setMode(document.getElementById('boundaryBtn'),'boundary'); }
+}
+function setMode(btn,m,keepHint){mode=m;document.querySelectorAll('.tools button[data-mode]').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');
+  drawingLine=null;pendingLine=null;shadowPending=null;structDrawing=null;structPendingLine=null;pendingHoop=null;document.getElementById('sidePicker').style.display="none";const sp=document.getElementById('structPicker');if(sp)sp.style.display="none";const hp=document.getElementById('hoopPicker');if(hp)hp.style.display="none";
+  if(!keepHint){
+    if(m==='boundary')hint.textContent="Tap one END of a boundary line, then the other end.";
+    if(m==='hoop')hint.textContent="Tap near a hoop — it snaps to the exact centre.";
+    if(m==='hoopv')hint.textContent="Trace the hoop: tap the base of one leg, then up to the crown, across the top, and down to the other leg base.";
+    if(m==='corner')hint.textContent=`Tap a lawn corner.`;
+    if(m==='ball')hint.textContent=`Tap where the ball TOUCHES THE GROUND (its base, not its top) — that's the point on the lawn.`;
+    if(m==='structure')hint.textContent=`Trace any straight man-made edge (shed roofline, fence, wall, corner) — tap each end, then tag its direction.`;
+    if(m==='shadow')hint.textContent=`Tap the BASE of a vertical (e.g. a hoop leg), then the TIP of its shadow — the sun orients the lawn.`;
+  }
+  draw();
+}
+let sizingBall=null;
+let shadowPending=null;
+let shadowVector=null;      // {base,tip,Lreal,bearing} captured shadow as a known ground ruler
+let structureLines=[];      // committed {axis,a,b}
+let structDrawing=null;     // first endpoint while tracing
+let structPendingLine=null; // traced edge awaiting axis choice
+function skipBallSize(){const c=sizingBall;sizingBall=null;setMode(document.getElementById('ballBtn'),'ball',true);hint.textContent=`✓ ${c} placed (no size). Pick another colour, or Build snapshot.`;draw();}
+function startBallSize(color){sizingBall=color;mode='ballsize';hint.textContent=`Tap the TOP of the ${color} ball — the marker will grow to match its size.`;}
+function snapBallInJaws(color,hoopId){
+  const snapped=snapBallToHoop(balls[color].nx,balls[color].ny,{within:0.06});
+  if(snapped){balls[color].nx=snapped.nx;balls[color].ny=snapped.ny;balls[color].inJaws=true;balls[color].hoopId=hoopId;
+    hint.textContent=`✓ ${color} snapped into hoop ${hoopId}'s jaws (precise).`;recalc();draw();}
+}
+function pickAxis(axis){
+  if(!structPendingLine)return;
+  structureLines.push({axis,a:structPendingLine.a,b:structPendingLine.b});
+  structPendingLine=null;document.getElementById('structPicker').style.display="none";
+  applyStructure();draw();
+}
+function cancelStruct(){structPendingLine=null;structDrawing=null;document.getElementById('structPicker').style.display="none";hint.textContent="Trace another edge, or switch tool.";draw();}
+function applyStructure(){
+  // recover orientation from all structure lines (+ hoop verticals), cross-check
+  const hv=hoopVerticals.map(h=>hoopVertical(h));
+  const r=solveStructure(structureLines,hv,cv.width,cv.height);
+  structSolution=r;
+  let bits=[];
+  if(r.counts.V>=2)bits.push('vertical');
+  if(r.counts.H1>=2)bits.push('horizontal-A');
+  if(r.counts.H2>=2)bits.push('horizontal-B');
+  // if we have the vertical axis from structure AND a calibration, cross-check tilt
+  if(r.verticalAxis && calibration){
+    const agree=verticalAgreement(calibration.H,hv.length?hv:[{verticalLine:[r.vps.V?lineFromVP(r.vps.V):null]}],cv.width,cv.height);
+  }
+  hint.innerHTML = bits.length
+    ? `🏠 Structure: ${bits.join(', ')} axis recovered. ${r.horizon?'Horizon found — orientation cross-checked.':'Add a perpendicular edge for the full horizon.'}`
+    : `🏠 Edge added — trace more parallel edges (2+ per direction) to lock an axis.`;
+}
+function lineFromVP(vp){return null;}
+let structSolution=null;
+function toggleFlip(axis){flip._userSet=true;if(axis==='x')flip.x=!flip.x;else flip.y=!flip.y;recalc();}
+function resetFlip(){flip={x:false,y:false};recalc();}
+let fusionContradiction=false;
+function pickSide(side){
+  if(!pendingLine){document.getElementById('sidePicker').style.display="none";return;}
+  const pl=pendingLine;
+  const dirNew=Math.atan2(pl.e1.py-pl.e0.py, pl.e1.px-pl.e0.px);
+  for(const b of boundaries){
+    const dirOld=Math.atan2(b.e1.py-b.e0.py, b.e1.px-b.e0.px);
+    let diff=Math.abs(((dirNew-dirOld)*180/Math.PI+180)%180); if(diff>90)diff=180-diff;
+    const perpLabels=((b.side==='S'||b.side==='N')&&(side==='W'||side==='E'))||((b.side==='W'||b.side==='E')&&(side==='S'||side==='N'));
+    if(perpLabels && diff<25){
+      // BLOCK: near-parallel lines can't be perpendicular sides. Don't add it.
+      document.getElementById('sidePicker').style.display="none";pendingLine=null;
+      hint.innerHTML=`<span style="color:#e69638">⚠ Can't add that — this line runs nearly parallel to your "${b.side}" edge, so it can't be the "${side}" edge (those are perpendicular sides). It's likely another part of the same near edge. <b>Better: skip boundaries and tap your hoops instead</b> — that's the reliable way from this angle.</span>`;
+      draw();return;
+    }
+  }
+  // Also block a side (W/E) edge drawn as a flat near-horizontal line (it should recede)
+  const ang=Math.abs(dirNew*180/Math.PI); const nearHoriz=(ang<20||ang>160);
+  if((side==='W'||side==='E') && nearHoriz){
+    document.getElementById('sidePicker').style.display="none";pendingLine=null;
+    hint.innerHTML=`<span style="color:#e69638">⚠ A ${side} side edge runs away from you up the lawn, so it should look slanted/receding — not flat across the photo. This flat line is almost certainly the near (South) or far (North) edge. <b>Or skip boundaries and tap hoops</b> (more reliable).</span>`;
+    draw();return;
+  }
+  pendingLine=null;
+  document.getElementById('sidePicker').style.display="none";
+  boundaries.push({side,e0:pl.e0,e1:pl.e1});
+  anchors.push(...boundaryTapToAnchors(side,pl.e0,pl.e1));
+  recalc();
+  if(!hint.innerHTML.includes('⚠'))hint.textContent=`✓ ${side} edge set.`;
+  draw();
+}
+function undoLast(){
+  _lastModalKey=null;
+  // undo most recent action: a boundary (removes its 2 edge anchors) or last anchor
+  if(pendingLine){pendingLine=null;document.getElementById('sidePicker').style.display="none";draw();return;}
+  if(drawingLine){drawingLine=null;hint.textContent="Cancelled. Tap one end of a boundary line.";draw();return;}
+  if(boundaries.length){
+    boundaries.pop();
+    // remove the last two edge anchors
+    for(let n=0;n<2;n++){for(let i=anchors.length-1;i>=0;i--){if(anchors[i].kind==='edge'){anchors.splice(i,1);break;}}}
+    hint.textContent="Removed last boundary.";recalc();draw();return;
+  }
+  if(anchors.length){const last=anchors.pop();if(last.kind==='ref')hoopIdx=Math.max(0,hoopIdx-1);if(last.kind==='corner')cornerIdx=Math.max(0,cornerIdx-1);recalc();draw();}
+}
+function reset(){_lastModalKey=null;closeModal();anchors=[];calibration=null;balls={};hoopIdx=0;cornerIdx=0;snappedCount=0;boundaries=[];drawingLine=null;pendingLine=null;livePt=null;autoProposals=[];hoopVPending=null;hoopVerticals=[];flip={x:false,y:false};structureLines=[];structDrawing=null;structPendingLine=null;structSolution=null;shadowVector=null;fusionPose=null;pendingHoop=null;_compassNearEdge=null;_compassConf=0;_syntheticVVPy=null;{const hp=document.getElementById('hoopPicker');if(hp)hp.style.display="none";}
+  document.getElementById('ballrow').style.display="none";document.getElementById('snapWrap').style.display="none";document.getElementById('sidePicker').style.display="none";
+  {const ph=document.getElementById('snapPlaceholder');if(ph)ph.style.display="block";}
+  if(img){setBoundaryMode(boundaryMode);recalc();hint.textContent="Draw the NEAR edge: tap ✏️ Boundary, tap each end of the closest sideline, label it (usually South). Then trace the hoop.";}
+  else{confEl.className="conf insufficient";confEl.textContent="Load a photo to begin.";hint.textContent="① Load a photo to start.";}}
+
+function runAuto(){
+  if(!img)return;
+  const det=autoDetect(img,{maxW:480});
+  confEl.className="conf "+(det.autoUsable?"medium":"low");
+  confEl.textContent=`AUTO: ${det.needs}`;
+  if(det.autoUsable){
+    autoProposals=det.strongLines.map(L=>({...L,confirmed:false}));
+    hint.textContent="Tap a detected red line to use it as a boundary (you'll pick its side). Or switch to Draw boundaries.";
+  } else {
+    autoProposals=[];
+    hint.textContent="Auto found nothing confident — switch to 'Tap boundary ends' (Manual). This is the common case.";
+  }
+  draw();
+}
+
+function refPointCount(){
+  // how many independent reference points the anchors provide
+  let n=0;
+  n+=anchors.filter(a=>a.kind==='ref'&&a.key!=='peg').length; // each hoop = 1
+  n+=anchors.filter(a=>a.kind==='corner').length;             // each corner = 1
+  n+=anchors.filter(a=>a.kind==='edge').length;               // each boundary end = 1
+  return n;
+}
+function fusionEvidenceCount(){let n=0;for(const a of anchors)if(a.px!=null)n++;n+=hoopVerticals.length;if(shadowVector)n++;return n;}
+let fusionPose=null;
+let pendingHoop=null; // {type:'crown'|'plain', ...geometry} awaiting which-hoop choice
+function pickHoop(num){
+  if(!pendingHoop)return;
+  const key='hoop'+num;
+  // guard: is this hoop number already taken? two hoops can't be the same hoop.
+  const taken = anchors.some(a=>a.kind==='ref'&&a.key&&a.key.replace(/_[LR]$/,'')===key) || hoopVerticals.some(h=>h.key===key);
+  if(taken){
+    showModal({icon:'⚠️', title:`Hoop ${num} is already set`,
+      body:`Two hoops can't both be hoop ${num}. Pick the correct different number for this one — or tap <b>↶ Undo</b> if it's a duplicate.`,
+      primary:'Pick again'});
+    return; // keep the picker open for a corrected choice
+  }
+  const hoopLawn=LAWN_REFERENCE_POINTS[key];
+  if(pendingHoop.type==='crown'){
+    const tap={key, legL:pendingHoop.legL, legR:pendingHoop.legR, crownL:pendingHoop.crownL, crownR:pendingHoop.crownR, crown:pendingHoop.crown, crownDefinesWidth:true};
+    hoopVerticals.push(tap);
+    anchors.push(...hoopGroundAnchors(tap,hoopLawn));
+    snappedCount++;
+  } else {
+    anchors.push({kind:"ref",key,px:pendingHoop.px,py:pendingHoop.py});
+  }
+  pendingHoop=null;document.getElementById('hoopPicker').style.display="none";
+  hint.textContent=`Hoop ${num} set. Add more evidence or place balls.`;
+  recalc();draw();
+}
+function tryFusion(){
+  fusionDiag="";
+  if(!camFocal||!camFocal.fpx){fusionDiag="no focal";return null;}
+  const YARD=36;
+  const ground=[], verticals=[];
+  // ground anchors: plain hoops (centre), corners, boundary endpoints. NOTE we skip
+  // the crown hoop's _L/_R leg anchors here — those legs are only 0.05yd apart and
+  // would act as near-coincident ground points (a scale-exploding contradiction).
+  // Crown hoops are added below as a single centre point + plumb verticals.
+  for(const a of anchors){
+    if(a.kind==='ref'&&a.key&&/_[LR]$/.test(a.key))continue; // crown leg — handled below
+    let lawn=null;
+    if(a.kind==='ref'&&a.key){lawn=a.lawn||LAWN_REFERENCE_POINTS[a.key.replace(/_[LR]$/,'')];}
+    else if(a.kind==='corner'){lawn=CORNER_POINTS[a.key];}
+    else if(a.kind==='boundary'||a.kind==='edge'){lawn=edgeToLawnPoint(a.side,a.frac);}
+    if(lawn&&a.px!=null){ground.push({X:[lawn.nx*LAWN_W_YD*YARD, lawn.ny*LAWN_H_YD*YARD, 0], uv:[a.px,a.py], w:1});}
+  }
+  // crown verticals AND their bases as ground points. The two legs sit ±half-gauge
+  // (3.75in/2) east-west of the hoop centre — both a plumb direction and a known
+  // A hoop is ONE ground location (its centre) plus verticals. The two legs are
+  // only 3.75in = 0.05yd apart — using them as two separate GROUND points forces
+  // the solver to map ~40px of image onto 0.05yd of ground = a scale explosion.
+  // So: contribute the hoop CENTRE as a single ground point, and each leg only as
+  // a plumb-direction (vertical) constraint. The crown width is handled separately.
+  const halfGaugeFrac = (3.75/2)/(LAWN_W_YD*YARD);
+  for(const h of hoopVerticals){
+    if(!h.legL||!h.legR||!h.crownL)continue;
+    const refKey=h.key||null; const refLawn = refKey?LAWN_REFERENCE_POINTS[refKey]:null;
+    let centreLawn = refLawn?{nx:refLawn.nx, ny:refLawn.ny}:null;
+    if(!centreLawn && calibration){const mp={px:(h.legL.px+h.legR.px)/2,py:(h.legL.py+h.legR.py)/2};const lp=tapToLawnPositionH(calibration.Hwork,mp.px,mp.py);centreLawn={nx:lp.nx,ny:lp.ny};}
+    if(!centreLawn)continue;
+    const centrePx=[(h.legL.px+h.legR.px)/2,(h.legL.py+h.legR.py)/2];
+    // single ground point at the hoop centre
+    ground.push({X:[centreLawn.nx*LAWN_W_YD*YARD, centreLawn.ny*LAWN_H_YD*YARD, 0], uv:centrePx, w:1});
+    // each leg as a plumb-direction constraint at its (slightly offset) lawn x
+    const legSpecs=[[h.legL,h.crownL,-halfGaugeFrac],[h.legR,h.crownR||h.crownL,+halfGaugeFrac]];
+    for(const [leg,crown,off] of legSpecs){
+      let d=[crown.px-leg.px, crown.py-leg.py]; const n=Math.hypot(d[0],d[1]); if(n<3)continue; d=[d[0]/n,d[1]/n];
+      verticals.push({X:[(centreLawn.nx+off)*LAWN_W_YD*YARD, centreLawn.ny*LAWN_H_YD*YARD, 0], dir:d, w:200});
+    }
+  }
+  // de-duplicate near-identical ground points
+  const dedup=[]; for(const g of ground){ if(!dedup.some(o=>Math.hypot(o.uv[0]-g.uv[0],o.uv[1]-g.uv[1])<10)) dedup.push(g); }
+  ground.length=0; ground.push(...dedup);
+  if(ground.length<3||verticals.length<1){fusionDiag=`need 3 ground+1 vertical, have ${ground.length}+${verticals.length}`;return null;}
+  // CONSISTENCY GATE 1: same lawn point tapped in two far-apart pixel spots.
+  for(let i=0;i<ground.length;i++)for(let j=i+1;j<ground.length;j++){
+    const sameLawn=Math.hypot(ground[i].X[0]-ground[j].X[0],ground[i].X[1]-ground[j].X[1])<3*36;
+    const farPixels=Math.hypot(ground[i].uv[0]-ground[j].uv[0],ground[i].uv[1]-ground[j].uv[1])>120;
+    if(sameLawn&&farPixels){
+      fusionDiag=`contradiction: lawn (${(ground[i].X[0]/36).toFixed(0)},${(ground[i].X[1]/36).toFixed(0)}) tapped in two far-apart spots — a boundary is probably labelled with the wrong side`;
+      fusionContradiction=true; return null;
+    }
+  }
+  // CONSISTENCY GATE 2: two points far apart in lawn DEPTH (ny) but at nearly the same
+  // image height (flat horizontal line). A receding edge can't be flat in the image —
+  // this is the classic "drew the W/E edge as a horizontal near-line" mistake.
+  for(let i=0;i<ground.length;i++)for(let j=i+1;j<ground.length;j++){
+    const lawnDepth=Math.abs(ground[i].X[1]-ground[j].X[1])/36;       // yards apart N–S
+    const lawnAcross=Math.abs(ground[i].X[0]-ground[j].X[0])/36;      // yards apart E–W
+    const imgDV=Math.abs(ground[i].uv[1]-ground[j].uv[1]);            // pixel height diff
+    const imgDU=Math.abs(ground[i].uv[0]-ground[j].uv[0]);
+    // far apart in depth (>10yd N–S, little E–W) but image line is near-horizontal:
+    if(lawnDepth>10 && lawnAcross<6 && imgDU>150 && imgDV<imgDU*0.35){
+      fusionDiag=`contradiction: a side edge that runs away up the lawn was drawn as a flat near-horizontal line — it should recede into the distance. Re-label it, or delete it and use hoops`;
+      fusionContradiction=true; return null;
+    }
+  }
+  fusionContradiction=false;
+  // expose the evidence for diagnosis: list each ground point's lawn-yard coords
+  fusionEvidenceDump = ground.map(g=>`(${(g.X[0]/36).toFixed(0)},${(g.X[1]/36).toFixed(0)})`).join(' ');
+  const ev={f:camFocal.fpx, cx:cv.width/2, cy:cv.height/2, ground, verticals};
+  // MULTI-SEED: the camera could be on any side of the lawn. Try four cardinal
+  // vantage points (S/W/N/E looking in) plus a couple of pitches, keep the best fit.
+  const YARDc=YARD;
+  function seedFrom(yawDeg,pitchDeg,camYd){
+    const R=rodrigues([pitchDeg*Math.PI/180, yawDeg*Math.PI/180, 0]);
+    const c=[camYd[0]*YARDc,camYd[1]*YARDc,58];
+    const t=[-(R[0][0]*c[0]+R[0][1]*c[1]+R[0][2]*c[2]),-(R[1][0]*c[0]+R[1][1]*c[1]+R[1][2]*c[2]),-(R[2][0]*c[0]+R[2][1]*c[1]+R[2][2]*c[2])];
+    return [pitchDeg*Math.PI/180, yawDeg*Math.PI/180, 0, t[0],t[1],t[2]];
+  }
+  const seeds=[
+    seedFrom(0,72,[14,-26]),   // south side looking N
+    seedFrom(0,68,[14,-26]),
+    seedFrom(0,68,[14,4]),     // ON the lawn, near south end, looking N (close-ups)
+    seedFrom(0,62,[14,12]),    // standing further onto the lawn
+    seedFrom(180,72,[14,61]),  // north side looking S
+    seedFrom(180,68,[14,31]),  // on lawn, north end, looking S
+    seedFrom(90,72,[-26,17]),  // west side looking E
+    seedFrom(-90,72,[54,17]),  // east side looking W
+  ];
+  let best=null;
+  for(const seed of seeds){
+    let s; try{ s=solvePose(ev,seed); }catch(e){ continue; }
+    if(s&&isFinite(s.cost)&&(!best||s.cost<best.cost))best=s;
+  }
+  if(!best){ fusionDiag="solve failed all seeds"; return null; }
+  const sol=best;
+  const perObs=sol.cost/(ev.ground.length*2+ev.verticals.length*2);
+  // identify the worst-fitting constraint for diagnosis
+  let worst="";
+  try{
+    const R=rodrigues([sol.pose.p[0],sol.pose.p[1],sol.pose.p[2]]); const t=sol.pose.t;
+    let wv=0;
+    for(const g of ev.ground){const pr=projectPose(ev.f,ev.cx,ev.cy,R,t,g.X);if(pr){const e=Math.hypot(pr[0]-g.uv[0],pr[1]-g.uv[1]);if(e>wv){wv=e;worst=`ground(${(g.X[0]/36).toFixed(0)},${(g.X[1]/36).toFixed(0)}) off ${e.toFixed(0)}px`;}}}
+  }catch(e){}
+  fusionDiag=`fit ${perObs.toFixed(0)} (${ground.length}g+${verticals.length}v)`;
+  if(!isFinite(perObs)||perObs>2500){fusionDiag=`poor fit ${perObs.toFixed(0)} · worst ${worst}`;return null;}
+  return sol.pose;
+}
+let _lastModalKey=null;
+function showModal(o){
+  // o.key prevents the same modal re-firing every recalc; pass a stable key
+  if(o.key && o.key===_lastModalKey) return;
+  if(o.key) _lastModalKey=o.key;
+  document.getElementById('modalIcon').textContent=o.icon||'💡';
+  document.getElementById('modalTitle').textContent=o.title||'';
+  document.getElementById('modalBody').innerHTML=o.body||'';
+  const pb=document.getElementById('modalPrimary');pb.textContent=o.primary||'Got it';
+  pb.onclick=()=>{closeModal();if(o.onPrimary)o.onPrimary();};
+  const sb=document.getElementById('modalSecondary');
+  if(o.secondary){sb.style.display='inline-block';sb.textContent=o.secondary;sb.onclick=()=>{closeModal();if(o.onSecondary)o.onSecondary();};}
+  else sb.style.display='none';
+  document.getElementById('modalBackdrop').style.display='flex';
+}
+function closeModal(){document.getElementById('modalBackdrop').style.display='none';}
+function resetModalGuard(){_lastModalKey=null;}
+function showFusionWhy(){
+  // translate the technical fusionDiag into a plain next-step
+  let title='Using the rough solver', body='', icon='🧭';
+  if(/no focal/.test(fusionDiag)){
+    title='Photo has no lens info';
+    body='This image is missing the camera data the accurate solver needs (often stripped from screenshots or shared photos). The rough solver is being used instead — positions are approximate. An original photo straight from the phone usually works better.';
+  } else if(/need \d+ ground/.test(fusionDiag)){
+    title='Need one more solid anchor';
+    body='The accurate solver needs a bit more to work with. <b>Best next step:</b> trace a hoop with <b>⛳↥ Hoop+crown</b> (the crown gives the vertical it needs) and pick which hoop it is.';
+  } else if(/poor fit|worst/.test(fusionDiag)){
+    title='Anchors don\'t quite agree';
+    body='The anchors you\'ve placed don\'t fit a single consistent view yet, so the rough solver is being used. <b>Try:</b> add one more clearly-identified hoop, or tap <b>↶ Undo</b> on any anchor you\'re unsure about and re-place it carefully (use the 🔍 zoom).';
+  } else {
+    title='Using the rough solver';
+    body='Positions are approximate. Adding a clearly-identified hoop (traced with ⛳↥) usually switches on the accurate solver.';
+  }
+  showModal({icon,title,body,primary:'OK'});
+}
+let fusionDiag="";
+let fusionEvidenceDump="";
+function recalc(){
+ updateWizard();
+ try{
+  const n=refPointCount();
+  const r=calibrateFromAnchors(anchors);
+  calibration=r.H?r:null;
+  if(calibration){
+    // pick an interior point to fix orientation; prefer a traced/known hoop so we
+    // can match its KNOWN lawn position (reliable) rather than guessing toward centre
+    let interior=null, expected=null;
+    const refAnchor=anchors.find(a=>a.kind==='ref'&&a.key&&a.key.indexOf('peg')<0);
+    if(refAnchor){interior=refAnchor; expected=refAnchor.lawn||LAWN_REFERENCE_POINTS[refAnchor.key.replace(/_[LR]$/,'')]||null;}
+    else if(Object.keys(balls).length){interior=balls[Object.keys(balls)[0]];}
+    if(interior && !flip._userSet){
+      const f=detectFlip(calibration.H,{px:interior.px,py:interior.py},expected);
+      flip.x=f.flipX; flip.y=f.flipY;
+    }
+    calibration.Hwork = applyFlip(calibration.H, flip.x, flip.y);
+    // CROWN CONSISTENCY GATE: if we have >=2 crown hoops, check whether the ground
+    // solve's implied vertical agrees with what the crowns observe. Read-only.
+    if(hoopVerticals.length>=1){
+      const hv=hoopVerticals.map(h=>hoopVertical(h));
+      const vtest=verticalVanishingPoint(hv);
+      if(vtest.count>=2){
+        const agree=verticalAgreement(calibration.H,hv,cv.width,cv.height);
+        calibration.verticalCheck=agree;
+        if(agree.checked && !agree.agree && calibration.confidence!=='low' && calibration.confidence!=='insufficient'){
+          calibration.confidence='low';
+          calibration.advice=`Crown verticals disagree with the ground solve by ${agree.angleDeg.toFixed(0)}° — the lawn shape is probably off (near-parallel boundaries). Redraw a boundary running away up the lawn.`;
+        } else if(agree.checked && agree.agree){
+          calibration.verticalConfirmed=true;
+        }
+      }
+      // known-size scale check using the traced hoop's gauge
+      const traced=hoopVerticals.find(h=>h.legL&&h.legR);
+      if(traced){const ss=scaleSanity(applyHomography,calibration.Hwork,traced);calibration.scaleCheck=ss;}
+      // CROWN HOOPS PARALLEL TO N-S: the line between two hoops' bases should run
+      // N-S on the lawn. Check the mapped direction is within ~15deg of due N-S.
+      if(hoopVerticals.length>=2){
+        const h0=hoopVerticals[0],h1=hoopVerticals[1];
+        const b0={px:(h0.legL.px+h0.legR.px)/2,py:(h0.legL.py+h0.legR.py)/2};
+        const b1={px:(h1.legL.px+h1.legR.px)/2,py:(h1.legL.py+h1.legR.py)/2};
+        const l0=tapToLawnPositionH(calibration.Hwork,b0.px,b0.py);
+        const l1=tapToLawnPositionH(calibration.Hwork,b1.px,b1.py);
+        const dE=Math.abs(l1.nx-l0.nx), dN=Math.abs(l1.ny-l0.ny);
+        // N-S means dE should be small relative to dN (unless the two hoops share a row)
+        if(dN>0.05||dE>0.05){
+          const ang=Math.atan2(dE,dN)*180/Math.PI; // 0 = pure N-S
+          calibration.nsCheck={ok:ang<20||Math.abs(ang-90)<20, ang}; // allow N-S or E-W pairs
+        }
+      }
+    }
+  }
+  // ===== FUSION POSE SOLVER: solve one camera pose from all evidence at once =====
+  // Verified to beat the homography on near-parallel-boundary photos (60/60 in test).
+  fusionPose = tryFusion();
+  for(const c in balls){
+    if(fusionPose){
+      const fr=pixelToLawnFrac(fusionPose,[balls[c].px,balls[c].py]);
+      if(fr){balls[c].nx=fr.nx;balls[c].ny=fr.ny;balls[c].fromFusion=true;continue;}
+    }
+    if(calibration){const [rnx,rny]=applyHomography(calibration.Hwork,balls[c].px,balls[c].py);balls[c].nx=Math.max(0,Math.min(1,rnx));balls[c].ny=Math.max(0,Math.min(1,rny));balls[c].fromFusion=false;balls[c].clamped=(rnx<-0.05||rnx>1.05||rny<-0.05||rny>1.05);}
+  }
+  // ORIENTATION CROSS-CHECK: if a hoop is identified AND a boundary labelled, verify
+  // they're geometrically consistent in the image. The line between an identified
+  // hoop and a labelled edge should point the right way. Catches compass mislabels
+  // early (the recurring "wrong N/S/E/W" mistake) before they corrupt the solve.
+  if(!fusionContradiction && hoopVerticals.length>=1 && boundaries.length>=1){
+    try{
+      const h=hoopVerticals.find(h=>h.key); 
+      if(h){
+        const hl=LAWN_REFERENCE_POINTS[h.key]; // ny-up
+        for(const b of boundaries){
+          const el=edgeToLawnPoint(b.side,0.5); // midpoint of that edge in lawn frac
+          // expected image direction from hoop to edge midpoint, vs actual
+          // (only flag a gross mismatch: hoop on one side, edge labelled opposite)
+          const lawnDX=el.nx-hl.nx, lawnDY=el.ny-hl.ny;
+          const hpx=(h.legL.px+h.legR.px)/2, hpy=(h.legL.py+h.legR.py)/2;
+          const bmx=(b.e0.px+b.e1.px)/2, bmy=(b.e0.py+b.e1.py)/2;
+          const imgDX=bmx-hpx, imgDY=bmy-hpy;
+          // in image, "up the lawn" (increasing ny) is roughly decreasing py.
+          // gross check: if edge is NORTH of hoop in lawn (lawnDY>0.3) it should be
+          // higher in the image (imgDY<0). If it's clearly LOWER, that's a mismatch.
+          if(lawnDY>0.3 && imgDY>80){
+            showModal({key:'orient', icon:'🧭', title:'Double-check that edge',
+              body:`You marked an edge as the <b>${b.side}</b> side, but relative to the hoop you identified it's on the opposite side in the photo. If the hoop number or the edge name is off, the lawn will map mirrored.<br><br>If you're sure both are right for your lawn, carry on — otherwise tap <b>↶ Undo</b> and re-check.`,
+              primary:'It is correct', secondary:'Undo', onSecondary:undoLast});
+            break;
+          }
+        }
+      }
+    }catch(e){}
+  }
+  // detect the collapse: many balls landing on the same clamped corner = weak geometry
+  const placed=Object.values(balls).filter(b=>b.nx!=null);
+  // FALSE-SOLVE GUARD: if fusion "solved" but all placed balls land within ~1yd of
+  // each other, the pose is almost certainly wrong (e.g. a mis-identified hoop made
+  // a self-consistent but fictional camera). Don't trust it.
+  if(fusionPose && placed.length>=2){
+    let maxSep=0;
+    for(let i=0;i<placed.length;i++)for(let j=i+1;j<placed.length;j++){
+      const d=Math.hypot((placed[i].nx-placed[j].nx)*28,(placed[i].ny-placed[j].ny)*35);
+      if(d>maxSep)maxSep=d;
+    }
+    // balls visibly spread in the photo can't all be within 1yd on the lawn
+    if(maxSep<1.0){
+      fusionPose=null; fusionDiag='false solve: everything collapsed onto one spot — the hoop is probably mis-identified';
+      // re-project balls via homography fallback so they at least aren't all stacked
+      for(const c in balls){ if(calibration){const [rnx,rny]=applyHomography(calibration.Hwork,balls[c].px,balls[c].py);balls[c].nx=Math.max(0,Math.min(1,rnx));balls[c].ny=Math.max(0,Math.min(1,rny));balls[c].fromFusion=false;} }
+      showModal({key:'falsesolve', icon:'🧭', title:'That solve looks wrong',
+        body:'The lawn solved, but all the balls landed on the same spot — which means a hoop was probably identified as the wrong number. <b>Fix:</b> tap <b>↶ Undo</b> on the hoop and re-add it, picking the correct hoop on the diagram (use 🔍 zoom to see it clearly).',
+        primary:'OK'});
+    }
+  }
+  const collapsed = placed.length>=2 && placed.every(b=>Math.hypot(b.nx-placed[0].nx,b.ny-placed[0].ny)<0.04);
+  const lines=boundaries.length, hoops=anchors.filter(a=>a.kind==='ref'&&a.key!=='peg').length, corners=anchors.filter(a=>a.kind==='corner').length;
+  const ballsN=Object.keys(balls).length;
+  document.getElementById('ballrow').style.display = calibration ? "flex" : "none";
+  document.getElementById('flipBar').style.display = calibration ? "flex" : "none";
+
+  if(!calibration){
+    confEl.className="conf insufficient";
+    let msg, next;
+    if(r.degenerate){
+      // enough anchors, but geometry won't solve — tell them exactly how to fix
+      msg="Can't solve the lawn shape yet — the lines/points are nearly in a row.";
+      next="👉 Your two boundary lines look nearly parallel. Make them PERPENDICULAR: one running left-to-right across the lawn, the other running away from you. Or add a hoop well to one side.";
+      confEl.innerHTML=`<b>${msg}</b><br><span style="opacity:.85">${r.advice}</span>`;
+      hint.textContent=next; draw(); return;
+    }
+    if(lines===0 && n===0){
+      msg="Two things unlock the lawn: the near edge + one hoop.";
+      next="👉 Step 1: tap ✏️ Boundary and draw along the NEAR edge (the sideline closest to you, running left–right across the photo). Label it the side it really is — usually <b>South (near)</b>. Step 2: trace the hoop with ⛳↥ Hoop+crown and pick which hoop it is. That pair is enough.";
+    } else if(lines>=1 && snappedCount===0 && hoopVerticals.length===0){
+      msg=`Near edge set. Now the hoop.`;
+      next="👉 Trace the hoop with ⛳↥ Hoop+crown (tap base, crown, crown, base), then pick which hoop it is on the diagram. The near edge + one identified hoop solves it.";
+    } else if(snappedCount>0 && lines===0){
+      msg=`Hoop set. Now the near edge.`;
+      next="👉 Tap ✏️ Boundary and draw along the near edge (closest sideline, left–right), labelled the side it really is — usually South. Edge + hoop = solved.";
+    } else if(lines>=1 && n<3){
+      msg=`Almost there.`;
+      next="👉 One more cue: trace the hoop (⛳↥), or add the shed's edges with 🏠 Structure, or tap a shadow with ☀ Shadow. Any one of these locks it.";
+    } else {
+      msg=`Have ${n} of the 4 reference points needed.`;
+      next=`👉 Add ${4-n} more — a boundary line (worth 2), a hoop, or a corner.`;
+    }
+    confEl.innerHTML=`<b>${msg}</b><br><span style="opacity:.85">A boundary line = 2 points · hoop = 1 · corner = 1. Two edges meeting at a corner + one hoop is the easiest reliable combo.</span>`;
+    hint.textContent=next;
+  } else {
+    const conf=calibration.confidence||r.confidence;
+    confEl.className="conf "+conf;
+    // CLEAN STATUS: one short line + a single state word. Details go to a modal only
+    // when there's a specific action to take.
+    let state, color;
+    if(fusionPose){ state='Solved ⚡'; color='#9be8a0'; }
+    else if(fusionContradiction){ state='Needs a fix'; color='#e69638'; }
+    else if(collapsed){ state='Weak — add a hoop'; color='#e69638'; }
+    else { state=conf.toUpperCase()+' confidence'; color=conf==='high'?'#7fd99a':conf==='medium'?'#cfd87f':'#e69638'; }
+    const why = (!fusionPose && fusionDiag) ? ` <a onclick="showFusionWhy()" style="color:#6f9bd0;cursor:pointer;font-size:12px;text-decoration:underline">why not solved?</a>` : ``;
+    confEl.innerHTML=`<b style="color:${color}">${fusionPose?'✓ Lawn solved':'Lawn locked'} — ${state}.</b> <span style="opacity:.75">${ballsN} ball${ballsN===1?'':'s'} placed.</span>${why}`;
+
+    // ROUTE ACTIONABLE PROBLEMS TO A SINGLE MODAL (not screen text)
+    if(fusionContradiction){
+      if(/two far-apart|same/.test(fusionDiag)){
+        showModal({key:'dup', icon:'⚠️', title:'Two anchors are the same spot',
+          body:'You\'ve marked the same lawn point (or hoop number) twice in different places. That can\'t be solved.<br><br><b>Fix:</b> tap <b>↶ Undo</b> to remove the duplicate, then continue.',
+          primary:'OK'});
+      } else {
+        showModal({key:'sideedge', icon:'⚠️', title:'That boundary can\'t be that side',
+          body:'A side edge runs <i>away</i> up the lawn, so it should look slanted, not flat across the photo.<br><br><b>Fix:</b> tap <b>↶ Undo</b> and either re-label it the near edge (South), or skip boundaries and tap your hoops instead.',
+          primary:'OK'});
+      }
+    } else if(collapsed && !fusionPose){
+      showModal({key:'collapse', icon:'🎯', title:'Add one hoop to lock it',
+        body:'The balls are bunching together because the shape isn\'t pinned down well enough yet.<br><br><b>Fix:</b> tap <b>⛳↥ Hoop+crown</b>, trace a hoop, and pick which hoop it is. That switches on the accurate solver.',
+        primary:'Got it'});
+    } else if(fusionPose){
+      resetModalGuard(); // solved — clear so future problems can show
+    }
+    if(ballsN===0 && !fusionContradiction) hint.textContent="Place the balls you can see (tap a colour, then the ball's ground contact).";
+    else hint.textContent="";
+  }
+  draw();
+ }catch(err){
+  // never let an error freeze the UI
+  confEl.className="conf low";
+  confEl.innerHTML=`<b>Something went wrong recalculating.</b><br><span style="opacity:.85">${(err&&err.message)||err}. Tap Undo and try a different anchor.</span>`;
+ }
+}
+
+function draw(){
+  if(!img)return;ctx.drawImage(img,0,0);
+  // ACTIVE-LAWN QUADRILATERAL — one clear shaded shape for the inferred lawn edges.
+  // Smart: if the projected corners are degenerate (off-screen / inverted / razor-thin),
+  // the calibration is too weak to trust the exact shape, so we show a sensible
+  // estimate instead of a nonsense sliver.
+  if(fusionPose){
+    // project the four lawn corners through the solved pose (forward projection)
+    const YARD=36;
+    const cornersW=[[0,0],[LAWN_W_YD*YARD,0],[LAWN_W_YD*YARD,LAWN_H_YD*YARD],[0,LAWN_H_YD*YARD]];
+    let poly=cornersW.map(c=>projectPose(fusionPose.f,fusionPose.cx,fusionPose.cy,fusionPose.R,fusionPose.t,[c[0],c[1],0])).filter(Boolean);
+    if(poly.length===4){
+      // fill the visible (frame-clipped) lawn area so it reads as a clean plane,
+      // then outline the true edges on top. Corners off-frame just clip to the border.
+      const clipped=clipToFrame(poly,cv.width,cv.height);
+      drawPoly(clipped,'rgba(220,40,40,0.18)','rgba(255,60,60,0.0)');
+      // true edge outline (may extend past frame; canvas clips it)
+      ctx.strokeStyle='rgba(255,60,60,0.95)';ctx.lineWidth=3;ctx.beginPath();
+      ctx.moveTo(poly[0][0],poly[0][1]);for(let i=1;i<4;i++)ctx.lineTo(poly[i][0],poly[i][1]);ctx.closePath();ctx.stroke();
+      // corner labels only where the corner is actually on-screen
+      const lab=['SW','SE','NE','NW'];
+      poly.forEach((p,i)=>{if(p[0]>=0&&p[0]<=cv.width&&p[1]>=0&&p[1]<=cv.height){ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(p[0]-2,p[1]-16,26,16);ctx.fillStyle='#ff9c9c';ctx.font='bold 13px system-ui';ctx.fillText(lab[i],p[0],p[1]-4);}});
+      // perspective grid so it reads as a flat plane on the ground
+      ctx.strokeStyle='rgba(255,80,80,0.30)';ctx.lineWidth=1;
+      for(let gx=1;gx<4;gx++){const x=gx/4*LAWN_W_YD*YARD;
+        const a=projectPose(fusionPose.f,fusionPose.cx,fusionPose.cy,fusionPose.R,fusionPose.t,[x,0,0]);
+        const b=projectPose(fusionPose.f,fusionPose.cx,fusionPose.cy,fusionPose.R,fusionPose.t,[x,LAWN_H_YD*YARD,0]);
+        if(a&&b){ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();}}
+      for(let gy=1;gy<5;gy++){const y=gy/5*LAWN_H_YD*YARD;
+        const a=projectPose(fusionPose.f,fusionPose.cx,fusionPose.cy,fusionPose.R,fusionPose.t,[0,y,0]);
+        const b=projectPose(fusionPose.f,fusionPose.cx,fusionPose.cy,fusionPose.R,fusionPose.t,[LAWN_W_YD*YARD,y,0]);
+        if(a&&b){ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();}}
+      // SANITY MIRROR: project all 6 hoops back onto the photo. If they don't land
+      // on the real hoops, the user can SEE the solve is off and fix it.
+      const HP={1:[7,7],2:[7,28],3:[21,28],4:[21,7],5:[14,14],6:[14,21]};
+      ctx.font='bold 12px system-ui';
+      for(const id in HP){const [hx,hy]=HP[id];const pp=projectPose(fusionPose.f,fusionPose.cx,fusionPose.cy,fusionPose.R,fusionPose.t,[hx*YARD,hy*YARD,0]);
+        if(pp&&pp[0]>-50&&pp[0]<cv.width+50&&pp[1]>-50&&pp[1]<cv.height+50){
+          ctx.fillStyle='rgba(255,255,120,0.85)';ctx.beginPath();ctx.arc(pp[0],pp[1],7,0,7);ctx.fill();
+          ctx.fillStyle='#000';ctx.fillText(id,pp[0]-3,pp[1]+4);
+        }}
+    }
+  } else if(calibration && calibration.Hwork){
+    const Hinv=invert3(calibration.Hwork);
+    if(Hinv){
+      const cs=[[0,0],[1,0],[1,1],[0,1]];
+      let poly=cs.map(([nx,ny])=>applyHomography(Hinv,nx,ny)).filter(Boolean);
+      const quality=quadQuality(poly,cv.width,cv.height);
+      if(poly.length===4 && quality.ok){
+        drawQuad(poly,'rgba(220,40,40,0.20)','rgba(255,60,60,0.95)',true);
+      } else if(poly.length===4){
+        const clamped=poly.map(p=>[Math.max(0,Math.min(cv.width,p[0])),Math.max(0,Math.min(cv.height,p[1]))]);
+        drawQuad(clamped,'rgba(230,150,60,0.16)','rgba(230,150,60,0.85)',true);
+        ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(8,8,330,24);
+        ctx.fillStyle='#e69638';ctx.font='bold 13px system-ui';
+        ctx.fillText('Rough lawn area — geometry weak, redraw a crossing boundary',14,25);
+      }
+    }
+  }
+  // committed boundary lines — thick cyan with side label and endpoint dots
+  for(const L of boundaries){
+    ctx.strokeStyle='#36d1ff';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(L.e0.px,L.e0.py);ctx.lineTo(L.e1.px,L.e1.py);ctx.stroke();
+    dot(L.e0.px,L.e0.py,'#36d1ff');dot(L.e1.px,L.e1.py,'#36d1ff');
+    const mx=(L.e0.px+L.e1.px)/2,my=(L.e0.py+L.e1.py)/2;
+    ctx.fillStyle='#0b1a14';ctx.fillRect(mx-12,my-13,28,20);
+    ctx.fillStyle='#36d1ff';ctx.font="bold 15px system-ui";ctx.fillText(L.side,mx-7,my+2);
+  }
+  // pending line (placed, awaiting side choice) — dashed amber
+  if(pendingLine){ctx.setLineDash([8,5]);ctx.strokeStyle='#e6b800';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(pendingLine.e0.px,pendingLine.e0.py);ctx.lineTo(pendingLine.e1.px,pendingLine.e1.py);ctx.stroke();ctx.setLineDash([]);dot(pendingLine.e0.px,pendingLine.e0.py,'#e6b800');dot(pendingLine.e1.px,pendingLine.e1.py,'#e6b800');}
+  // in-progress: first end placed, rubber-band to finger
+  if(drawingLine){dot(drawingLine.e0.px,drawingLine.e0.py,'#7fd9ff');
+    if(livePt){ctx.setLineDash([6,5]);ctx.strokeStyle='#7fd9ff';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(drawingLine.e0.px,drawingLine.e0.py);ctx.lineTo(livePt.px,livePt.py);ctx.stroke();ctx.setLineDash([]);}}
+  // auto proposals
+  for(const L of autoProposals){ctx.strokeStyle=L.confirmed?'#7fd99a':'#ff5050';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(L.p1[0],L.p1[1]);ctx.lineTo(L.p2[0],L.p2[1]);ctx.stroke();}
+  // hoop/corner anchors
+  for(const a of anchors){if(a.kind==='edge')continue;const col=a.kind==='corner'?'#d8c24a':'#7fd99a';mk(a.px,a.py,col,a.key);}
+  // crown hoops: traced outline — two legs + the real crown line (measured corners)
+  for(const h of hoopVerticals){
+    const cL=h.crownL||h.crown, cR=h.crownR||h.crown;
+    ctx.strokeStyle='#ffd24a';ctx.lineWidth=3;
+    // legs: base -> crown corner on each side
+    ctx.beginPath();ctx.moveTo(h.legL.px,h.legL.py);ctx.lineTo(cL.px,cL.py);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(h.legR.px,h.legR.py);ctx.lineTo(cR.px,cR.py);ctx.stroke();
+    // CROWN LINE — the actual traced top bar
+    ctx.strokeStyle='#fff200';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(cL.px,cL.py);ctx.lineTo(cR.px,cR.py);ctx.stroke();
+    // extend crown line as a faint leveller sight-line across the photo
+    const dx=cR.px-cL.px,dy=cR.py-cL.py,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,EXT=cv.width;
+    ctx.strokeStyle='rgba(255,242,0,0.30)';ctx.lineWidth=1.5;ctx.setLineDash([8,6]);
+    ctx.beginPath();ctx.moveTo(cL.px-ux*EXT,cL.py-uy*EXT);ctx.lineTo(cR.px+ux*EXT,cR.py+uy*EXT);ctx.stroke();ctx.setLineDash([]);
+    // base footprint
+    ctx.strokeStyle='#ffd24a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(h.legL.px,h.legL.py);ctx.lineTo(h.legR.px,h.legR.py);ctx.stroke();
+    dot(h.legL.px,h.legL.py,'#ffd24a');dot(h.legR.px,h.legR.py,'#ffd24a');dot(cL.px,cL.py,'#fff200');dot(cR.px,cR.py,'#fff200');
+  }
+  // in-progress trace: show the polyline as it's drawn
+  if(hoopVPending&&hoopVPending.pts){
+    const ps=hoopVPending.pts;
+    ctx.strokeStyle='#ffd24a';ctx.lineWidth=2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(ps[0].px,ps[0].py);for(let i=1;i<ps.length;i++)ctx.lineTo(ps[i].px,ps[i].py);
+    if(livePt)ctx.lineTo(livePt.px,livePt.py);ctx.stroke();ctx.setLineDash([]);
+    ps.forEach(p=>dot(p.px,p.py,'#ffd24a'));
+    // when placing the 4th point (base2), preview the WIDTH-LOCKED position
+    if(ps.length===3&&livePt){
+      const [b1,c1,c2]=ps; const leg1=[c1.px-b1.px,c1.py-b1.py];
+      const dlen=Math.hypot(leg1[0],leg1[1])||1,u=[leg1[0]/dlen,leg1[1]/dlen];
+      const dv=[livePt.px-c2.px,livePt.py-c2.py],proj=dv[0]*u[0]+dv[1]*u[1];
+      const lock={px:c2.px+u[0]*proj,py:c2.py+u[1]*proj};
+      ctx.strokeStyle='#7fd99a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(b1.px,b1.py);ctx.lineTo(lock.px,lock.py);ctx.stroke(); // ground bar parallel to crown
+      ctx.strokeStyle='#7fd99a';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(c2.px,c2.py);ctx.lineTo(lock.px,lock.py);ctx.stroke();ctx.setLineDash([]);
+      dot(lock.px,lock.py,'#7fd99a');
+      ctx.fillStyle='#7fd99a';ctx.font='11px system-ui';ctx.fillText('width locked to crown',lock.px+6,lock.py+4);
+    }
+  }
+  // in-progress crown taps
+  // (in-progress trace is drawn in the crown-hoop block above)
+  if(shadowVector){ctx.strokeStyle='#ffd24a';ctx.lineWidth=2.5;ctx.setLineDash([2,3]);ctx.beginPath();ctx.moveTo(shadowVector.base.px,shadowVector.base.py);ctx.lineTo(shadowVector.tip.px,shadowVector.tip.py);ctx.stroke();ctx.setLineDash([]);dot(shadowVector.tip.px,shadowVector.tip.py,'#ffd24a');ctx.fillStyle='#ffd24a';ctx.font='11px system-ui';ctx.fillText(`${Math.round(shadowVector.Lreal)}in`,shadowVector.tip.px+6,shadowVector.tip.py);}
+  if(shadowPending){dot(shadowPending.base.px,shadowPending.base.py,'#ffd24a');if(livePt){ctx.setLineDash([5,4]);ctx.strokeStyle='#ffd24a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(shadowPending.base.px,shadowPending.base.py);ctx.lineTo(livePt.px,livePt.py);ctx.stroke();ctx.setLineDash([]);}}
+  // structure lines: V=cyan, H1=orange, H2=magenta
+  const axc={V:'#5cc8ff',H1:'#ff9a3c',H2:'#e060d0'};
+  for(const s of structureLines){ctx.strokeStyle=axc[s.axis]||'#fff';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(s.a.px,s.a.py);ctx.lineTo(s.b.px,s.b.py);ctx.stroke();dot(s.a.px,s.a.py,axc[s.axis]);dot(s.b.px,s.b.py,axc[s.axis]);}
+  if(structPendingLine){const s=structPendingLine;ctx.setLineDash([7,5]);ctx.strokeStyle='#7fb0e6';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(s.a.px,s.a.py);ctx.lineTo(s.b.px,s.b.py);ctx.stroke();ctx.setLineDash([]);}
+  if(structDrawing){dot(structDrawing.a.px,structDrawing.a.py,'#7fb0e6');if(livePt){ctx.setLineDash([6,5]);ctx.strokeStyle='#7fb0e6';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(structDrawing.a.px,structDrawing.a.py);ctx.lineTo(livePt.px,livePt.py);ctx.stroke();ctx.setLineDash([]);}}
+  // recovered horizon from structure (blue dashed, labelled)
+  if(structSolution&&structSolution.horizon){
+    const [a,b,c]=structSolution.horizon;let x0=0,y0,x1=cv.width,y1;
+    if(Math.abs(b)>1e-6){y0=-(a*x0+c)/b;y1=-(a*x1+c)/b;ctx.strokeStyle='rgba(92,200,255,0.6)';ctx.lineWidth=1.5;ctx.setLineDash([12,7]);ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();ctx.setLineDash([]);}
+  }
+  // sensor-derived horizon (from device tilt, shown when no hoop verticals yet)
+  if(_syntheticVVPy!=null && hoopVerticals.length===0){
+    const hy=_syntheticVVPy;
+    if(hy>-cv.height&&hy<cv.height*1.5){
+      ctx.strokeStyle='rgba(217,210,127,0.55)';ctx.lineWidth=1.5;ctx.setLineDash([14,7]);
+      ctx.beginPath();ctx.moveTo(0,hy);ctx.lineTo(cv.width,hy);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(8,hy-18,148,16);
+      ctx.fillStyle='#d9d27f';ctx.font='bold 12px system-ui';
+      ctx.fillText('sensor horizon (±5°)',12,hy-5);
+    }
+  }
+  // recovered horizon (needs >=2 verticals)
+  if(hoopVerticals.length>=1){
+    const hv=hoopVerticals.map(h=>hoopVertical(h));
+    const vvp=verticalVanishingPoint(hv);
+    const horizon=vvp.vvp?horizonFromVVP(vvp.vvp,[cv.width/2,cv.height/2]):null;
+    if(horizon){
+      // draw the horizon line across the photo: a*x+b*y+c=0
+      const [a,b,c]=horizon;let x0=0,y0,x1=cv.width,y1;
+      if(Math.abs(b)>1e-6){y0=-(a*x0+c)/b;y1=-(a*x1+c)/b;}else{x0=x1=-c/a;y0=0;y1=cv.height;}
+      ctx.strokeStyle='rgba(120,200,255,0.7)';ctx.lineWidth=1.5;ctx.setLineDash([10,6]);
+      ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(x0+8,y0-18,70,16);
+      ctx.fillStyle='#78c8ff';ctx.font='bold 12px system-ui';ctx.fillText('horizon',x0+12,y0-5);
+    }
+  }
+  const bc={blue:"#185FA5",red:"#B83232",black:"#111",yellow:"#C9A227"};
+  for(const c in balls){
+    const b=balls[c];
+    if(b.pixelRadius){
+      // ball sits ON its ground point: centre is radius above the contact, drawn to scale
+      const cx=b.centrePx?b.centrePx.px:b.px, cy=b.centrePx?b.centrePx.py:(b.py-b.pixelRadius);
+      ctx.beginPath();ctx.arc(cx,cy,b.pixelRadius,0,7);
+      ctx.fillStyle=bc[c];ctx.globalAlpha=0.55;ctx.fill();ctx.globalAlpha=1;
+      ctx.strokeStyle=bc[c];ctx.lineWidth=2.5;ctx.stroke();
+      // mark the ground-contact point
+      ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(b.px,b.py,3,0,7);ctx.fill();
+      ctx.strokeStyle=bc[c];ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(b.px,b.py,3,0,7);ctx.stroke();
+    } else {
+      // not sized yet: simple marker at the ground point
+      mk(b.px,b.py,bc[c],"",true);
+    }
+  }
+  // LIVE sizing feedback: while choosing the top, show the growing ball
+  if(mode==='ballsize'&&sizingBall&&balls[sizingBall]&&livePt){
+    const b=balls[sizingBall];
+    const diam=Math.hypot(livePt.px-b.px,livePt.py-b.py), r=diam/2;
+    const cx=(b.px+livePt.px)/2, cy=(b.py+livePt.py)/2;
+    ctx.setLineDash([4,3]);ctx.strokeStyle=bc[sizingBall]||'#fff';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(b.px,b.py,3,0,7);ctx.fill(); // ground point
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(cx+r+4,cy-8,70,16);
+    ctx.fillStyle='#fff';ctx.font='12px system-ui';ctx.fillText(`${Math.round(diam)}px`,cx+r+8,cy+4);
+  }
+}
+// assess whether a projected lawn quad is trustworthy to draw precisely
+function quadQuality(poly,W,H){
+  if(poly.length!==4) return {ok:false};
+  // area via shoelace
+  let A=0;for(let i=0;i<4;i++){const [x1,y1]=poly[i],[x2,y2]=poly[(i+1)%4];A+=x1*y2-x2*y1;}
+  A=Math.abs(A)/2;
+  const frac=A/(W*H);
+  // bounding box
+  const xs=poly.map(p=>p[0]),ys=poly.map(p=>p[1]);
+  const bw=Math.max(...xs)-Math.min(...xs),bh=Math.max(...ys)-Math.min(...ys);
+  const thin = bh < H*0.05 || bw < W*0.05;            // razor-thin sliver
+  const offscreen = poly.every(p=>p[1]<0) || poly.every(p=>p[1]>H); // entirely off
+  const tooSmall = frac < 0.04;                        // < 4% of photo = not a lawn
+  const tooHuge = frac > 4;                            // wildly extrapolated
+  return {ok: !thin && !offscreen && !tooSmall && !tooHuge, frac};
+}
+// draw a quad with fill+outline and optional SW/SE/NE/NW labels
+function clipToFrame(poly,W,H){
+  // Sutherland–Hodgman clip of a polygon to the rectangle [0,W]x[0,H]
+  const edges=[
+    p=>p[0]>=0, (a,b)=>{const t=(0-a[0])/(b[0]-a[0]);return [0,a[1]+t*(b[1]-a[1])];},
+    p=>p[0]<=W, (a,b)=>{const t=(W-a[0])/(b[0]-a[0]);return [W,a[1]+t*(b[1]-a[1])];},
+    p=>p[1]>=0, (a,b)=>{const t=(0-a[1])/(b[1]-a[1]);return [a[0]+t*(b[0]-a[0]),0];},
+    p=>p[1]<=H, (a,b)=>{const t=(H-a[1])/(b[1]-a[1]);return [a[0]+t*(b[0]-a[0]),H];},
+  ];
+  let out=poly.slice();
+  for(let e=0;e<edges.length;e+=2){
+    const inside=edges[e], intersect=edges[e+1]; const inp=out; out=[];
+    for(let i=0;i<inp.length;i++){
+      const cur=inp[i], prev=inp[(i+inp.length-1)%inp.length];
+      const curIn=inside(cur), prevIn=inside(prev);
+      if(curIn){ if(!prevIn) out.push(intersect(prev,cur)); out.push(cur); }
+      else if(prevIn){ out.push(intersect(prev,cur)); }
+    }
+    if(!out.length)break;
+  }
+  return out;
+}
+function drawPoly(poly,fill,stroke){
+  if(poly.length<3)return;
+  ctx.beginPath();ctx.moveTo(poly[0][0],poly[0][1]);
+  for(let i=1;i<poly.length;i++)ctx.lineTo(poly[i][0],poly[i][1]);
+  ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.strokeStyle=stroke;ctx.lineWidth=3;ctx.stroke();
+}
+function drawQuad(poly,fill,stroke,labels){
+  ctx.beginPath();ctx.moveTo(poly[0][0],poly[0][1]);
+  for(let i=1;i<4;i++)ctx.lineTo(poly[i][0],poly[i][1]);
+  ctx.closePath();
+  ctx.fillStyle=fill;ctx.fill();
+  ctx.strokeStyle=stroke;ctx.lineWidth=3;ctx.stroke();
+  if(labels){const lab=['SW','SE','NE','NW'];
+    poly.forEach((p,i)=>{ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(p[0]-2,p[1]-16,26,16);ctx.fillStyle='#ff9c9c';ctx.font='bold 13px system-ui';ctx.fillText(lab[i],p[0],p[1]-4);});}
+}
+// invert a 3x3 (for projecting lawn-coords back to pixels)
+function invert3(m){
+  const a=m[0][0],b=m[0][1],c=m[0][2],d=m[1][0],e=m[1][1],f=m[1][2],g=m[2][0],h=m[2][1],i=m[2][2];
+  const A=e*i-f*h,B=-(d*i-f*g),C=d*h-e*g,det=a*A+b*B+c*C;
+  if(Math.abs(det)<1e-12)return null;const id=1/det;
+  return [[A*id,(c*h-b*i)*id,(b*f-c*e)*id],[B*id,(a*i-c*g)*id,(c*d-a*f)*id],[C*id,(b*g-a*h)*id,(a*e-b*d)*id]];
+}
+function dot(px,py,color){ctx.fillStyle=color;ctx.beginPath();ctx.arc(px,py,6,0,7);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();}
+function mk(px,py,color,txt,fill){ctx.lineWidth=4;ctx.strokeStyle=color;ctx.fillStyle=color;ctx.beginPath();ctx.arc(px,py,12,0,7);fill?ctx.fill():ctx.stroke();
+  if(txt){ctx.fillStyle="#fff";ctx.font="bold 18px system-ui";ctx.fillText(String(txt).replace('hoop','H').replace('corner',''),px+14,py-9);}}
+
+const stage=document.getElementById('stage');
+function ic(e){const r=cv.getBoundingClientRect();const x=e.touches?e.touches[0].clientX:e.clientX,y=e.touches?e.touches[0].clientY:e.clientY;return{px:(x-r.left)*(cv.width/r.width),py:(y-r.top)*(cv.height/r.height),clientX:x,clientY:y};}
+let loupeZoom=5;
+let zoomUserSet=false;
+const ZOOM_STEPS=[5,8,12,18];
+function cycleZoom(){
+  zoomUserSet=true;
+  const i=ZOOM_STEPS.indexOf(loupeZoom);
+  loupeZoom=ZOOM_STEPS[(i+1)%ZOOM_STEPS.length];
+  const b=document.getElementById('zoomBtn');if(b)b.textContent=`🔍 Zoom ${loupeZoom}×`;
+}
+function showLoupe(p){
+  loupe.style.display="block";
+  const r=stage.getBoundingClientRect();
+  // keep the loupe on-screen: flip it below the finger when near the top
+  const lx=p.clientX-r.left-60, lyAbove=p.clientY-r.top-140, lyBelow=p.clientY-r.top+30;
+  loupe.style.left=Math.max(4,Math.min(lx, stage.clientWidth-124))+"px";
+  loupe.style.top=(lyAbove<4?lyBelow:lyAbove)+"px";
+  lctx.clearRect(0,0,120,120);
+  const z=loupeZoom;
+  const src=120/z;
+  lctx.imageSmoothingEnabled=false; // crisp pixels when zoomed far in
+  lctx.drawImage(img, p.px-src/2, p.py-src/2, src, src, 0,0,120,120);
+  // crosshair marking the EXACT tap point being committed
+  lctx.strokeStyle="rgba(255,60,60,0.9)";lctx.lineWidth=1;
+  lctx.beginPath();lctx.moveTo(60,44);lctx.lineTo(60,76);lctx.moveTo(44,60);lctx.lineTo(76,60);lctx.stroke();
+  lctx.strokeStyle="rgba(255,255,255,0.5)";lctx.beginPath();lctx.arc(60,60,10,0,7);lctx.stroke();
+  // zoom label
+  lctx.fillStyle="rgba(0,0,0,0.6)";lctx.fillRect(0,0,34,15);
+  lctx.fillStyle="#fff";lctx.font="10px system-ui";lctx.fillText(z+"×",4,11);
+}
+stage.addEventListener('pointerdown',e=>{if(!img)return;e.preventDefault();
+  if(!zoomUserSet)loupeZoom=(mode==='hoop'||mode==='hoopv')?8:5;
+  showLoupe(ic(e));});
+stage.addEventListener('pointermove',e=>{if(!img)return;e.preventDefault();const p=ic(e);if(loupe.style.display==="block")showLoupe(p);if(drawingLine||(mode==='ballsize'&&sizingBall)||(mode==='shadow'&&shadowPending)||(mode==='structure'&&structDrawing)||(mode==='hoopv'&&hoopVPending)){livePt=p;draw();}});
+stage.addEventListener('pointerup',e=>{
+  if(!img)return;loupe.style.display="none";const p=ic(e);livePt=null;
+
+  // AUTO: tap near a proposed line to confirm it, then pick side inline
+  if(boundaryMode==='auto'&&autoProposals.length){
+    const hit=nearestLine(p,autoProposals);
+    if(hit){pendingLine={e0:{px:hit.p1[0],py:hit.p1[1]},e1:{px:hit.p2[0],py:hit.p2[1]}};
+      document.getElementById('sidePicker').style.display="flex";
+      hint.textContent="Which side is this detected line? Tap S/N/W/E above.";draw();return;}
+  }
+
+  // BOUNDARY tool: two taps make a line, then side picker
+  if(mode==='boundary'){
+    if(pendingLine){hint.textContent="Pick the side (S/N/W/E) above first, or Undo.";return;}
+    if(!drawingLine){drawingLine={e0:p};hint.textContent="Now tap the OTHER end of this boundary line.";draw();return;}
+    else{pendingLine={e0:drawingLine.e0,e1:p};drawingLine=null;
+      document.getElementById('sidePicker').style.display="flex";
+      hint.textContent="Line drawn ✓ — now tap which side it is (S/N/W/E above).";draw();return;}
+  }
+
+  // HOOP: snap-assisted
+  if(mode==='hoopv'){
+    // FOUR taps tracing the hoop outline:
+    //   1) base of first leg (on ground)
+    //   2) top of crown on that same side (crown corner)
+    //   3) top of crown on the other side (crown corner)
+    //   4) base of the other leg (on ground)
+    if(!hoopVPending){hoopVPending={pts:[{px:p.px,py:p.py}]};hint.textContent="Tap UP to the top of that leg (crown corner on this side).";draw();return;}
+    hoopVPending.pts.push({px:p.px,py:p.py});
+    const k=hoopVPending.pts.length;
+    if(k===2){hint.textContent="Now tap ACROSS to the other side of the crown top.";draw();return;}
+    if(k===3){hint.textContent="Now tap DOWN to the base of that other leg (on the ground).";draw();return;}
+    // k===4: complete — base1, crown1, crown2, base2(raw). The CROWN BAR is the
+    // definitive width: the two legs are equal-length verticals, so the ground bar
+    // (b1->b2) must be PARALLEL to the crown bar (c1->c2) and the same width. We
+    // trust the crown + leg1 + the *direction* of leg2, but snap base2 onto leg2's
+    // line at the height that makes the legs parallel — the loose 4th tap can't
+    // override the crown's width.
+    const [b1,c1,c2,praw]=hoopVPending.pts;
+    // leg1 vector (base->crown):
+    const leg1=[c1.px-b1.px, c1.py-b1.py];
+    // ideal base2 = crown2 - leg1  (legs parallel & equal)  ... but allow the user's
+    // tap to adjust ALONG leg1's direction only (perspective foreshortening), not width.
+    const ideal={px:c2.px-leg1[0], py:c2.py-leg1[1]};
+    // project the raw tap onto the line through c2 in direction leg1, to keep width fixed
+    const dlen=Math.hypot(leg1[0],leg1[1])||1; const u=[leg1[0]/dlen,leg1[1]/dlen];
+    const dv=[praw.px-c2.px, praw.py-c2.py];
+    const proj=dv[0]*u[0]+dv[1]*u[1];
+    const b2={px:c2.px+u[0]*proj, py:c2.py+u[1]*proj};
+    // DON'T guess the hoop number by tap order — that misplaces it on the lawn and
+    // poisons the solve. Stash the geometry and ask which hoop it is.
+    pendingHoop={type:'crown', legL:b1, legR:b2, crownL:c1, crownR:c2,
+                 crown:{px:(c1.px+c2.px)/2,py:(c1.py+c2.py)/2}, crownDefinesWidth:true};
+    hoopVPending=null;
+    document.getElementById('hoopPicker').style.display="flex";
+    hint.textContent="Crown traced ✓ — now tell me which hoop this is (above).";
+    draw();return;
+  }
+  if(mode==='hoop'){
+    let hx=p.px,hy=p.py,snapNote="";
+    try{const s=snapToHoop(cv,p.px,p.py,60);if(s&&s.confidence>=0.5&&s.width<=60){hx=s.cx;hy=s.cy;snapNote=` (snapped ${s.mode})`;}}catch(err){}
+    pendingHoop={type:'plain', px:hx, py:hy, snapNote};
+    document.getElementById('hoopPicker').style.display="flex";
+    hint.textContent=`Hoop captured${snapNote} — now tell me which hoop this is (above).`;
+    draw();return;
+  }
+  if(mode==='corner'){anchors.push({kind:"corner",key:CORNER_KEYS[cornerIdx%4],px:p.px,py:p.py});cornerIdx++;hint.textContent=`Corner placed.`;recalc();draw();return;}
+  if(mode==='ballsize'){
+    // ball is stored at its GROUND CONTACT (px,py). This tap = the TOP of the ball.
+    // diameter (px) = distance ground->top ; radius = half ; centre = midpoint.
+    if(calibration && sizingBall && balls[sizingBall]){
+      const b=balls[sizingBall];
+      const diamPx=Math.hypot(p.px-b.px,p.py-b.py);
+      b.topPx={px:p.px,py:p.py};
+      b.pixelRadius=diamPx/2;
+      b.centrePx={px:(b.px+p.px)/2,py:(b.py+p.py)/2};
+      const sc=ballScaleCheck(applyHomography,calibration.Hwork,{px:b.px,py:b.py},b.pixelRadius);
+      b.scaleCheck=sc;
+      // EXIF-focal absolute distance from ball size (needs no camera height)
+      if(camFocal&&camFocal.fpx){const dd=ballSizeDepth(camFocal.fpx,diamPx);b.sizeDistIn=dd.distIn;b.sizeReliability=dd.reliability;}
+      const near=snapBallToHoop(b.nx,b.ny);
+      let jaws = near?` <button onclick="snapBallInJaws('${sizingBall}',${near.hoopId})" style="background:#2D6B45;padding:4px 10px;font-size:13px;margin-left:4px">📍 In hoop ${near.hoopId}'s jaws</button>`:``;
+      const done=sizingBall;
+      const distTxt=b.sizeDistIn?` ~${(b.sizeDistIn/36).toFixed(1)}yd from camera`:``;
+      hint.innerHTML = (sc.checked
+        ? `✓ ${done} sized (${Math.round(diamPx)}px,${distTxt}) — scale ${sc.ok?'<span style="color:#7fd99a">looks right</span>':'<span style="color:#e69638">off '+sc.ratio.toFixed(1)+'×</span>'}. Pick another colour.`
+        : `✓ ${done} placed. Pick another colour.`) + jaws;
+      sizingBall=null;setMode(document.getElementById('ballBtn'),'ball',true);draw();return;
+    }
+  }
+  if(mode==='structure'){
+    if(structPendingLine){hint.textContent="Pick the direction above (V / H1 / H2) first.";return;}
+    if(!structDrawing){structDrawing={a:{px:p.px,py:p.py}};hint.textContent="Now tap the OTHER end of that straight edge.";draw();return;}
+    structPendingLine={a:structDrawing.a,b:{px:p.px,py:p.py}};structDrawing=null;
+    document.getElementById('structPicker').style.display="flex";
+    hint.textContent="Edge traced ✓ — now tap its real-world direction above.";draw();return;
+  }
+  if(mode==='shadow'){
+    if(!sunInfo){hint.textContent="No sun data (photo lacks GPS/time). Use the manual flip buttons instead.";return;}
+    if(!calibration){hint.textContent="Calibrate the lawn first, then tap a shadow to orient it.";return;}
+    if(!shadowPending){shadowPending={base:{px:p.px,py:p.py}};hint.textContent="Now tap the TIP of that shadow.";draw();return;}
+    // second tap = shadow tip. Map both to lawn coords (using current Hwork) to get
+    // the shadow's direction in lawn space, then compare to the known real bearing.
+    const base=tapToLawnPositionH(calibration.Hwork,shadowPending.base.px,shadowPending.base.py);
+    const tip=tapToLawnPositionH(calibration.Hwork,p.px,p.py);
+    // lawn-space shadow vector; convert to a compass bearing. In lawn frac: +ny=north,
+    // +nx=east (after our convention). bearing = atan2(east, north).
+    const dE=tip.nx-base.nx, dN=tip.ny-base.ny;
+    let lawnBearing=(Math.atan2(dE,dN)*180/Math.PI+360)%360;
+    // the REAL shadow bearing from the sun:
+    const realB=sunInfo.shadowBearing;
+    // difference tells us how the lawn is rotated/flipped. We only resolve the
+    // 4 flip states (the homography already fixes fine rotation). Pick the flip
+    // (x,y) whose resulting lawn bearing best matches realB.
+    const cand=[{x:false,y:false},{x:true,y:false},{x:false,y:true},{x:true,y:true}];
+    let best=null,bestErr=999;
+    for(const c of cand){
+      // under flipX: east->west (nx->1-nx) so dE sign flips; flipY flips dN
+      const e2=c.x?-dE:dE, n2=c.y?-dN:dN;
+      let b=(Math.atan2(e2,n2)*180/Math.PI+360)%360;
+      let err=Math.abs(((b-realB+540)%360)-180);
+      if(err<bestErr){bestErr=err;best=c;}
+    }
+    flip.x=best.x;flip.y=best.y;flip._userSet=true;
+    // SHADOW LENGTH: with sun elevation, a hoop crown (12in) casts a known real
+    // shadow length L = 12 / tan(elevation). Compare to the measured lawn-length.
+    let scaleNote='';
+    if(sunInfo.elevation>5){
+      const Lreal=12/Math.tan(sunInfo.elevation*Math.PI/180); // inches (assumes crown-height vertical)
+      const measLawn=Math.hypot(dE,dN)*28*36; // lawn-frac span -> inches (28yd width)
+      if(measLawn>0.5){
+        const ratio=measLawn/Lreal;
+        shadowVector={base:shadowPending.base,tip:{px:p.px,py:p.py},Lreal,bearing:realB};
+        scaleNote=` · shadow length ${Math.round(Lreal)}in expected, scale ${ratio>0.5&&ratio<2?'<span style="color:#7fd99a">consistent ✓</span>':'<span style="color:#e69638">off '+ratio.toFixed(1)+'×</span>'}`;
+      }
+    }
+    shadowPending=null;
+    hint.innerHTML=`☀ Oriented from shadow — shadows point ${compassName(realB)}; flipped to match (±${bestErr.toFixed(0)}°)${scaleNote}.`;
+    recalc();draw();return;
+  }
+  if(mode==='ball'){
+    if(!calibration){hint.textContent="Set a boundary + anchors first (need 4 reference points).";return;}
+    const pos=tapToLawnPositionH(calibration.Hwork,p.px,p.py);
+    balls[selBall]={px:p.px,py:p.py,nx:pos.nx,ny:pos.ny};
+    refreshBallChips();recalc();
+    sizingBall=selBall; mode='ballsize';
+    hint.innerHTML=`✓ ${selBall} ground set. Now tap the TOP of the ball (the marker grows to match). `+
+      `<button onclick="skipBallSize()" style="background:#274;padding:4px 10px;font-size:13px;margin-left:4px">skip sizing</button>`;
+    draw();return;
+  }
+});
+function nearestLine(p,lines){let best=null,bd=30;for(const L of lines){const d=ptLineDist(p.px,p.py,L.p1[0],L.p1[1],L.p2[0],L.p2[1]);if(d<bd){bd=d;best=L;}}return best;}
+function ptLineDist(px,py,x1,y1,x2,y2){const A=px-x1,B=py-y1,C=x2-x1,D=y2-y1;const dot=A*C+B*D,len=C*C+D*D;let t=len?dot/len:0;t=Math.max(0,Math.min(1,t));const xx=x1+t*C,yy=y1+t*D;return Math.hypot(px-xx,py-yy);}
+function pickBall(el){
+  const col=el.dataset.c;
+  // tapping the already-selected colour that is already placed -> clear it
+  if(selBall===col && balls[col] && balls[col].nx!=null){
+    delete balls[col]; refreshBallChips(); recalc(); draw();
+    hint.textContent=`Removed ${col}. Tap a colour to place a ball.`; return;
+  }
+  document.querySelectorAll('.ballchip').forEach(c=>c.classList.remove('sel'));el.classList.add('sel');selBall=col;
+  hint.textContent=balls[col]&&balls[col].nx!=null
+    ? `${col} already placed — tap it again on the photo to move it, or tap this colour once more to remove it.`
+    : `Now tap where the ${col} ball touches the ground (its base).`;
+}
+function refreshBallChips(){document.querySelectorAll('.ballchip').forEach(c=>{const col=c.dataset.c;const placed=balls[col]&&balls[col].nx!=null;c.textContent=(placed?'✓ ':'')+col.charAt(0).toUpperCase()+col.slice(1);c.style.outline=placed?'2px solid #7fd99a':'none';});}
+window.addEventListener('resize',()=>{if(img)fit();});
+
+// ---- full-lawn snapshot rendered in the APP's own diagram format -----------
+function renderSnapshot(){
+ try{
+  if(!calibration){hint.textContent="Calibrate first (boundary + anchors).";return;}
+  if(fusionContradiction){
+    showModal({icon:'🛠️', title:'Fix the evidence before building',
+      body:'Some anchors contradict each other, so building now would put every ball in the wrong place.<br><br><b>Fix:</b> tap <b>↶ Undo</b> to remove the conflicting boundary or duplicate hoop, then build again.',
+      primary:'OK'});
+    return;
+  }
+  document.getElementById('snapWrap').style.display="block";
+  // pictured region = bbox of anchor lawn-coords, with the SAME flip applied as the balls,
+  // converted to app y-down fracs
+  const pts=anchors.map(a=>{const lp=a.kind==='ref'?LAWN_REFERENCE_POINTS[a.key]:a.kind==='corner'?CORNER_POINTS[a.key]:edgeToLawnPoint(a.side,a.frac);return lp;}).filter(Boolean);
+  let region=null;
+  if(pts.length){
+    // apply flip to each anchor lawn-coord so region matches the flipped balls
+    const fp=pts.map(p=>({nx:flip.x?1-p.nx:p.nx, ny:flip.y?1-p.ny:p.ny}));
+    const nxs=fp.map(p=>p.nx),nys=fp.map(p=>p.ny);
+    const rx0=Math.min(...nxs),rx1=Math.max(...nxs),ry0=Math.min(...nys),ry1=Math.max(...nys);
+    region={x0:rx0,y0:1-ry1,x1:rx1,y1:1-ry0};
+  }
+  // Honest confidence: ONLY a fusion-pose solve is "high/reliable". A homography-only
+  // result is approximate no matter how well its own points fit locally, so cap it.
+  let conf;
+  if(fusionPose){ conf='high'; }
+  else if(fusionContradiction || collapsed){ conf='low'; }
+  else { conf='medium'; } // homography working but not the accurate solver
+  const snap=buildAppSnapshot(balls,{confidence:conf,picturedRegion:region,anchors:anchors,snappedHoops:snappedCount});
+  const confColor={high:'#7fd99a',medium:'#d9d27f',low:'#e6a86b',insufficient:'#e6a86b'}[conf]||'#d9d27f';
+  const confMsg = conf==='high' ? 'positions solved and reliable'
+                : conf==='medium' ? 'positions mapped — approximate (rough solver)'
+                : 'positions are rough; fix the warning and rebuild';
+  let html=`<div style="color:${confColor};font-size:13px;font-weight:600;margin-bottom:6px">${conf==='low'?'⚠ ':conf==='medium'?'~ ':'✓ '}${conf.toUpperCase()} confidence — ${confMsg}.</div>`;
+  html+=renderAppDiagram(snap,{width:520,height:660});
+  html+=`<div style="font-size:13px;color:#cfe8d6;margin-top:10px;line-height:1.5">📝 ${snap.note}</div>`;
+  const j=JSON.stringify(snap.positions,(k,v)=>typeof v==='number'?+v.toFixed(3):v);
+  html+=`<div style="font-family:ui-monospace,monospace;font-size:11px;color:#9fb3a6;margin-top:8px;word-break:break-all">positions → app: ${j}</div>`;
+  document.getElementById('snapHost').innerHTML=html;
+  // bring it into view — the page is tall, the snapshot is at the bottom
+  document.getElementById('snapPlaceholder').style.display="none";
+  hint.textContent="✓ Snapshot built — see the diagram on the right.";
+  updateWizard();
+  try { window.parent.postMessage({ type: 'ballMapperSnapshot', snapshot: snap.positions }, '*'); } catch(e) {}
+ }catch(err){
+  document.getElementById('snapWrap').style.display="block";
+  document.getElementById('snapHost').innerHTML=`<div style="color:#e6a86b">Couldn't build snapshot: ${(err&&err.message)||err}</div>`;
+ }
+}
+</script>
+<!-- Outdoor wizard progress bar -->
+<div id="wizard">
+  <div class="wiz-row">
+    <div class="wiz-step" id="wiz1">
+      <div class="wiz-num">1</div>
+      <div class="wiz-label">Mark near<br>boundary</div>
+    </div>
+    <div class="wiz-sep"></div>
+    <div class="wiz-step" id="wiz2">
+      <div class="wiz-num">2</div>
+      <div class="wiz-label">Trace a<br>hoop</div>
+    </div>
+    <div class="wiz-sep"></div>
+    <div class="wiz-step" id="wiz3">
+      <div class="wiz-num">3</div>
+      <div class="wiz-label">Place<br>balls</div>
+    </div>
+    <div class="wiz-sep"></div>
+    <div class="wiz-step" id="wiz4">
+      <div class="wiz-num">4</div>
+      <div class="wiz-label">Build<br>snapshot</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+ * LIVE CAMERA + SENSOR FUSION
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Sensor state ── */
+let _camStream        = null;
+let _deviceOrient     = null;   // {alpha, beta, gamma} snapshot
+let _capturedOrient   = null;   // locked at shutter time
+let _capturedGps      = null;   // locked at shutter time
+let _gpsCoords        = null;
+let _orientListener   = null;
+let _compassNearEdge  = null;   // 'N'|'S'|'E'|'W' suggestion from compass
+let _compassConf      = 0;      // 0..1
+let _syntheticVVPy    = null;   // derived from device tilt
+
+/* ── Sensor startup ── */
+function startSensors() {
+  // GPS (best-effort, for sun orientation)
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      p => { _gpsCoords = { lat: p.coords.latitude, lon: p.coords.longitude }; },
+      () => {},
+      { maximumAge: 120000, timeout: 8000 }
+    );
+  }
+  // Device orientation — iOS 13+ needs explicit permission
+  const doListen = () => {
+    _orientListener = e => { _deviceOrient = { alpha: e.alpha, beta: e.beta, gamma: e.gamma }; };
+    window.addEventListener('deviceorientation', _orientListener, { passive: true });
+  };
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(s => { if (s === 'granted') doListen(); }).catch(() => {});
+  } else {
+    doListen();
+  }
+}
+
+function stopSensors() {
+  if (_orientListener) { window.removeEventListener('deviceorientation', _orientListener); _orientListener = null; }
+}
+
+/* ── Detection loop ── */
+let _detRaf     = null;
+let _lastDetTs  = 0;
+const DET_MS    = 240;  // ms between analyses (~4 fps)
+let _offCv      = null;
+
+function startDetectionLoop() {
+  _offCv = document.createElement('canvas');
+  function loop(ts) {
+    _detRaf = requestAnimationFrame(loop);
+    if (ts - _lastDetTs < DET_MS) return;
+    _lastDetTs = ts;
+    const video   = document.getElementById('camVideo');
+    const overlay = document.getElementById('camDetectCanvas');
+    if (!video || !overlay || !video.videoWidth) return;
+
+    // Size overlay to match the displayed video area
+    const vr = video.getBoundingClientRect();
+    const ow = Math.round(vr.width), oh = Math.round(vr.height);
+    if (overlay.width !== ow || overlay.height !== oh) { overlay.width = ow; overlay.height = oh; }
+    const ctx = overlay.getContext('2d');
+    ctx.clearRect(0, 0, ow, oh);
+
+    // Draw video frame into small offscreen canvas for fast analysis
+    const DW = 320, DH = Math.round(320 * video.videoHeight / video.videoWidth);
+    _offCv.width = DW; _offCv.height = DH;
+    const oc = _offCv.getContext('2d', { willReadFrequently: true });
+    oc.drawImage(video, 0, 0, DW, DH);
+
+    // Mapping: detection pixel → overlay pixel (accounting for object-fit:cover letterboxing)
+    const vidAR = video.videoWidth / video.videoHeight, dispAR = ow / oh;
+    let mapX, mapY;
+    if (vidAR > dispAR) {
+      // cropped L/R
+      const s = oh / DH;
+      const xOff = (ow - DW * s) / 2;
+      mapX = dx => xOff + dx * s;
+      mapY = dy => dy * s;
+    } else {
+      // cropped T/B
+      const s = ow / DW;
+      const yOff = (oh - DH * s) / 2;
+      mapX = dx => dx * s;
+      mapY = dy => yOff + dy * s;
+    }
+
+    // 1. Boundary line detection (Hough)
+    let strongLines = [];
+    try {
+      const det = autoDetect(_offCv, { maxW: DW });
+      strongLines = det.strongLines || [];
+      for (const L of strongLines) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(54,209,255,0.82)';
+        ctx.lineWidth = 2.5; ctx.setLineDash([12, 7]);
+        ctx.beginPath();
+        ctx.moveTo(mapX(L.p1[0]), mapY(L.p1[1]));
+        ctx.lineTo(mapX(L.p2[0]), mapY(L.p2[1]));
+        ctx.stroke(); ctx.restore();
+      }
+    } catch(e) {}
+
+    // 2. Hoop upright detection
+    let hoops = [];
+    try {
+      hoops = detectHoopsGlobal(_offCv);
+      ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+      for (const h of hoops) {
+        const ox = mapX(h.cx), oy = mapY(h.cy);
+        const r  = Math.max(20, Math.abs(mapX(h.cx + h.width / 2) - ox));
+        ctx.save();
+        ctx.strokeStyle = h.conf > 0.12 ? 'rgba(127,217,154,0.92)' : 'rgba(127,217,154,0.45)';
+        ctx.lineWidth = 2.5; ctx.setLineDash([5, 3]);
+        ctx.beginPath(); ctx.arc(ox, oy, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(ox - 14, oy - r - 20, 28, 17);
+        ctx.fillStyle = '#7fd99a'; ctx.fillText('⛳', ox, oy - r - 6);
+        ctx.restore();
+      }
+    } catch(e) {}
+
+    // 3. Horizon line from device tilt
+    if (_deviceOrient && _deviceOrient.beta != null) {
+      const beta = _deviceOrient.beta; // degrees; ~45-80 when filming ground
+      const tiltDown = Math.max(2, 90 - Math.abs(beta));
+      const fpxEst = ow * 1.1; // rough focal in overlay pixels
+      const cotTilt = Math.cos(tiltDown * Math.PI/180) / (Math.sin(tiltDown * Math.PI/180) + 1e-9);
+      const horizY = oh / 2 + fpxEst * cotTilt;
+      if (horizY > -oh && horizY < oh * 2) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,230,100,0.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([16, 8]);
+        ctx.beginPath(); ctx.moveTo(0, horizY); ctx.lineTo(ow, horizY); ctx.stroke();
+        ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(4, horizY - 14, 58, 14);
+        ctx.fillStyle = '#d9d27f'; ctx.font = '10px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('horizon', 7, horizY - 3);
+        ctx.restore();
+      }
+    }
+
+    // 4. Status badge (top-left)
+    const parts = [];
+    if (hoops.length)       parts.push(`${hoops.length} hoop${hoops.length > 1 ? 's' : ''}`);
+    if (strongLines.length) parts.push(`${strongLines.length} line${strongLines.length > 1 ? 's' : ''}`);
+    if (_deviceOrient)      parts.push('tilt ✓');
+    const label = parts.length ? parts.join(' · ') + ' detected' : 'Scanning…';
+    ctx.textAlign = 'left'; ctx.font = 'bold 11px system-ui';
+    const tw = ctx.measureText(label).width + 20;
+    ctx.fillStyle = 'rgba(18,26,20,0.78)';
+    if (ctx.roundRect) ctx.roundRect(8, 8, tw, 22, 5); else ctx.rect(8, 8, tw, 22);
+    ctx.fill();
+    ctx.fillStyle = parts.length ? '#7fd99a' : '#9fb3a6';
+    ctx.fillText(label, 18, 23);
+
+    // 5. Compass badge (top-right)
+    if (_deviceOrient && _deviceOrient.alpha != null) {
+      const dir = ['N','NE','E','SE','S','SW','W','NW'][Math.round(_deviceOrient.alpha / 45) % 8];
+      ctx.textAlign = 'right'; ctx.font = 'bold 11px system-ui';
+      const cw = 68;
+      ctx.fillStyle = 'rgba(18,26,20,0.78)';
+      if (ctx.roundRect) ctx.roundRect(ow - cw - 8, 8, cw, 22, 5); else ctx.rect(ow - cw - 8, 8, cw, 22);
+      ctx.fill();
+      ctx.fillStyle = '#d9d27f';
+      ctx.fillText('🧭 ' + dir, ow - 12, 23);
+    }
+
+    // 6. Update camera tip based on detection state
+    const tip = document.getElementById('camTip');
+    if (tip) {
+      if (hoops.length >= 2 && strongLines.length >= 1) tip.innerHTML = 'Good view!<br>Tap to capture.';
+      else if (hoops.length >= 1) tip.innerHTML = `${hoops.length} hoop visible.<br>Tap to capture.`;
+      else tip.innerHTML = 'Aim at lawn.<br>Tap to capture.';
+    }
+  }
+  _detRaf = requestAnimationFrame(loop);
+}
+
+function stopDetectionLoop() {
+  if (_detRaf) { cancelAnimationFrame(_detRaf); _detRaf = null; }
+}
+
+/* ── Global hoop upright detector ── */
+function detectHoopsGlobal(canvas) {
+  const ctx  = canvas.getContext('2d', { willReadFrequently: true });
+  const w = canvas.width, h = canvas.height;
+  const data = ctx.getImageData(0, 0, w, h).data;
+  const minRun = Math.max(4, Math.round(h * 0.07));
+  const maxRun = Math.round(h * 0.65);
+  const col = new Float32Array(w);
+
+  for (let x = 0; x < w; x++) {
+    let run = 0, best = 0;
+    for (let y = 0; y < h; y++) {
+      const i = (y * w + x) * 4;
+      const r = data[i], g = data[i+1], b = data[i+2];
+      const lum = (r + g + b) / 3;
+      const bright = lum > 155 && (Math.max(r,g,b) - Math.min(r,g,b)) < 60;
+      if (bright) { run++; if (run > best) best = run; }
+      else run = 0;
+    }
+    col[x] = (best >= minRun && best <= maxRun) ? best : 0;
+  }
+
+  // 3-tap smooth
+  const sm = new Float32Array(w);
+  for (let x = 1; x < w - 1; x++) sm[x] = (col[x-1] + col[x] + col[x+1]) / 3;
+  const maxVal = sm.reduce((a, v) => Math.max(a, v), 0);
+  if (maxVal < minRun) return [];
+
+  const thr = maxVal * 0.45;
+  const peaks = [];
+  for (let x = 1; x < w - 1; x++)
+    if (sm[x] > thr && sm[x] >= sm[x-1] && sm[x] >= sm[x+1]) peaks.push(x);
+
+  // Pair peaks separated by a plausible hoop gauge (3–12% of frame width)
+  const minGap = Math.max(3, Math.round(w * 0.015));
+  const maxGap = Math.round(w * 0.12);
+  const hoops = []; const used = new Set();
+  for (let i = 0; i < peaks.length; i++) {
+    if (used.has(i)) continue;
+    for (let j = i + 1; j < peaks.length; j++) {
+      if (used.has(j)) continue;
+      const dx = peaks[j] - peaks[i];
+      if (dx < minGap || dx > maxGap) continue;
+      const cx = (peaks[i] + peaks[j]) / 2;
+      // Find vertical extent of bright run at stronger peak
+      const dp = sm[peaks[i]] >= sm[peaks[j]] ? peaks[i] : peaks[j];
+      let yTop = h, yBot = 0;
+      for (let y = 0; y < h; y++) {
+        const ii = (y * w + dp) * 4;
+        if ((data[ii] + data[ii+1] + data[ii+2]) / 3 > 145) { yTop = Math.min(yTop, y); yBot = Math.max(yBot, y); }
+      }
+      hoops.push({ cx, cy: (yTop + yBot) / 2, width: dx, conf: Math.min(sm[peaks[i]], sm[peaks[j]]) / h });
+      used.add(i); used.add(j); break;
+    }
+  }
+  return hoops;
+}
+
+/* ── Camera open/close ── */
+function startCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    document.getElementById('file').click(); return;
+  }
+  document.getElementById('camOverlay').style.display = 'flex';
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    audio: false
+  }).then(stream => {
+    _camStream = stream;
+    const video = document.getElementById('camVideo');
+    video.srcObject = stream;
+    video.onloadedmetadata = () => { startDetectionLoop(); startSensors(); };
+  }).catch(() => {
+    document.getElementById('camOverlay').style.display = 'none';
+    document.getElementById('file').click();
+  });
+}
+
+function cancelCamera() {
+  stopDetectionLoop(); stopSensors();
+  if (_camStream) { _camStream.getTracks().forEach(t => t.stop()); _camStream = null; }
+  document.getElementById('camOverlay').style.display = 'none';
+}
+
+/* ── Capture: freeze frame + snapshot sensors ── */
+function captureCamera() {
+  const video = document.getElementById('camVideo');
+  if (!video.videoWidth) return;
+
+  // Snapshot sensor state at shutter time
+  _capturedOrient = _deviceOrient ? { ..._deviceOrient } : null;
+  _capturedGps    = _gpsCoords    ? { ..._gpsCoords    } : null;
+
+  // Grab the last detected hoops for auto-annotation after load
+  let preDetectedHoops = [];
+  try { preDetectedHoops = detectHoopsGlobal(document.getElementById('camDetectCanvas')); } catch(e) {}
+
+  const c = document.createElement('canvas');
+  c.width = video.videoWidth; c.height = video.videoHeight;
+  c.getContext('2d').drawImage(video, 0, 0);
+  cancelCamera();
+  c.toBlob(blob => {
+    if (!blob) return;
+    loadImage(URL.createObjectURL(blob), null, { orient: _capturedOrient, gps: _capturedGps, hoops: preDetectedHoops });
+  }, 'image/jpeg', 0.92);
+}
+
+/* ── Video file frame extraction ── */
+document.getElementById('file').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  // video: extract first frame after seeking to 0.5s
+  if (f.type.startsWith('video/')) {
+    const url = URL.createObjectURL(f);
+    const v = document.createElement('video');
+    v.src = url; v.muted = true; v.currentTime = 0.5;
+    v.onloadeddata = () => {
+      v.currentTime = 0.5;
+    };
+    v.onseeked = () => {
+      const c = document.createElement('canvas');
+      c.width = v.videoWidth; c.height = v.videoHeight;
+      c.getContext('2d').drawImage(v, 0, 0);
+      c.toBlob(blob => { if (blob) loadImage(URL.createObjectURL(blob), null); }, 'image/jpeg', 0.92);
+      URL.revokeObjectURL(url);
+    };
+    v.load();
+    return;
+  }
+  // image: read EXIF then load (same as existing code)
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try { const exif = parseExif(ev.target.result); loadImage(URL.createObjectURL(f), exif); }
+    catch(err) { loadImage(URL.createObjectURL(f), null); }
+  };
+  reader.onerror = () => loadImage(URL.createObjectURL(f), null);
+  reader.readAsArrayBuffer(f);
+});
+
+/* ── Auto-apply orientation from device sensors ── */
+function autoApplyOrientation(orient, gps) {
+  if (!orient) return;
+  const alpha = orient.alpha; // compass: degrees from North, clockwise, camera is pointing this way
+  const beta  = orient.beta;  // pitch: 90=vertical, ~45-75 when photographing lawn
+
+  // 1. Camera tilt → virtual horizon (VVP y-coordinate in image space)
+  //    Replaces the need to trace hoop crowns for the vertical vanishing point.
+  if (beta != null && img && cv) {
+    // tiltDown: how many degrees below horizontal the camera is pointing
+    // DeviceOrientation beta: 0=flat, 90=vertical (for most devices held portrait tilting forward)
+    const tiltDown = Math.max(2, Math.abs(beta)); // beta IS the angle from horizontal on most phones
+    const fpx = camFocal ? camFocal.fpx : img.width * 1.1;
+    // VVP is far above the image when nearly horizontal, at infinity when tiltDown=0
+    if (tiltDown > 5) {
+      const cotTilt = Math.cos(tiltDown * Math.PI/180) / Math.sin(tiltDown * Math.PI/180);
+      _syntheticVVPy = cv.height / 2 - fpx * cotTilt; // above image centre (negative = above top)
+    }
+  }
+
+  // 2. Compass heading → which boundary edge is "near" (behind the camera)
+  //    Camera points toward alpha degrees. The lawn is in front; the near edge is behind us.
+  //    The near edge faces AWAY from the lawn direction, i.e. compass = (alpha+180)%360.
+  if (alpha != null) {
+    const nearBearing = (alpha + 180) % 360; // direction we're standing relative to N
+    const cardinals = [{s:'N',b:0},{s:'E',b:90},{s:'S',b:180},{s:'W',b:270}];
+    let best = cardinals[0], bestDiff = 999;
+    for (const c of cardinals) {
+      const diff = Math.abs(((nearBearing - c.b + 540) % 360) - 180);
+      if (diff < bestDiff) { bestDiff = diff; best = c; }
+    }
+    _compassNearEdge = best.s;
+    _compassConf = Math.max(0, 1 - bestDiff / 45); // 1.0 = dead on cardinal, 0 = 45° off
+  }
+
+  // 3. If sun is known, use shadow bearing for a second orientation check
+  if (sunInfo && _compassNearEdge) {
+    // sunInfo.shadowBearing is the real-world compass direction shadows point.
+    // We can cross-check with compass to validate orientation.
+  }
+
+  // 4. Update the side picker buttons to highlight the suggested near edge
+  highlightCompassEdge();
+
+  // 5. Show hint
+  const bits = [];
+  if (_compassNearEdge && _compassConf > 0.3) {
+    bits.push(`near edge is likely <b>${_compassNearEdge}</b> (${Math.round(_compassConf*100)}% confident from compass)`);
+  }
+  if (_syntheticVVPy != null) bits.push('camera tilt captured');
+  if (bits.length) {
+    hint.innerHTML = `🧭 Sensors: ${bits.join(' · ')}. Near edge button pre-selected below.`;
+    // Auto-select the boundary tool so the user can start drawing immediately
+    setMode(document.getElementById('boundaryBtn'), 'boundary', true);
+  }
+}
+
+function highlightCompassEdge() {
+  if (!_compassNearEdge || _compassConf < 0.3) return;
+  // Find the side picker buttons and highlight the suggested one
+  document.querySelectorAll('.sideBtn').forEach(btn => {
+    const side = btn.getAttribute('onclick').match(/'([NSEW])'/)?.[1];
+    if (!side) return;
+    if (side === _compassNearEdge) {
+      btn.style.background = '#1a6640';
+      btn.style.outline = '2px solid #7fd99a';
+      btn.innerHTML = btn.textContent + ' ← likely';
+    } else {
+      btn.style.background = '';
+      btn.style.outline = '';
+      btn.textContent = btn.textContent.replace(' ← likely', '');
+    }
+  });
+}
+
+/* ── Wizard update ── */
+function updateWizard() {
+  if (!img) { document.getElementById('wizard').style.display = 'none'; return; }
+  document.getElementById('wizard').style.display = 'block';
+
+  const step1done = boundaries.length >= 1;
+  const step2done = hoopVerticals.length >= 1;
+  const step3done = Object.keys(balls).length >= 1;
+  const step4done = document.getElementById('snapWrap').style.display !== 'none';
+
+  function setStep(el, done, active) {
+    el.classList.toggle('wiz-done', done);
+    el.classList.toggle('wiz-active', active && !done);
+    const num = el.querySelector('.wiz-num');
+    if (done) num.textContent = '✓';
+    else num.textContent = el.id.replace('wiz','');
+  }
+
+  setStep(document.getElementById('wiz1'), step1done, true);
+  setStep(document.getElementById('wiz2'), step2done, step1done);
+  setStep(document.getElementById('wiz3'), step3done, step2done);
+  setStep(document.getElementById('wiz4'), step4done, step3done);
+}
+</script>
+</body>
+</html>
