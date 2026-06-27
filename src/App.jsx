@@ -35903,6 +35903,259 @@ function SolidThinCard({ icon, logo, label, sublabel, color, onClick, badge, che
 // A place to track followed players, clubs, and events. The metaphor: a race
 // circuit — avatar nodes sit on a glowing track, activity pulses between them.
 
+// ── Croquet? OK editorial broadcast — update these to push news/highlights ────
+const CROQUETOK_BROADCAST = [
+  {
+    id: "b1",
+    type: "highlight",   // highlight | news | clip | player-spotlight
+    icon: "ti-star",
+    label: "Player Spotlight",
+    headline: "Reg Bamford makes history at the World Championships",
+    detail: "Bamford clinched his sixth AC World title with a flawless triple peel in the final — a performance many are calling the greatest in the game's history.",
+    date: "2026-06-20",
+  },
+  {
+    id: "b2",
+    type: "news",
+    icon: "ti-news",
+    label: "News",
+    headline: "Croquet Australia announces 2026–27 national calendar",
+    detail: "Twelve national events confirmed, including a new GC Open series across three states. Registrations open 1 August.",
+    date: "2026-06-18",
+  },
+  {
+    id: "b3",
+    type: "clip",
+    icon: "ti-player-play",
+    label: "Watch",
+    headline: "Best breaks from the Victorian Open — highlights reel",
+    detail: "Three minutes of the slickest triple peels, cannons, and jump shots from last week's field of 64.",
+    date: "2026-06-15",
+  },
+  {
+    id: "b4",
+    type: "highlight",
+    icon: "ti-trophy",
+    label: "Result",
+    headline: "Hobart CC wins the 2026 National Club Shield",
+    detail: "First title for a Tasmanian club since 1998. The team of six went undefeated across the four-day round robin.",
+    date: "2026-06-12",
+  },
+];
+
+// ── CroquetOKTrackRow — editorial broadcast as a first-class circuit row ──────
+const CQOK_KEY = "__croquetok__";
+
+// Track-level colors — all within the app's green/amber motif
+const TRACK_COLORS = {
+  cqok:   "#B8860B", // dark amber/gold   — Croquet? OK editorial (one warm accent)
+  people: "#1A5C3A", // deep forest green  — People / players
+  clubs:  "#2D7A55", // mid green          — Clubs
+  events: "#4A9070", // sage green         — Events
+  games:  "#7AAF8A", // light sage         — Games
+};
+
+// All 5 tracks in display order — drives compact bar, pills, rows
+const TRACKS = [
+  { key: "cqok",   label: "Croquet? OK",    icon: "ti-mallet",            color: TRACK_COLORS.cqok   },
+  { key: "people", label: "People",          icon: "ti-users",             color: TRACK_COLORS.people },
+  { key: "clubs",  label: "Clubs",           icon: "ti-building-pavilion", color: TRACK_COLORS.clubs  },
+  { key: "events", label: "Events",          icon: "ti-calendar-event",    color: TRACK_COLORS.events },
+  { key: "games",  label: "Games",           icon: "ti-ball-football",     color: TRACK_COLORS.games  },
+];
+
+// ── CircuitTrackWave — canvas-based sine wave with gradient tail + spark ─────
+// Single RAF loop per track: arc-length lookup guarantees spark alignment,
+// gradient tail is drawn in one pass (transparent back → opaque front).
+function CircuitTrackWave({ hbPath, waveColor, active, intensity, sparkSpeed, animStagger }) {
+  const canvasRef = React.useRef(null);
+  const rafRef    = React.useRef(null);
+  const t0Ref     = React.useRef(null); // persists across effect re-runs to preserve phase
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const W   = canvas.offsetWidth || 200;
+    const H   = 16;
+    canvas.width  = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    // Scale path from SVG viewBox (200×16) → canvas CSS px
+    const pts = hbPath.split(" ").map(p => {
+      const [x, y] = p.split(",").map(Number);
+      return [x / 200 * W, y / 16 * H];
+    });
+
+    // Cumulative arc lengths in CSS px
+    const arcLens = [0];
+    for (let i = 1; i < pts.length; i++) {
+      const dx = pts[i][0] - pts[i-1][0], dy = pts[i][1] - pts[i-1][1];
+      arcLens.push(arcLens[i-1] + Math.sqrt(dx*dx + dy*dy));
+    }
+    const totalLen = arcLens[arcLens.length - 1];
+
+    // Exact [x,y] at arc position s (wraps)
+    function ptAtArc(s) {
+      s = ((s % totalLen) + totalLen) % totalLen;
+      let lo = 0, hi = arcLens.length - 1;
+      while (lo < hi - 1) { const m = (lo+hi)>>1; arcLens[m] <= s ? lo=m : (hi=m); }
+      const span = arcLens[hi] - arcLens[lo];
+      const t = span > 0 ? (s - arcLens[lo]) / span : 0;
+      return [pts[lo][0] + t*(pts[hi][0]-pts[lo][0]), pts[lo][1] + t*(pts[hi][1]-pts[lo][1])];
+    }
+
+    // Stroke one tiny segment of the path (s0→s1 in arc units, handles wrap)
+    function strokeSeg(s0r, s1r) {
+      const segLen = s1r - s0r;
+      const s0 = ((s0r % totalLen) + totalLen) % totalLen;
+      // Cap just below totalLen so ptAtArc never wraps to position 0 (causes full-line flash)
+      const EPS = 0.001;
+      const s1c = Math.min(s0 + segLen, totalLen - EPS);
+      const [x0, y0] = ptAtArc(s0);
+      ctx.beginPath(); ctx.moveTo(x0, y0);
+      let lo = 0, hi = arcLens.length;
+      while (lo < hi) { const m=(lo+hi)>>1; arcLens[m]<=s0 ? lo=m+1 : hi=m; }
+      while (lo < arcLens.length && arcLens[lo] <= s1c) { ctx.lineTo(pts[lo][0], pts[lo][1]); lo++; }
+      ctx.lineTo(...ptAtArc(s1c)); ctx.stroke();
+      // Wrap remainder from path start
+      if (s0 + segLen > totalLen) {
+        const rem = Math.min(s0 + segLen - totalLen, totalLen - EPS);
+        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); lo = 1;
+        while (lo < arcLens.length && arcLens[lo] <= rem) { ctx.lineTo(pts[lo][0], pts[lo][1]); lo++; }
+        ctx.lineTo(...ptAtArc(rem)); ctx.stroke();
+      }
+    }
+
+    // Parse waveColor hex → rgba helper
+    const hx = waveColor.replace("#","");
+    const CR = parseInt(hx.slice(0,2),16), CG = parseInt(hx.slice(2,4),16), CB = parseInt(hx.slice(4,6),16);
+    const rgba = a => `rgba(${CR},${CG},${CB},${(+a).toFixed(3)})`;
+
+    // Tail lengths in CSS px (proportional to arc length)
+    const sc   = totalLen / 200;
+    const TIP  = 8  * sc;
+    const MID  = 22 * sc * (0.3 + intensity * 0.7);
+    const SOFT = 65 * sc * (0.3 + intensity * 0.7);
+    const TRAIL = TIP + MID + SOFT;
+    const dur   = parseFloat(sparkSpeed) * 1000;
+    const STEPS = 16;
+
+    function draw(ts) {
+      if (!t0Ref.current) t0Ref.current = ts;
+      const elapsed  = (ts - t0Ref.current + animStagger * dur) % dur;
+      const sparkPos = (elapsed / dur) * totalLen;
+
+      ctx.clearRect(0, 0, W, H);
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+      // Ghost rail
+      ctx.beginPath();
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
+      ctx.strokeStyle = rgba(active ? 0.08 : 0.25);
+      ctx.lineWidth = 1; ctx.stroke();
+
+      if (active) {
+        // Gradient tail: STEPS segments, transparent/thin at back → opaque/thick at front
+        for (let s = 0; s < STEPS; s++) {
+          const t0 = sparkPos - TRAIL + (s / STEPS) * TRAIL;
+          const t1 = sparkPos - TRAIL + ((s+1) / STEPS) * TRAIL;
+          ctx.strokeStyle = rgba(0.04 + (s / (STEPS-1)) * 0.88);
+          ctx.lineWidth   = 0.8 + (s / (STEPS-1)) * 1.7;
+          strokeSeg(t0, t1);
+        }
+        // Spark glow at exact arc position
+        const [sx, sy] = ptAtArc(sparkPos);
+        const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, 7);
+        g.addColorStop(0,   "rgba(255,255,255,0.95)");
+        g.addColorStop(0.3, rgba(0.9));
+        g.addColorStop(1,   rgba(0));
+        ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI*2);
+        ctx.fillStyle = g; ctx.fill();
+      }
+
+      rafRef.current = requestAnimationFrame(draw);
+    }
+
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [hbPath, waveColor, active, intensity, sparkSpeed, animStagger]);
+
+  return (
+    <canvas ref={canvasRef}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />
+  );
+}
+
+function CroquetOKTrackRow({ selected, setSelected, itemCount = CROQUETOK_BROADCAST.length, onTrackClick, animStagger = 0 }) {
+  const isSelected = selected === CQOK_KEY;
+  const active   = itemCount > 0;
+  const intensity = Math.min(itemCount / 5, 1);
+  const cycles   = 1 + Math.round(intensity * 2.5);
+  const amp      = 0.8 + intensity * 5.5;
+  const sparkSpeed = active ? (intensity > 0.6 ? "5s" : "7s") : "10s";
+  const waveColor  = TRACK_COLORS.cqok;
+
+  function makeSineWave(amplitude, cyc) {
+    const W = 200, cy = 8;
+    const pts = [];
+    const steps = cyc * 32;
+    for (let i = 0; i <= steps; i++) {
+      const x = (i / steps) * W;
+      const y = cy - Math.sin((i / steps) * cyc * 2 * Math.PI) * amplitude;
+      pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+    }
+    return pts.join(" ");
+  }
+  const hbPath = makeSineWave(amp, cycles);
+
+  const shadow = isSelected
+    ? `0 0 0 2.5px ${T.card}, 0 0 0 5px ${waveColor}, 0 0 0 6.5px ${waveColor}44`
+    : `0 0 0 2px ${T.pageBg}, 0 0 0 4.5px ${waveColor}cc`;
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {/* Row label + canvas wave (same CircuitTrackWave as other tracks) */}
+      <button onClick={onTrackClick} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, padding: "0 16px", width: "100%", background: "none", border: "none", cursor: onTrackClick ? "pointer" : "default", fontFamily: "inherit", textAlign: "left" }}>
+        <span style={{ fontSize: 9, fontWeight: 800, color: waveColor, textTransform: "uppercase", letterSpacing: "0.1em", opacity: 0.8 }}>Croquet? OK</span>
+        <span style={{ flex: 1, position: "relative", height: 16, overflow: "visible" }}>
+          <CircuitTrackWave
+            hbPath={hbPath} waveColor={waveColor}
+            active={active} intensity={intensity}
+            sparkSpeed={sparkSpeed} animStagger={animStagger} />
+        </span>
+        <span style={{ fontSize: 9, color: waveColor, fontWeight: 700, opacity: active ? 1 : 0.4 }}>{itemCount}</span>
+      </button>
+
+      {/* Single special node */}
+      <div style={{ padding: "6px 12px 4px" }}>
+        <button
+          onClick={() => setSelected(sel => sel === CQOK_KEY ? null : CQOK_KEY)}
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: "6px 5px 4px", flexShrink: 0, fontFamily: "inherit" }}
+        >
+          <span style={{
+            width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: TRACK_COLORS.cqok,
+            boxShadow: shadow,
+            transition: "box-shadow 0.25s",
+            animation: isSelected ? "circuit-select-pulse 1.8s ease-out infinite" : "none",
+          }}>
+            <i className="ti ti-mallet" style={{ fontSize: 22, color: "#fff" }} aria-hidden="true" />
+          </span>
+          <span style={{ fontSize: 9, fontWeight: 800, color: isSelected ? TRACK_COLORS.cqok : T.textFaint, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+            What's Hot
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const CIRCUIT_SPARK   = "#F5C842"; // warm amber/yellow — the electrical arc
 const CIRCUIT_SPARK2  = "#FDE68A"; // lighter glow/halo
 const CIRCUIT_TRACE   = "rgba(26,74,46,0.09)"; // faint board trace (app green family)
@@ -36390,16 +36643,17 @@ function CircuitNode({ item, selected, ageH, onClick, size = 40, idx }) {
   );
 }
 // ── CircuitTrackRow — stable top-level so it doesn't remount on every render ──
-function CircuitTrackRow({ nodes, label, activity, now, seen, selected, setSelected, markSeen }) {
+function CircuitTrackRow({ nodes, label, activity, now, seen, dismissed = new Set(), selected, setSelected, markSeen, color: waveColor = CIRCUIT_SPARK, onTrackClick, animStagger = 0 }) {
   const scrollRef = useDragScroll();
 
-  // Count unseen signals for this row's nodes — drives wave intensity
+  // Count unseen, undismissed signals for this row's nodes — drives wave intensity
   const unseenCount = nodes.reduce((acc, node) => {
     return acc + activity.filter(a => {
       const key = a.entityKey || a.key;
+      const itemKey = `${key}:${a.ts}`;
       const aH = (now - a.ts) / 3600000;
       const hideH = circuitHideAge(a.entity) * 24;
-      return key === node.key && aH < hideH && !seen.has(`${key}:${a.ts}`);
+      return key === node.key && aH < hideH && !seen.has(itemKey) && !dismissed.has(itemKey);
     }).length;
   }, 0);
 
@@ -36446,80 +36700,24 @@ function CircuitTrackRow({ nodes, label, activity, now, seen, selected, setSelec
     return pts.join(" ");
   }
 
-  const cycles   = 1 + Math.round(intensity * 2.5); // 1 wave quiet → 3.5 waves intense
-  const amp      = 0.8 + intensity * 5.5;            // 0.8px quiet → 6.3px intense
-  const hbPath   = makeSineWave(amp, cycles);
-  const sparkColor  = unseenCount === 0 ? T.cardBorder : CIRCUIT_SPARK;
-  const lineOpacity = unseenCount === 0 ? 0.4 : 0.7;
-  const sparkSpeed  = unseenCount === 0 ? "10s" : intensity > 0.6 ? "5s" : "7s";
+  const cycles     = 1 + Math.round(intensity * 2.5);
+  const amp        = 0.8 + intensity * 5.5;
+  const hbPath     = makeSineWave(amp, cycles);
+  const sparkSpeed = unseenCount === 0 ? "10s" : intensity > 0.6 ? "5s" : "7s";
 
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, padding: "0 16px" }}>
-        <span style={{ fontSize: 9, fontWeight: 800, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</span>
-        {/* Sine wave trace — amplitude driven by unseen signal count */}
+      <button onClick={onTrackClick} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, padding: "0 16px", width: "100%", background: "none", border: "none", cursor: onTrackClick ? "pointer" : "default", fontFamily: "inherit", textAlign: "left" }}>
+        <span style={{ fontSize: 9, fontWeight: 800, color: waveColor, textTransform: "uppercase", letterSpacing: "0.1em", opacity: 0.8 }}>{label}</span>
+        {/* Sine wave — canvas RAF, amplitude driven by unseen count */}
         <span style={{ flex: 1, position: "relative", height: 16, overflow: "visible" }}>
-          {/* Wave line — stretched */}
-          <svg width="100%" height="16" viewBox="0 0 200 16" preserveAspectRatio="none"
-            style={{ position: "absolute", inset: 0 }}>
-            <polyline points={hbPath} fill="none"
-              stroke={unseenCount === 0 ? T.cardBorder : CIRCUIT_SPARK}
-              strokeWidth={unseenCount === 0 ? 1 : 1.5 + intensity * 0.5}
-              strokeLinecap="round" strokeLinejoin="round" opacity={lineOpacity} />
-          </svg>
-          {/* Spark — CSS animates left; top follows sine via keyframes */}
-          {(() => {
-            // Build a CSS keyframe string that mirrors the sine wave Y position
-            // at regular intervals so the spark tracks the wave
-            const mid = 8; // centre Y in px (half of 16px container)
-            const steps = 20;
-            const kfName = `spark-wave-${label.replace(/\W/g,"")}`;
-            const kfStops = Array.from({length: steps + 1}, (_, i) => {
-              const pct = (i / steps * 100).toFixed(0);
-              const phase = (i / steps) * cycles * 2 * Math.PI;
-              const yOff = -Math.sin(phase) * amp; // matches makeSineWave
-              const left = (i / steps * 100).toFixed(1);
-              // opacity: fade in at start, fade out at end
-              const op = i < 2 ? i * 0.5 : i > steps - 2 ? (steps - i) * 0.5 : 0.92;
-              return `${pct}% { left: ${left}%; top: calc(50% + ${yOff.toFixed(2)}px - 7px); opacity: ${unseenCount === 0 ? 0.35 : op}; }`;
-            }).join(' ');
-            return (
-              <>
-                <style>{`@keyframes ${kfName} { ${kfStops} }`}</style>
-                <span style={{
-                  position: "absolute",
-                  width: 14, height: 14,
-                  marginLeft: -7,
-                  animation: `${kfName} ${sparkSpeed} linear infinite`,
-                  pointerEvents: "none",
-                  transformOrigin: "7px 7px",
-                }}>
-                  <svg width="14" height="14" viewBox="-7 -7 14 14" overflow="visible">
-                    <defs>
-                      <radialGradient id={`sg-${label.replace(/\W/g,"")}`} cx="50%" cy="50%" r="50%">
-                        <stop offset="0%" stopColor="white" stopOpacity="1" />
-                        <stop offset="40%" stopColor={CIRCUIT_SPARK} stopOpacity="0.9" />
-                        <stop offset="100%" stopColor={CIRCUIT_SPARK} stopOpacity="0" />
-                      </radialGradient>
-                    </defs>
-                    <polygon
-                      points="0,-6 0.8,-2.5 3.4,-4.8 2.1,-1.6 5.8,-3 3.1,0 6.2,1.3 2.8,1.1 5.1,4 1.6,0.5 1.6,4.4 0,1.6 -1.6,4.4 -1.6,0.5 -5.1,4 -2.8,1.1 -6.2,1.3 -3.1,0 -5.8,-3 -2.1,-1.6 -3.4,-4.8 -0.8,-2.5"
-                      fill={`url(#sg-${label.replace(/\W/g,"")})`}
-                      opacity={unseenCount === 0 ? 0.35 : 0.92}
-                      style={{
-                        filter: unseenCount > 0 ? `drop-shadow(0 0 3px ${CIRCUIT_SPARK})` : "none",
-                        animation: unseenCount > 0 ? "spark-breathe 0.9s ease-in-out infinite" : "none",
-                        transformOrigin: "center",
-                      }}
-                    />
-                  </svg>
-                </span>
-              </>
-            );
-          })()}
+          <CircuitTrackWave
+            hbPath={hbPath} waveColor={waveColor}
+            active={unseenCount > 0} intensity={intensity}
+            sparkSpeed={sparkSpeed} animStagger={animStagger} />
         </span>
         <span style={{ fontSize: 9, color: T.textFaint }}>{nodes.length}</span>
-      </div>
+      </button>
       <SwipeFade fadeColor={T.card} leftWidth={0} rightWidth={28} trackStyle={{ padding: "6px 12px 4px", cursor: "grab" }}>
         <div style={{ display: "flex", gap: 0, minWidth: "min-content" }}>
           {nodes.map((node, idx) => {
@@ -36581,6 +36779,173 @@ function UnfollowButton({ node, onUnfollow }) {
   );
 }
 
+// ── TrackWaveBar — 5 overlapping sine waves with animated sparks ──────────────
+// intensities: object { cqok, people, clubs, events, games } each 0–1
+// height: px height of the container (default 44 for compact, smaller for micro)
+// sameAxis: all waves share the same vertical midpoint (overlapping, oscilloscope-style)
+// staggered (default): waves spaced vertically so each is individually readable
+function TrackWaveBar({ intensities = {}, height = 44, sparks = true, sameAxis = false }) {
+  const canvasRef = React.useRef(null);
+  const rafRef    = React.useRef(null);
+  const t0Ref     = React.useRef(null);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const W   = canvas.offsetWidth || 300;
+    const H   = height;
+    canvas.width  = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    const pad  = Math.round(H * 0.12);
+    const span = H - pad * 2;
+    const mid  = H / 2;
+    const STAGGERS = [0.0, 0.2, 0.4, 0.6, 0.8];
+
+    const tracks = [
+      { key: "cqok",   color: TRACK_COLORS.cqok,   cycles: 2,   phase: 0   },
+      { key: "people", color: TRACK_COLORS.people,  cycles: 2.5, phase: 1.2 },
+      { key: "clubs",  color: TRACK_COLORS.clubs,   cycles: 3,   phase: 2.4 },
+      { key: "events", color: TRACK_COLORS.events,  cycles: 1.7, phase: 0.8 },
+      { key: "games",  color: TRACK_COLORS.games,   cycles: 2.2, phase: 3.1 },
+    ].map((t, i, arr) => {
+      const intensity = Math.min(intensities[t.key] || 0, 1);
+      const cy  = sameAxis ? mid : pad + (i / (arr.length - 1)) * span;
+      const amp = intensity < 0.05 ? H * 0.025 : H * 0.06 + intensity * H * 0.22;
+
+      const steps = Math.round(t.cycles * 28);
+      const pts = [];
+      for (let j = 0; j <= steps; j++) {
+        const x = (j / steps) * W;
+        const y = cy - Math.sin((j / steps) * t.cycles * 2 * Math.PI + t.phase) * amp;
+        pts.push([x, y]);
+      }
+      const arcLens = [0];
+      for (let j = 1; j < pts.length; j++) {
+        const dx = pts[j][0]-pts[j-1][0], dy = pts[j][1]-pts[j-1][1];
+        arcLens.push(arcLens[j-1] + Math.sqrt(dx*dx+dy*dy));
+      }
+      const totalLen = arcLens[arcLens.length - 1];
+
+      const hx = t.color.replace("#","");
+      const r = parseInt(hx.slice(0,2),16), g = parseInt(hx.slice(2,4),16), b = parseInt(hx.slice(4,6),16);
+      return { ...t, intensity, cy, amp, pts, arcLens, totalLen, r, g, b, stagger: STAGGERS[i] };
+    });
+
+    function ptAtArc(td, s) {
+      const { pts, arcLens, totalLen } = td;
+      s = ((s % totalLen) + totalLen) % totalLen;
+      let lo = 0, hi = arcLens.length - 1;
+      while (lo < hi - 1) { const m = (lo+hi)>>1; arcLens[m] <= s ? lo=m : (hi=m); }
+      const sp = arcLens[hi] - arcLens[lo];
+      const t2 = sp > 0 ? (s - arcLens[lo]) / sp : 0;
+      return [pts[lo][0]+t2*(pts[hi][0]-pts[lo][0]), pts[lo][1]+t2*(pts[hi][1]-pts[lo][1])];
+    }
+
+    function strokeSeg(td, s0r, s1r) {
+      const { pts, arcLens, totalLen } = td;
+      const segLen = s1r - s0r;
+      const s0 = ((s0r % totalLen) + totalLen) % totalLen;
+      const EPS = 0.001;
+      const s1c = Math.min(s0 + segLen, totalLen - EPS);
+      const [x0, y0] = ptAtArc(td, s0);
+      ctx.beginPath(); ctx.moveTo(x0, y0);
+      let lo = 0, hi = arcLens.length;
+      while (lo < hi) { const m=(lo+hi)>>1; arcLens[m]<=s0 ? lo=m+1 : hi=m; }
+      while (lo < arcLens.length && arcLens[lo] <= s1c) { ctx.lineTo(pts[lo][0], pts[lo][1]); lo++; }
+      ctx.lineTo(...ptAtArc(td, s1c)); ctx.stroke();
+      if (s0 + segLen > totalLen) {
+        const rem = Math.min(s0 + segLen - totalLen, totalLen - EPS);
+        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); lo = 1;
+        while (lo < arcLens.length && arcLens[lo] <= rem) { ctx.lineTo(pts[lo][0], pts[lo][1]); lo++; }
+        ctx.lineTo(...ptAtArc(td, rem)); ctx.stroke();
+      }
+    }
+
+    const BASE_DUR = 7500;
+
+    function draw(ts) {
+      if (!t0Ref.current) t0Ref.current = ts;
+      ctx.clearRect(0, 0, W, H);
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+      for (const td of tracks) {
+        const { pts, totalLen, intensity, stagger, r, g, b } = td;
+        const rgba = a => `rgba(${r},${g},${b},${(+a).toFixed(3)})`;
+        const active = intensity > 0.01;
+
+        if (!sparks) {
+          // ── Micro mode: gently undulating wave, no spark ──────────────────
+          // Amplitude breathes slowly; each track has a different phase offset
+          const breathe = active
+            ? 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(ts / 2000 + stagger * Math.PI * 2.5))
+            : 0.15;
+          ctx.beginPath();
+          pts.forEach(([x, y], i) => {
+            const ys = td.cy + (y - td.cy) * breathe;
+            i === 0 ? ctx.moveTo(x, ys) : ctx.lineTo(x, ys);
+          });
+          ctx.strokeStyle = rgba(active ? 0.55 : 0.20);
+          ctx.lineWidth = active ? 0.9 : 0.6;
+          ctx.stroke();
+
+        } else {
+          // ── Compact mode: gradient tail + small dot spark ─────────────────
+          const dur = BASE_DUR * (active ? (1.5 - intensity * 0.7) : 1.5);
+          const elapsed = (ts - t0Ref.current + stagger * dur) % dur;
+          const sparkPos = (elapsed / dur) * totalLen;
+
+          // Ghost rail
+          ctx.beginPath();
+          pts.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
+          ctx.strokeStyle = rgba(active ? 0.14 : 0.20);
+          ctx.lineWidth = active ? 0.9 : 0.7;
+          ctx.stroke();
+
+          if (active) {
+            // Gradient tail
+            const TRAIL = totalLen * 0.26;
+            const STEPS = 12;
+            for (let s = 0; s < STEPS; s++) {
+              const t0s = sparkPos - TRAIL + (s / STEPS) * TRAIL;
+              const t1s = sparkPos - TRAIL + ((s+1) / STEPS) * TRAIL;
+              ctx.strokeStyle = rgba(0.04 + (s / (STEPS-1)) * 0.70);
+              ctx.lineWidth   = 0.4 + (s / (STEPS-1)) * 1.6;
+              strokeSeg(td, t0s, t1s);
+            }
+            // Tiny dot at leading edge — no radial gradient, just a crisp circle
+            const [sx, sy] = ptAtArc(td, sparkPos);
+            ctx.beginPath(); ctx.arc(sx, sy, 2, 0, Math.PI*2);
+            ctx.fillStyle = rgba(0.95);
+            ctx.shadowBlur = 4; ctx.shadowColor = rgba(0.6);
+            ctx.fill(); ctx.shadowBlur = 0;
+          }
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(draw);
+    }
+
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [intensities, height, sparks, sameAxis]);
+
+  return (
+    <canvas ref={canvasRef} style={{ display: "block", width: "100%", height }} />
+  );
+}
+
+// ── CircuitMicroBar — ultra-compact for LiveCard on home screen ───────────────
+// No sparks, no labels — pure at-a-glance wave density signal
+function CircuitMicroBar({ intensities = {} }) {
+  return <TrackWaveBar intensities={intensities} height={22} sparks={false} />;
+}
+
 // ── CircuitView — the full screen ─────────────────────────────────────────────
 function CircuitView({ onBack, onNavigate }) {
   const wide = useWideLayout();
@@ -36590,6 +36955,11 @@ function CircuitView({ onBack, onNavigate }) {
     try { return JSON.parse(localStorage.getItem("circuit_seed_loaded") || "false"); } catch { return false; }
   });
   const [selected, setSelected] = React.useState(null);
+  const [tracksOpen, setTracksOpen] = React.useState(true);
+  const [trackFilter, setTrackFilter] = React.useState(null); // null | "cqok" | "people" | "clubs" | "events" | "games"
+  const [dismissedBroadcast, setDismissedBroadcast] = React.useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("cqok_dismissed") || "[]")); } catch { return new Set(); }
+  });
   const [showOlder, setShowOlder] = React.useState(false);
   const [seen, setSeen] = React.useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("circuit_seen") || "[]")); } catch { return new Set(); }
@@ -36664,22 +37034,59 @@ function CircuitView({ onBack, onNavigate }) {
     return { playerNodes, otherNodes };
   }, [followingPlayers, followingClubs, activity]);
 
+  const clubNodes  = otherNodes.filter(n => n.entity === "club");
+  const eventNodes = otherNodes.filter(n => n.entity === "event");
+  const gameNodes  = otherNodes.filter(n => n.entity === "game");
+
   const allNodes = [...playerNodes, ...otherNodes];
   const totalFollowing = allNodes.length;
 
-  // Auto-select first node
+  // Wrapped setters — node selection and track filter are mutually exclusive
+  function handleSetSelected(valOrFn) {
+    setSelected(valOrFn);
+    setTrackFilter(null);
+  }
+  function handleSetTrackFilter(key) {
+    setTrackFilter(key);
+    setSelected(null);
+    setTracksOpen(false);
+  }
+
+  // Per-track unread counts for compact wave bar
+  const now = Date.now();
+  function countUnread(nodes) {
+    return nodes.reduce((acc, node) => acc + activity.filter(a => {
+      const key = a.entityKey || a.key;
+      const itemKey = `${key}:${a.ts}`;
+      const aH = (Date.now() - a.ts) / 3600000;
+      return key === node.key && aH < circuitHideAge(a.entity) * 24 && !seen.has(itemKey) && !dismissed.has(itemKey);
+    }).length, 0);
+  }
+  const peopleUnread = React.useMemo(() => countUnread(playerNodes), [playerNodes, activity, seen, dismissed]);
+  const clubsUnread  = React.useMemo(() => countUnread(clubNodes),  [clubNodes,  activity, seen, dismissed]);
+  const eventsUnread = React.useMemo(() => countUnread(eventNodes), [eventNodes, activity, seen, dismissed]);
+  const gamesUnread  = React.useMemo(() => countUnread(gameNodes),  [gameNodes,  activity, seen, dismissed]);
+  const visibleBroadcast = CROQUETOK_BROADCAST.filter(item => !dismissedBroadcast.has(item.id));
+  const cqokUnread = visibleBroadcast.length;
+  const totalUnread  = cqokUnread + peopleUnread + clubsUnread + eventsUnread + gamesUnread;
+
+  // Auto-select first node only when no filter is active
   React.useEffect(() => {
-    if (!selected && activity.length > 0) setSelected(activity[0].entityKey || activity[0].key);
+    if (!selected && !trackFilter && activity.length > 0) setSelected(activity[0].entityKey || activity[0].key);
   }, [activity.length]);
 
-  const selectedNode = allNodes.find(n => n.key === selected) || null;
+  const isCQOKSelected = selected === CQOK_KEY || trackFilter === "cqok";
+  const selectedNode = (isCQOKSelected || !selected) ? null : (allNodes.find(n => n.key === selected) || null);
 
   // Signal decay — entity-aware thresholds
-  const now = Date.now();
   const H48 = CIRCUIT_SEEN_AGE_H * 3600000;
 
-  const filteredActivity = selected
+  const filteredActivity = (selected && !isCQOKSelected)
     ? activity.filter(a => (a.entityKey || a.key) === selected)
+    : trackFilter === "people" ? activity.filter(a => a.entity === "player")
+    : trackFilter === "clubs"  ? activity.filter(a => a.entity === "club")
+    : trackFilter === "events" ? activity.filter(a => a.entity === "event")
+    : trackFilter === "games"  ? activity.filter(a => a.entity === "game")
     : activity;
 
   // undismissed = signals not explicitly × dismissed by the user
@@ -36739,11 +37146,23 @@ function CircuitView({ onBack, onNavigate }) {
     });
   }
 
+  function dismissBroadcastItem(id) {
+    setDismissedBroadcast(prev => {
+      const next = new Set([...prev, id]);
+      try { localStorage.setItem("cqok_dismissed", JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }
+  function clearDismissedBroadcast() {
+    setDismissedBroadcast(new Set());
+    try { localStorage.removeItem("cqok_dismissed"); } catch {}
+  }
+
   return (
     <div style={{ background: T.pageBg, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Header */}
       <div style={{ position: "relative" }}>
-        <PageHeader height={62} label="Home" title="The Circuit" onBack={onBack} />
+        <PageHeader height={62} label="Croquet? OK!" title="The Circuit" onBack={onBack} />
         {/* "?" info toggle — always accessible in header corner */}
         <button onClick={() => setInfoOpen(v => !v)}
           style={{ position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)", width: 28, height: 28, borderRadius: "50%", border: `1.5px solid ${CIRCUIT_SPARK}88`, background: infoOpen ? CIRCUIT_SPARK + "22" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontFamily: "inherit" }}>
@@ -36806,16 +37225,138 @@ function CircuitView({ onBack, onNavigate }) {
         </div>
       ) : (
         <div style={{ flex: 1, overflowY: "auto" }}>
-          {/* ── The two circuit rows ── */}
-          <div style={{ paddingTop: 14, paddingBottom: 8, borderBottom: `1px solid ${T.cardBorder}`, background: T.card, borderRadius: "0 0 14px 14px" }}>
+          {/* ── Track card — collapsible ── */}
+          <div style={{ borderBottom: `1px solid ${T.cardBorder}`, background: T.card, borderRadius: "0 0 14px 14px", overflow: "hidden" }}>
+            {tracksOpen ? (
+              <>
+                {/* Expanded header */}
+                <div style={{ display: "flex", alignItems: "center", padding: "10px 16px 2px", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                    {TRACKS.map(t => (
+                      <span key={t.key} style={{ width: 6, height: 6, borderRadius: "50%", background: t.color, opacity: 0.75 }} />
+                    ))}
+                  </div>
+                  <span style={{ flex: 1, fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.08em" }}>Your Tracks</span>
+                  <button onClick={() => setTracksOpen(false)}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 6px", color: T.textFaint, display: "flex", alignItems: "center", gap: 3, fontFamily: "inherit", fontSize: 10, fontWeight: 700, borderRadius: 6 }}>
+                    <i className="ti ti-chevron-up" style={{ fontSize: 11 }} /> Compact
+                  </button>
+                </div>
+                <div style={{ paddingTop: 6, paddingBottom: 6 }}>
+                  <CroquetOKTrackRow selected={selected} setSelected={handleSetSelected} itemCount={cqokUnread} onTrackClick={() => handleSetTrackFilter("cqok")} animStagger={0.0} />
+                  <CircuitTrackRow nodes={playerNodes} label="People"  color={TRACK_COLORS.people} activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("people")} animStagger={0.2} />
+                  <CircuitTrackRow nodes={clubNodes}   label="Clubs"   color={TRACK_COLORS.clubs}  activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("clubs")}  animStagger={0.4} />
+                  <CircuitTrackRow nodes={eventNodes}  label="Events"  color={TRACK_COLORS.events} activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("events")} animStagger={0.6} />
+                  <CircuitTrackRow nodes={gameNodes}   label="Games"   color={TRACK_COLORS.games}  activity={activity} now={now} seen={seen} dismissed={dismissed} selected={selected} setSelected={handleSetSelected} markSeen={markAllSeen} onTrackClick={() => handleSetTrackFilter("games")}  animStagger={0.8} />
+                </div>
+              </>
+            ) : (
+              /* Compact bar — 5 overlapping animated waves */
+              <button onClick={() => setTracksOpen(true)}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                {/* 5-dot legend with counts */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 2.5, flexShrink: 0, minWidth: 36 }}>
+                  {TRACKS.map(t => {
+                    const count = { cqok: cqokUnread, people: peopleUnread, clubs: clubsUnread, events: eventsUnread, games: gamesUnread }[t.key] || 0;
+                    return (
+                      <span key={t.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: t.color, opacity: count > 0 ? 0.9 : 0.25, flexShrink: 0 }} />
+                        {count > 0 && <span style={{ fontSize: 8, fontWeight: 800, color: t.color, lineHeight: 1 }}>{count}</span>}
+                      </span>
+                    );
+                  })}
+                </div>
+                {/* Animated 5-wave visualisation */}
+                <div style={{ flex: 1 }}>
+                  <TrackWaveBar intensities={{ cqok: Math.min(cqokUnread / 5, 1), people: Math.min(peopleUnread / 10, 1), clubs: Math.min(clubsUnread / 8, 1), events: Math.min(eventsUnread / 8, 1), games: Math.min(gamesUnread / 6, 1) }} height={44} sparks sameAxis />
+                </div>
+                {totalUnread > 0 && (
+                  <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 800, color: TRACK_COLORS.cqok, background: TRACK_COLORS.cqok + "18", padding: "3px 8px", borderRadius: 20, border: `1px solid ${TRACK_COLORS.cqok}33` }}>
+                    {totalUnread} new
+                  </span>
+                )}
+                <i className="ti ti-chevron-down" style={{ fontSize: 12, color: T.textFaint, flexShrink: 0 }} />
+              </button>
+            )}
+          </div>
 
-            {/* ── How it works — full banner on first view, collapsible "?" after ── */}
-            <CircuitTrackRow nodes={playerNodes} label="People" activity={activity} now={now} seen={seen} selected={selected} setSelected={setSelected} markSeen={markAllSeen} />
-            <CircuitTrackRow nodes={otherNodes} label="Clubs · Events · Games" activity={activity} now={now} seen={seen} selected={selected} setSelected={setSelected} markSeen={markAllSeen} />
+          {/* ── Track filter pills ── */}
+          <div style={{ display: "flex", gap: 5, padding: "10px 14px 4px", overflowX: "auto", scrollbarWidth: "none" }}>
+            {[{ key: null, label: "All", color: null }, ...TRACKS].map(tab => {
+              const isActive = tab.key === null
+                ? (!trackFilter && !isCQOKSelected && !selectedNode)
+                : trackFilter === tab.key || (tab.key === "cqok" && isCQOKSelected && !selectedNode);
+              return (
+                <button key={tab.key ?? "all"}
+                  onClick={() => handleSetTrackFilter(tab.key)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 4, flexShrink: 0,
+                    padding: "4px 10px", borderRadius: 20, border: "none", cursor: "pointer", fontFamily: "inherit",
+                    fontSize: 11, fontWeight: 700, transition: "background 0.15s, color 0.15s",
+                    background: isActive ? (tab.color || T.green) : T.card,
+                    color: isActive ? "#fff" : T.textMuted,
+                    boxShadow: isActive ? `0 1px 4px ${(tab.color || T.green)}55` : `inset 0 0 0 1px ${T.cardBorder}`,
+                  }}>
+                  {tab.color && <span style={{ width: 5, height: 5, borderRadius: "50%", background: isActive ? "rgba(255,255,255,0.65)" : tab.color, flexShrink: 0 }} />}
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* ── Activity area ── */}
-          <div style={{ padding: "12px 14px 40px" }}>
+          <div style={{ padding: "6px 14px 40px" }}>
+
+            {/* ── Croquet? OK broadcast panel — when its node is selected ── */}
+            {isCQOKSelected && (
+              <div style={{ background: T.card, border: `1px solid ${TRACK_COLORS.cqok}44`, borderRadius: 12, overflow: "hidden", marginBottom: 10, animation: "circuit-fade-up 0.2s ease" }}>
+                {/* Header */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: TRACK_COLORS.cqok }}>
+                  <span style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <i className="ti ti-mallet" style={{ fontSize: 17, color: "#fff" }} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: "0.02em" }}>Croquet? OK</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(255,255,255,0.7)" }}>
+                      {visibleBroadcast.length > 0 ? `${visibleBroadcast.length} item${visibleBroadcast.length !== 1 ? "s" : ""}` : "All caught up"}
+                    </p>
+                  </div>
+                  {dismissedBroadcast.size > 0 && (
+                    <button onClick={clearDismissedBroadcast}
+                      style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 6, color: "#fff", fontSize: 10, fontWeight: 700, padding: "4px 8px", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                      Restore {dismissedBroadcast.size}
+                    </button>
+                  )}
+                  <button onClick={() => { setSelected(null); setTrackFilter(null); }}
+                    style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 2px", flexShrink: 0 }} aria-label="Close">×</button>
+                </div>
+
+                {/* Items */}
+                {visibleBroadcast.length === 0 ? (
+                  <div style={{ padding: "20px 14px", textAlign: "center" }}>
+                    <p style={{ margin: 0, fontSize: 13, color: T.textFaint, fontStyle: "italic" }}>Nothing new right now — check back soon</p>
+                  </div>
+                ) : visibleBroadcast.map((item, i) => (
+                  <SwipeableDismiss key={item.id} onDismiss={() => dismissBroadcastItem(item.id)}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 12px", borderTop: i > 0 ? `1px solid ${TRACK_COLORS.cqok}18` : `1px solid ${TRACK_COLORS.cqok}30` }}>
+                      <span style={{ width: 28, height: 28, borderRadius: 7, background: TRACK_COLORS.cqok + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <i className={`ti ${item.icon}`} style={{ fontSize: 13, color: TRACK_COLORS.cqok }} aria-hidden="true" />
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, lineHeight: 1.35, display: "block" }}>{item.headline}</span>
+                        {item.detail && <p style={{ margin: "3px 0 0", fontSize: 11.5, color: T.textMuted, lineHeight: 1.5 }}>{item.detail}</p>}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: TRACK_COLORS.cqok, textTransform: "uppercase", letterSpacing: "0.05em" }}>{item.label}</span>
+                          <span style={{ fontSize: 10, color: T.textFaint }}>{item.date}</span>
+                        </div>
+                      </div>
+                      <button onClick={() => dismissBroadcastItem(item.id)} aria-label="Dismiss"
+                        style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", color: T.textFaint, cursor: "pointer", flexShrink: 0, borderRadius: 6, fontSize: 16 }}>×</button>
+                    </div>
+                  </SwipeableDismiss>
+                ))}
+              </div>
+            )}
 
             {/* Node context panel — appears when a node is selected */}
             {selectedNode ? (() => {
@@ -36903,16 +37444,18 @@ function CircuitView({ onBack, onNavigate }) {
                   )}
                 </div>
               );
-            })() : (
+            })() : (!isCQOKSelected && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted }}>All signals</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: trackFilter ? (TRACK_COLORS[trackFilter] || T.textMuted) : T.textMuted }}>
+                  {TRACKS.find(t => t.key === trackFilter)?.label ?? "All signals"}
+                </span>
                 <span style={{ flex: 1 }} />
                 {activity.length > 0 && <span style={{ fontSize: 10, color: T.textFaint }}>{freshItems.length} fresh · {dimmedItems.length} older</span>}
               </div>
-            )}
+            ))}
 
             {/* Only show the grouped list when no node is selected */}
-            {!selectedNode && (visibleItems.length === 0 ? (
+            {!selectedNode && !isCQOKSelected && (visibleItems.length === 0 ? (
               <div style={{ textAlign: "center", padding: "2rem 0" }}>
                 <p style={{ margin: 0, fontSize: 13, color: T.textFaint, fontStyle: "italic" }}>Nothing recent — check back soon</p>
               </div>
@@ -37000,7 +37543,7 @@ function CircuitView({ onBack, onNavigate }) {
             })())}
 
             {/* Show older / hide older toggle */}
-            {!selectedNode && olderItems.length > 0 && (
+            {!selectedNode && !isCQOKSelected && olderItems.length > 0 && (
               <button onClick={() => setShowOlder(v => !v)}
                 style={{ display: "flex", alignItems: "center", gap: 6, margin: "12px auto 0", padding: "7px 16px", borderRadius: 20, border: `1px solid ${T.cardBorder}`, background: T.card, color: T.textMuted, fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                 <i className={`ti ${showOlder ? "ti-chevron-up" : "ti-chevron-down"}`} style={{ fontSize: 12 }} />
@@ -37123,6 +37666,35 @@ function CircuitStripCard({ onClick }) {
   }, []);
 
   const isEmpty = nodes.length === 0;
+  // Per-track intensities for micro bar (rough: unread / expected-max)
+  const [trackIntensities, setTrackIntensities] = React.useState({});
+  React.useEffect(() => {
+    try {
+      const ps = JSON.parse(localStorage.getItem("following_players") || "[]");
+      const cs = JSON.parse(localStorage.getItem("following_clubs") || "[]");
+      const act = getCircuitActivity(ps, cs);
+      const seen = new Set(JSON.parse(localStorage.getItem("circuit_seen") || "[]"));
+      const dismissed = new Set(JSON.parse(localStorage.getItem("circuit_dismissed") || "[]"));
+      const now = Date.now();
+      function countEnt(ent) {
+        return act.filter(a => {
+          const k = a.entityKey || a.key;
+          const aH = (now - a.ts) / 3600000;
+          return a.entity === ent && aH < circuitHideAge(ent) * 24 && !seen.has(`${k}:${a.ts}`) && !dismissed.has(`${k}:${a.ts}`);
+        }).length;
+      }
+      const cqokDismissed = new Set(JSON.parse(localStorage.getItem("cqok_dismissed") || "[]"));
+      const cqokVisible = CROQUETOK_BROADCAST.filter(item => !cqokDismissed.has(item.id)).length;
+      setTrackIntensities({
+        cqok:   Math.min(cqokVisible / 5, 1),
+        people: Math.min(countEnt("player") / 8, 1),
+        clubs:  Math.min(countEnt("club")   / 6, 1),
+        events: Math.min(countEnt("event")  / 6, 1),
+        games:  Math.min(countEnt("game")   / 4, 1),
+      });
+    } catch {}
+  }, [activityCount]);
+
   // Warm cream — in-palette, yellow-white, distinct from card white and green
   const BG    = "#FEFAF0";
   const TRACE = "#C9A227"; // deeper amber for traces against cream
@@ -37180,24 +37752,9 @@ function CircuitStripCard({ onClick }) {
         {isEmpty ? "Follow players & clubs" : "Stay connected"}
       </span>
 
-      {/* Baseline + starburst spark */}
-      <div style={{ position: "absolute", bottom: 7, left: 12, right: 12, height: 1, background: "#E8D99A", overflow: "visible" }}>
-        <span style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", width: 14, height: 14, marginLeft: -7, animation: "circuit-signal-dash 3.5s linear infinite", pointerEvents: "none" }}>
-          <svg width="14" height="14" viewBox="-7 -7 14 14" overflow="visible">
-            <defs>
-              <radialGradient id="spark-strip" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="white" stopOpacity="1" />
-                <stop offset="45%" stopColor={CIRCUIT_SPARK} stopOpacity="0.9" />
-                <stop offset="100%" stopColor={CIRCUIT_SPARK} stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            <polygon
-              points="0,-7 0.9,-2.8 3.8,-5.5 2.4,-1.8 6.5,-3.5 3.5,0 7,1.5 3.2,1.2 5.8,4.5 1.8,0.6 1.8,5 0,1.8 -1.8,5 -1.8,0.6 -5.8,4.5 -3.2,1.2 -7,1.5 -3.5,0 -6.5,-3.5 -2.4,-1.8 -3.8,-5.5 -0.9,-2.8"
-              fill="url(#spark-strip)" opacity="0.92"
-              style={{ filter: `drop-shadow(0 0 2px ${CIRCUIT_SPARK})` }}
-            />
-          </svg>
-        </span>
+      {/* Micro wave bar — 5-track at-a-glance density signal */}
+      <div style={{ position: "relative", marginTop: 2 }}>
+        <CircuitMicroBar intensities={trackIntensities} />
       </div>
     </button>
   );
@@ -45812,7 +46369,7 @@ function OKBadge() {
           </span>
         </span>
       </span>
-      <span style={{ position: "relative", zIndex: 2, opacity: 1 }}>K!</span>
+      <span style={{ position: "relative", zIndex: 2, opacity: 1, top: 1 }}>K!</span>
       <style>{`
         @keyframes cq-enter {
           from { transform: translateX(${ENTER_D}px) rotate(360deg); }
