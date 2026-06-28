@@ -37017,78 +37017,64 @@ function SolidThinCard({ icon, logo, label, sublabel, color, onClick, badge, che
   const ringColor = resting ? AMBER : c;
 
   if (bannerMedia) {
-    // Photo card — same outer footprint as original.
-    // Photo occupies the top ~56% (logo row space). Logo badge overlaid on photo.
-    // Club name omitted — photo + logo communicate it. Status row gets the full bottom.
+    // Photo card — photo fills the full card. Status shown as a pill overlay.
+    const pillBg = resting ? "rgba(154,122,0,0.82)" : "rgba(26,74,46,0.75)";
     return (
       <button onClick={onClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
-          background: "none",
-          border: notHere ? "1.5px dashed rgba(255,255,255,0.5)" : "1.5px solid transparent",
+          background: "#111",
+          border: notHere ? "1.5px dashed rgba(255,255,255,0.5)" : `1.5px solid ${c}55`,
           borderRadius: 10, padding: 0,
-          minWidth: 148, maxWidth: 172, flexShrink: 0,
+          minWidth: 148, maxWidth: 172, height: 78, flexShrink: 0,
           cursor: "pointer", WebkitTapHighlightColor: "transparent",
-          display: "flex", flexDirection: "column",
           fontFamily: "inherit",
-          boxShadow: resting ? "0 2px 6px rgba(154,122,0,0.30)" : "0 2px 6px rgba(26,74,46,0.22)",
-          overflow: "hidden", textAlign: "left",
+          boxShadow: resting ? "0 2px 8px rgba(154,122,0,0.32)" : "0 2px 8px rgba(26,74,46,0.22)",
+          overflow: "hidden", position: "relative",
         }} aria-label={label} title={label}>
 
-        {/* ── Photo strip ── logo+name row height (~46px) */}
-        <div style={{ position: "relative", height: 46, flexShrink: 0, overflow: "hidden" }}>
-          <img src={bannerMedia} alt=""
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: bannerPosition || "center 30%" }} />
-          {/* Gradient scrim: light at top, heavier at base so colour band reads */}
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.42) 100%)" }} />
+        {/* Photo fills entire card */}
+        <img src={bannerMedia} alt=""
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: bannerPosition || "center 30%" }} />
 
-          {/* Logo badge — bottom-left, slightly inside the photo */}
-          <span style={{
-            position: "absolute", bottom: 7, left: 9,
-            width: 28, height: 28, borderRadius: 7,
-            background: logo ? "#fff" : "rgba(255,255,255,0.22)",
-            border: "1.5px solid rgba(255,255,255,0.70)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
-            flexShrink: 0,
-          }}>
-            {logo
-              ? <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-              : <i className={`ti ${icon}`} style={{ fontSize: 15, color: "#fff" }} aria-hidden="true" />}
-            {checkedIn && (
-              <span style={{ position: "absolute", bottom: -1, right: -1,
-                width: 9, height: 9, borderRadius: "50%",
-                background: dotColor, border: "1.5px solid " + (resting ? AMBER_D : c),
-                display: "block" }} />
-            )}
+        {/* Scrim — bottom-weighted so pills read */}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.0) 30%, rgba(0,0,0,0.55) 100%)" }} />
+
+        {/* Logo badge — top-left */}
+        <span style={{
+          position: "absolute", top: 8, left: 9,
+          width: 26, height: 26, borderRadius: 7,
+          background: logo ? "#fff" : "rgba(255,255,255,0.22)",
+          border: "1.5px solid rgba(255,255,255,0.65)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+        }}>
+          {logo
+            ? <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            : <i className={`ti ${icon}`} style={{ fontSize: 14, color: "#fff" }} aria-hidden="true" />}
+        </span>
+
+        {/* Invite pulse — top-right when not checked in */}
+        {notHere && (
+          <span style={{ position: "absolute", top: 9, right: 10, width: 6, height: 6, borderRadius: "50%", background: "#fff", opacity: 0.85, animation: "checkin-pulse 1.8s ease-in-out infinite" }} aria-hidden="true" />
+        )}
+
+        {/* Status pill — bottom overlay */}
+        <span style={{
+          position: "absolute", bottom: 8, left: 9, right: 9,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+          background: checkedIn ? pillBg : "rgba(0,0,0,0.52)",
+          backdropFilter: "blur(4px)",
+          borderRadius: 20, padding: "4px 9px",
+        }}>
+          <i className={`ti ${checkedIn ? (statusIcon || "ti-circle-check") : "ti-hand-click"}`}
+            style={{ fontSize: 11, color: "#fff" }} aria-hidden="true" />
+          <span style={{ fontSize: 10.5, color: "#fff", fontWeight: 700, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {checkedIn ? (statusLabel || "At the club") : "Tap to check in"}
           </span>
-
-          {/* Invite pulse — top-right */}
-          {notHere && (
-            <span style={{ position: "absolute", top: 7, right: 9, width: 6, height: 6, borderRadius: "50%", background: "#fff", opacity: 0.85, animation: "checkin-pulse 1.8s ease-in-out infinite" }} aria-hidden="true" />
-          )}
-        </div>
-
-        {/* ── Colour band — status only; club name omitted ── */}
-        <div style={{ background: bg, padding: "7px 10px 8px", display: "flex", flexDirection: "column", gap: 0, flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 5,
-            background: checkedIn ? "rgba(255,255,255,0.16)" : "transparent",
-            borderRadius: 6, padding: checkedIn ? "4px 8px" : "2px 0" }}>
-            {checkedIn ? (
-              <>
-                <i className={`ti ${statusIcon || "ti-circle-check"}`} style={{ fontSize: 12, color: "#fff" }} aria-hidden="true" />
-                <span style={{ flex: 1, fontSize: 10.5, color: "#fff", fontWeight: 700, letterSpacing: "0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{statusLabel || "At the club"}</span>
-                <i className="ti ti-dots" style={{ fontSize: 12, color: "rgba(255,255,255,0.65)" }} aria-hidden="true" />
-              </>
-            ) : (
-              <>
-                <i className="ti ti-hand-click" style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }} aria-hidden="true" />
-                <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.9)", fontWeight: 700, letterSpacing: "0.02em" }}>Tap to check in</span>
-              </>
-            )}
-          </div>
-        </div>
+          {checkedIn && <i className="ti ti-dots" style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", flexShrink: 0 }} aria-hidden="true" />}
+        </span>
       </button>
     );
   }
@@ -39585,8 +39571,8 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
       {/* Presence status sheet — the single status control (when Here) */}
       {presenceSheet && ReactDOM.createPortal(
         (() => {
-          const sheetAccent = presence === "here_resting" ? "#C49A0A" : clubBrand.color;
-          const sheetAccentDark = presence === "here_resting" ? "#9A7A00" : T.greenDark;
+          const sheetAccent = clubBrand.color;
+          const sheetAccentDark = T.greenDark;
           const STATUS_OPTS = [
             { v: "here_ready",   label: "Ready to play", icon: "ti-player-play", color: clubBrand.color, colorDark: T.greenDark },
             { v: "here_resting", label: "Resting · Tea",  icon: "ti-coffee",      color: "#C49A0A",       colorDark: "#9A7A00"   },
@@ -39666,7 +39652,7 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
 
       {/* Arrival reason sheet — lightweight "why are you here today?" */}
       {arrivalSheet && ReactDOM.createPortal(
-        <div onClick={() => checkInAs("Playing")}
+        <div onClick={() => setArrivalSheet(false)}
           style={{ position: "fixed", inset: 0, zIndex: 335, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "rolesheet-overlay 0.2s ease" }}>
           <div onClick={e => e.stopPropagation()}
             style={{ width: "100%", maxWidth: 460, background: T.pageBg, borderRadius: "18px 18px 0 0", paddingBottom: "max(24px, env(safe-area-inset-bottom))", animation: "rolesheet-up 0.28s cubic-bezier(0.22,1,0.36,1)" }}>
@@ -39697,7 +39683,6 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
                 </button>
               ))}
             </div>
-            <p style={{ margin: "6px 16px 0", fontSize: 10.5, color: T.textFaint, textAlign: "center" }}>Tap outside to sign in as playing</p>
           </div>
         </div>,
         document.body
