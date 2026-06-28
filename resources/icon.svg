@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <clipPath id="rr"><rect width="1024" height="1024" rx="192"/></clipPath>
+    <radialGradient id="rg" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#4A9A60" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0e2e1a" stop-opacity="0.5"/>
+    </radialGradient>
+    <!-- Blue croquet ball gradient -->
+    <radialGradient id="ball" cx="36%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#6BAEE0"/>
+      <stop offset="40%" stop-color="#185FA5"/>
+      <stop offset="100%" stop-color="#0A3560"/>
+    </radialGradient>
+    <!-- Drop shadow for ball -->
+    <filter id="ballShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="10" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+    <!-- Wide lawn stripes: ~6x wider than original CSS stripes -->
+    <pattern id="stripes" patternUnits="userSpaceOnUse" width="260" height="260" patternTransform="rotate(25 512 512)">
+      <rect x="0" y="0" width="130" height="260" fill="white"/>
+    </pattern>
+  </defs>
+  <g clip-path="url(#rr)">
+    <rect width="1024" height="1024" fill="#1A4A2E"/>
+    <path d="M 1219.2 512 A 707.2 707.2 0 1 0 -192 512 A 707.2 707.2 0 1 0 1219.2 512 Z M 1126.4 512 A 614.4 614.4 0 1 1 -102.4 512 A 614.4 614.4 0 1 1 1126.4 512 Z" fill="#2D7A45"/>
+    <path d="M 1113.6 512 A 601.6 601.6 0 1 0 -89.6 512 A 601.6 601.6 0 1 0 1113.6 512 Z M 1024 512 A 512 512 0 1 1 0 512 A 512 512 0 1 1 1024 512 Z" fill="#246038"/>
+    <path d="M 1011.2 512 A 499.2 499.2 0 1 0 12.8 512 A 499.2 499.2 0 1 0 1011.2 512 Z M 921.6 512 A 409.6 409.6 0 1 1 102.4 512 A 409.6 409.6 0 1 1 921.6 512 Z" fill="#2D7A45"/>
+    <path d="M 908.8 512 A 396.8 396.8 0 1 0 115.2 512 A 396.8 396.8 0 1 0 908.8 512 Z M 819.2 512 A 307.2 307.2 0 1 1 204.8 512 A 307.2 307.2 0 1 1 819.2 512 Z" fill="#246038"/>
+    <path d="M 806.4 512 A 294.4 294.4 0 1 0 217.6 512 A 294.4 294.4 0 1 0 806.4 512 Z M 716.8 512 A 204.8 204.8 0 1 1 307.2 512 A 204.8 204.8 0 1 1 716.8 512 Z" fill="#2D7A45"/>
+    <path d="M 704 512 A 192 192 0 1 0 320 512 A 192 192 0 1 0 704 512 Z M 614.4 512 A 102.4 102.4 0 1 1 409.6 512 A 102.4 102.4 0 1 1 614.4 512 Z" fill="#246038"/>
+    <rect width="1024" height="1024" fill="url(#rg)"/>
+    <rect width="1024" height="1024" fill="url(#stripes)" opacity="0.10"/>
+  </g>
+
+  <!--
+    Centering: place K! with text-anchor="middle" at a fixed x,
+    then position ball to its left with a fixed gap.
+    K! text-anchor="middle" at x=680 → visual center of "OK!" ≈ (680 + ball_cx) / 2 ≈ 512
+    → ball_cx ≈ 512*2 − 680 = 344. With r=175: left edge = 169 (good margin).
+    Gap between ball right edge (344+175=519) and K! left edge ≈ 519 to ~480...
+    Use text-anchor start for precise control instead:
+    Ball r=175, cx=290; K! x=490. Shift group right +20 from previous attempt.
+  -->
+  <!--
+    Exact centering using textLength to pin K! to 460px:
+    ball diameter=320 (r=160) + gap=20 + K! textLength=460 = total 800px
+    left margin = (1024-800)/2 = 112
+    ball cx = 112+160 = 272
+    K! x   = 112+320+20 = 452  (ends at 452+460=912, right margin=112)
+    cap-height at font-size 490 ≈ 333px → ball cy = 551, baseline = 551+167 = 718
+  -->
+  <!-- Blue ball -->
+  <circle cx="222" cy="551" r="160" fill="url(#ball)" filter="url(#ballShadow)"/>
+  <!-- Highlight -->
+  <circle cx="172" cy="492" r="55" fill="white" opacity="0.30"/>
+
+  <text x="402" y="718"
+        font-family="Georgia,serif" font-weight="900" font-size="490"
+        fill="white" textLength="460" lengthAdjust="spacingAndGlyphs">K!</text>
+</svg>
