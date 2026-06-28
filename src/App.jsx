@@ -24618,17 +24618,20 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 </div>
 
                 {/* Sub-nav */}
-                <div style={{ display: "flex", gap: 4, padding: 3, borderRadius: 10, background: T.greenPale, border: `1px solid ${T.cardBorder}` }}>
+                <div style={{ display: "flex", gap: 2, alignItems: "stretch", padding: "4px 0", borderBottom: `1px solid ${T.cardBorder}` }}>
                   {memberSubs.map(st => {
                     const on = memberTab === st.id;
                     return (
-                      <button key={st.id} onClick={() => setMemberTab(st.id)}
-                        style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 4px", borderRadius: 7, cursor: "pointer", border: "none", position: "relative",
-                          background: on ? accent : "transparent", color: on ? "#fff" : T.textMuted, fontSize: 12, fontWeight: on ? 700 : 600, fontFamily: "inherit" }}>
-                        <i className={`ti ${st.icon}`} style={{ fontSize: 14 }} />
-                        {st.label}
+                      <button key={st.id} onClick={() => setMemberTab(st.id)} title={st.label}
+                        style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                          gap: 3, position: "relative", background: on ? accent + "14" : "transparent", border: "none", cursor: "pointer",
+                          borderRadius: 9, padding: "5px 6px", fontFamily: "inherit", WebkitTapHighlightColor: "transparent" }}>
+                        <i className={`ti ${st.icon}`} style={{ fontSize: 19, color: on ? accent : T.textMuted }} aria-hidden="true" />
+                        <span style={{ fontSize: 10, fontWeight: 600, color: on ? accent : T.text, lineHeight: 1.15, textAlign: "center", whiteSpace: "nowrap" }}>{st.label}</span>
                         {st.badge > 0 && (
-                          <span style={{ minWidth: 16, height: 16, padding: "0 4px", borderRadius: 9, background: on ? "rgba(255,255,255,0.3)" : accent, color: "#fff", fontSize: 9.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{st.badge}</span>
+                          <span style={{ position: "absolute", top: 4, right: 6, minWidth: 15, height: 15, padding: "0 3px", boxSizing: "border-box",
+                            borderRadius: 8, background: accent, color: "#fff",
+                            fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{st.badge}</span>
                         )}
                       </button>
                     );
