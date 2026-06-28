@@ -3625,6 +3625,8 @@ function App() {
       saveAnnouncements(next);
       return next;
     });
+    const tone = annTone(ann.tone);
+    cqFireNotif(`📢 ${tone.label}`, ann.body || ann.title || "New club announcement");
   }
   function deleteAnnouncement(id) {
     setAnnouncements(prev => {
@@ -19327,6 +19329,8 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
   const [regEdit, setRegEdit] = useState(null);
   const [regConfirmDelete, setRegConfirmDelete] = useState(null);
   const [regFilter, setRegFilter] = useState("all");
+  // Admin sub-nav (profile | contact | officers | settings)
+  const [adminSub, setAdminSub] = useState("officers");
   // Editing the club's recorded officers (admin tab). When non-null, holds the
   // draft name string being entered.
   const [secEdit, setSecEdit] = useState(null);
@@ -19862,18 +19866,18 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
     { value: "both", label: "Both AC & GC" },
   ];
   const TABS = isClubMember ? [
-    // ── Member view: Live first, then core, then deeper features ─────────────
+    // ── Member view: live · calendar · members · clubgrade · ladder · volunteer · lawns · policies · about
     { id: "live",      label: "Live",       icon: "ti-broadcast" },
     { id: "schedule",  label: "Calendar",   icon: "ti-calendar-week" },
     { id: "members",   label: "Members",    icon: "ti-users" },
-    { id: "volunteer", label: "Volunteer",  icon: "ti-hand-stop" },
-    { id: "policies",  label: "Policies",   icon: "ti-file-text" },
-    { id: "about",     label: "About",      icon: "ti-info-circle" },
     ...((clubGradeConfig(profile).enabled || isClubSecretary) ? [{ id: "grade",  label: "Club Grade", icon: "ti-trophy" }] : []),
     ...((ladderState(profile).config.enabled || isClubSecretary) ? [{ id: "ladder", label: "Ladder",     icon: "ti-stairs-up" }] : []),
-    // Committee officer extras
+    { id: "volunteer", label: "Volunteer",  icon: "ti-hand-stop" },
+    { id: "lawns",     label: "Lawns",      icon: "ti-layout-grid" },
+    { id: "policies",  label: "Policies",   icon: "ti-file-text" },
+    { id: "about",     label: "About",      icon: "ti-info-circle" },
+    // Officer-only extras — hidden from plain player members
     ...(isClubSecretary ? [{ id: "bookings", label: "Event Hire", icon: "ti-calendar-star" }] : []),
-    ...(isClubSecretary ? [{ id: "lawns",    label: "Lawns",      icon: "ti-layout-grid" }] : []),
     ...(isClubSecretary ? [{ id: "checkins", label: "Check-Ins",  icon: "ti-map-pin" }] : []),
     ...((isClubPresident || isClubTreasurer) && !isClubSecretary ? [{ id: "sec-dashboard", label: "Dashboard", icon: "ti-layout-dashboard" }] : []),
     ...((isClubCaptain || isClubCommittee) && !isClubSecretary ? [{ id: "sec-members", label: "All Members", icon: "ti-users" }] : []),
@@ -23157,37 +23161,129 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
           const headStyle = (color) => ({ background: `linear-gradient(135deg, ${color} 0%, ${color}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 });
           const headText = { fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" };
 
+          const executive = [
+            profile.presidentName  && { role: "President",  name: profile.presidentName,  icon: "ti-crown",       color: "#7C3AED" },
+            profile.secretaryName  && { role: "Secretary",  name: profile.secretaryName,  icon: "ti-id-badge-2",  color: "#0F766E" },
+            profile.treasurerName  && { role: "Treasurer",  name: profile.treasurerName,  icon: "ti-coins",       color: "#CA8A04" },
+            profile.captainName    && { role: "Captain",    name: profile.captainName,    icon: "ti-shield-star", color: "#0369A1" },
+          ].filter(Boolean);
+          const committeeList = (profile.committeeMembers || []).filter(Boolean);
+          const hasRoster = executive.length > 0 || committeeList.length > 0;
+
           return (
             <div style={{ display: "flex", flexDirection: "column" }}>
 
+              {/* ── Club committee roster ── */}
+              {hasRoster && (
+                <div style={cardStyle}>
+                  <div style={headStyle(COMMITTEE_COLOR)}>
+                    <i className="ti ti-users-group" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                    <span style={headText}>Club Committee</span>
+                  </div>
+                  <div style={{ padding: "14px 16px" }}>
+                    {executive.length > 0 && (
+                      <>
+                        <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: "0.04em", textTransform: "uppercase" }}>Executive</p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: committeeList.length > 0 ? 16 : 0 }}>
+                          {executive.map(ex => (
+                            <LiveMemberBadge key={ex.role} name={ex.name} accent={ex.color} pill={ex.role} pillColor={ex.color} size={52} />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {committeeList.length > 0 && (
+                      <>
+                        <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: "0.04em", textTransform: "uppercase" }}>Committee</p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {committeeList.map((name, i) => (
+                            <LiveMemberBadge key={i} name={name} accent={COMMITTEE_COLOR} size={52} />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* ── Next committee meeting ── */}
-              <div style={cardStyle}>
-                <div style={headStyle(COMMITTEE_COLOR)}>
-                  <i className="ti ti-calendar-event" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
-                  <span style={headText}>Next committee meeting</span>
-                  {canEdit && <button onClick={() => { const d = prompt("Next meeting date (YYYY-MM-DD):", portal.nextMeeting || ""); if (d !== null) saveCommitteeData({ nextMeeting: d.trim(), nextMeetingLocation: prompt("Location (optional):", portal.nextMeetingLocation || "") || "" }); }}
-                    style={{ marginLeft: "auto", background: "rgba(255,255,255,0.18)", border: "none", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer" }}>
-                    {portal.nextMeeting ? "Edit" : "Set"}
-                  </button>}
-                </div>
-                <div style={{ padding: "14px 16px" }}>
-                  {portal.nextMeeting ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 10, background: COMMITTEE_COLOR + "14", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <i className="ti ti-calendar-event" style={{ fontSize: 20, color: COMMITTEE_COLOR }} aria-hidden="true" />
-                      </div>
-                      <div>
-                        <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>{fmtDate(portal.nextMeeting)}</p>
-                        {portal.nextMeetingLocation && <p style={{ margin: "2px 0 0", fontSize: 12, color: T.textMuted }}>{portal.nextMeetingLocation}</p>}
-                      </div>
+              {(() => {
+                const agendaItems = (portal.nextMeetingAgenda || []).filter(Boolean);
+                const meetingDt = portal.nextMeeting ? (() => { try { return new Date(portal.nextMeeting); } catch { return null; } })() : null;
+                const dayNum    = meetingDt ? meetingDt.getDate() : null;
+                const dayName   = meetingDt ? meetingDt.toLocaleDateString("en-AU", { weekday: "short" }) : null;
+                const monthYear = meetingDt ? meetingDt.toLocaleDateString("en-AU", { month: "long", year: "numeric" }) : null;
+                const editMeeting = () => {
+                  const d = prompt("Next meeting date (YYYY-MM-DD):", portal.nextMeeting || "");
+                  if (d === null) return;
+                  const loc  = prompt("Location (optional):", portal.nextMeetingLocation || "") || "";
+                  const time = prompt("Time (optional, e.g. 7:00 PM):", portal.nextMeetingTime || "") || "";
+                  const rawAgenda = prompt("Agenda items (one per line):", (portal.nextMeetingAgenda || []).join("\n")) || "";
+                  const agenda = rawAgenda.split("\n").map(s => s.trim()).filter(Boolean);
+                  saveCommitteeData({ nextMeeting: d.trim(), nextMeetingLocation: loc, nextMeetingTime: time, nextMeetingAgenda: agenda });
+                };
+                return (
+                  <div style={cardStyle}>
+                    <div style={headStyle(COMMITTEE_COLOR)}>
+                      <i className="ti ti-calendar-event" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                      <span style={headText}>Next committee meeting</span>
+                      {canEdit && (
+                        <button onClick={editMeeting}
+                          style={{ marginLeft: "auto", background: "rgba(255,255,255,0.18)", border: "none", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer" }}>
+                          {portal.nextMeeting ? "Edit" : "Set"}
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <p style={{ margin: 0, fontSize: 13, color: T.textFaint, fontStyle: "italic" }}>
-                      {canEdit ? "No meeting scheduled — tap Set to add one." : "No meeting date set yet."}
-                    </p>
-                  )}
-                </div>
-              </div>
+                    <div style={{ padding: "14px 16px" }}>
+                      {portal.nextMeeting ? (
+                        <>
+                          {/* Calendar date block + meta */}
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: agendaItems.length > 0 ? 14 : 0 }}>
+                            <div style={{ width: 54, flexShrink: 0, borderRadius: 12, overflow: "hidden", border: `1px solid ${T.cardBorder}`, textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
+                              <div style={{ background: COMMITTEE_COLOR, padding: "3px 0", fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: "0.06em", textTransform: "uppercase" }}>{dayName}</div>
+                              <div style={{ background: T.card, padding: "4px 0 5px" }}>
+                                <p style={{ margin: 0, fontSize: 26, fontWeight: 800, color: T.text, lineHeight: 1 }}>{dayNum}</p>
+                                <p style={{ margin: 0, fontSize: 9, color: T.textMuted, fontWeight: 600 }}>{monthYear}</p>
+                              </div>
+                            </div>
+                            <div style={{ flex: 1, paddingTop: 2 }}>
+                              {portal.nextMeetingTime && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                                  <i className="ti ti-clock" style={{ fontSize: 13, color: COMMITTEE_COLOR }} aria-hidden="true" />
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{portal.nextMeetingTime}</span>
+                                </div>
+                              )}
+                              {portal.nextMeetingLocation && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <i className="ti ti-map-pin" style={{ fontSize: 13, color: COMMITTEE_COLOR }} aria-hidden="true" />
+                                  <span style={{ fontSize: 13, color: T.textMuted }}>{portal.nextMeetingLocation}</span>
+                                </div>
+                              )}
+                              {!portal.nextMeetingTime && !portal.nextMeetingLocation && (
+                                <p style={{ margin: 0, fontSize: 13, color: T.textFaint, fontStyle: "italic" }}>No time or location set.</p>
+                              )}
+                            </div>
+                          </div>
+                          {/* Agenda */}
+                          {agendaItems.length > 0 && (
+                            <div style={{ borderTop: `1px solid ${T.cardBorder}`, paddingTop: 12 }}>
+                              <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: "0.04em", textTransform: "uppercase" }}>Agenda</p>
+                              <ol style={{ margin: 0, padding: "0 0 0 18px" }}>
+                                {agendaItems.map((item, i) => (
+                                  <li key={i} style={{ fontSize: 13, color: T.text, lineHeight: 1.6, padding: "2px 0" }}>{item}</li>
+                                ))}
+                              </ol>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 13, color: T.textFaint, fontStyle: "italic" }}>
+                          {canEdit ? "No meeting scheduled — tap Set to add one." : "No meeting date set yet."}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* ── AGM ── */}
               <div style={cardStyle}>
@@ -23563,6 +23659,41 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
               You can manage this club because you've been granted admin access. These tools aren't visible to the public.
             </p>
 
+            {/* ── Admin sub-nav: 2×2 icon-card grid ── */}
+            {(() => {
+              const ADMIN_SECTIONS = [
+                { id: "profile",  label: "Profile",  icon: "ti-palette",       desc: "Logo, colour, photos" },
+                { id: "contact",  label: "Contact",  icon: "ti-address-book",  desc: "Address, phone, web" },
+                { id: "officers", label: "Officers", icon: "ti-users-group",   desc: "Secretary, president…" },
+                { id: "settings", label: "Settings", icon: "ti-settings-2",    desc: "Codes, presence, sync" },
+              ];
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {ADMIN_SECTIONS.map(s => {
+                    const on = adminSub === s.id;
+                    return (
+                      <button key={s.id} onClick={() => { setAdminSub(s.id); setEditing(false); setDraft(profile); }}
+                        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
+                          padding: "18px 8px", borderRadius: 13, border: `2px solid ${on ? accent : T.cardBorder}`,
+                          background: on ? accent + "12" : T.card, cursor: "pointer", fontFamily: "inherit",
+                          boxShadow: on ? `0 0 0 1px ${accent}44` : "0 1px 3px rgba(0,0,0,0.06)",
+                          transition: "border-color 0.15s, background 0.15s" }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center",
+                          background: on ? accent : accent + "15" }}>
+                          <i className={`ti ${s.icon}`} style={{ fontSize: 22, color: on ? "#fff" : accent }} aria-hidden="true" />
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: on ? accent : T.text }}>{s.label}</span>
+                        <span style={{ fontSize: 10.5, color: T.textFaint, textAlign: "center", lineHeight: 1.3 }}>{s.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+
+            {/* ── Officers section ── */}
+            {adminSub === "officers" && (<>
 
             {/* Club secretary — who holds the role at THIS club */}
             {(() => {
@@ -23868,6 +23999,11 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
               );
             })()}
 
+            </>)}
+
+            {/* ── Profile section ── */}
+            {adminSub === "profile" && (<>
+
             {/* Club intro video — identity-level config, lives alongside club details */}
             {(() => {
               const clubId = getClubId(clubName);
@@ -23932,88 +24068,32 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
               );
             })()}
 
-            {/* Manage club details */}
+            {/* ── Profile: Branding card ── */}
             <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
               <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
-                <i className="ti ti-building-cog" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>Club details</span>
+                <i className="ti ti-palette" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>Branding</span>
               </div>
               {!editing ? (
                 <button onClick={() => { setDraft({...profile}); setEditing(true); }}
                   style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
-                  <i className="ti ti-pencil" style={{ fontSize: 18, color: accent, flexShrink: 0 }} aria-hidden="true" />
-                  <span style={{ flex: 1 }}>
-                    <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: T.text }}>Edit club info</span>
-                    <span style={{ display: "block", fontSize: 11.5, color: T.textMuted, marginTop: 1 }}>Name, logo, colour, contact, lawns and game type</span>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0, overflow: "hidden", border: `1px solid ${T.cardBorder}`, background: profile.logo ? "#fff" : T.greenPale, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {profile.logo ? <img src={profile.logo} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                      : <i className="ti ti-building" style={{ fontSize: 20, color: T.greenMid }} aria-hidden="true" />}
+                  </div>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 600, color: T.text }}>Logo &amp; colour</span>
+                      {profile.primaryColor && <span style={{ width: 14, height: 14, borderRadius: "50%", background: profile.primaryColor, display: "inline-block", border: `1px solid ${T.cardBorder}`, flexShrink: 0 }} />}
+                    </span>
+                    <span style={{ display: "block", fontSize: 11.5, color: T.textMuted, marginTop: 1 }}>
+                      {profile.notes ? profile.notes.slice(0, 55) + (profile.notes.length > 55 ? "…" : "") : "Add a description, photos and header video"}
+                    </span>
                   </span>
-                  <i className="ti ti-chevron-right" style={{ fontSize: 16, color: T.textFaint, flexShrink: 0 }} aria-hidden="true" />
+                  <i className="ti ti-pencil" style={{ fontSize: 15, color: accent, flexShrink: 0 }} aria-hidden="true" />
                 </button>
               ) : (
                 <div style={{ padding: "1rem 1.25rem", display: "grid", gap: 14 }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Codes Played</label>
-                    <p style={{ margin: "0 0 8px", fontSize: 11, color: T.textFaint }}>Select every mallet-sport code this club plays.</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {CROQUET_CODES.map(c => {
-                        const sel = (draft.codes || []).includes(c.value);
-                        return (
-                          <button key={c.value} type="button"
-                            onClick={() => setDraft(d => {
-                              const cur = d.codes || [];
-                              return { ...d, codes: sel ? cur.filter(x => x !== c.value) : [...cur, c.value] };
-                            })}
-                            style={{ width: "100%", display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 11px", borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit",
-                              background: sel ? accent + "0E" : "transparent",
-                              border: `1.5px solid ${sel ? accent : T.cardBorder}` }}>
-                            <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, marginTop: 1,
-                              background: sel ? accent : "transparent", border: `1.5px solid ${sel ? accent : T.cardBorder}`,
-                              display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              {sel && <i className="ti ti-check" style={{ fontSize: 12, color: "#fff" }} aria-hidden="true" />}
-                            </span>
-                            <span style={{ flex: 1, minWidth: 0 }}>
-                              <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: T.text }}>{c.label}</span>
-                              <span style={{ display: "block", fontSize: 11.5, color: T.textMuted, lineHeight: 1.4, marginTop: 2 }}>{c.desc}</span>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Lawns</label>
-                    <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", borderRadius: 9, border: `1px solid ${T.cardBorder}`, background: T.greenPale }}>
-                      <i className="ti ti-layout-grid" style={{ fontSize: 16, color: accent, flexShrink: 0 }} aria-hidden="true" />
-                      <p style={{ margin: 0, fontSize: 11.5, color: T.textMuted, lineHeight: 1.45 }}>Lawns are managed on the <strong style={{ color: T.text }}>Lawns</strong> tab — add, name, and set the status of each one there. The club's lawn count and capacity update automatically.</p>
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Live board presence</label>
-                    <p style={{ margin: "0 0 10px", fontSize: 11.5, color: T.textFaint, lineHeight: 1.45 }}>People rarely sign out, so the board ages them automatically. Anyone seated in a game is always kept "here".</p>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
-                      <div>
-                        <span style={{ display: "block", fontSize: 10.5, fontWeight: 700, color: T.textMuted, marginBottom: 6 }}>Mark away after</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <button onClick={() => setDraft(d => ({ ...d, presenceTimeoutHours: Math.max(1, (d.presenceTimeoutHours || 4) - 1) }))}
-                            style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.card, fontSize: 17, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.text, fontWeight: 700 }}>−</button>
-                          <span style={{ minWidth: 58, textAlign: "center", fontSize: 15, fontWeight: 700, color: accent }}>{draft.presenceTimeoutHours || 4} hr{(draft.presenceTimeoutHours || 4) === 1 ? "" : "s"}</span>
-                          <button onClick={() => setDraft(d => ({ ...d, presenceTimeoutHours: Math.min(24, (d.presenceTimeoutHours || 4) + 1) }))}
-                            style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.card, fontSize: 17, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.text, fontWeight: 700 }}>+</button>
-                        </div>
-                        <p style={{ margin: "6px 0 0", fontSize: 10.5, color: T.textFaint }}>of no activity</p>
-                      </div>
-                      <div>
-                        <span style={{ display: "block", fontSize: 10.5, fontWeight: 700, color: T.textMuted, marginBottom: 6 }}>New day starts at</span>
-                        <select value={draft.dayStartHour != null ? draft.dayStartHour : 3}
-                          onChange={e => setDraft(d => ({ ...d, dayStartHour: parseInt(e.target.value, 10) }))}
-                          style={{ fontSize: 14, padding: "7px 10px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.card, color: T.text, fontFamily: "inherit", cursor: "pointer" }}>
-                          {Array.from({ length: 12 }, (_, h) => (
-                            <option key={h} value={h}>{h === 0 ? "Midnight" : `${h}:00 am`}</option>
-                          ))}
-                        </select>
-                        <p style={{ margin: "6px 0 0", fontSize: 10.5, color: T.textFaint }}>clears the board overnight</p>
-                      </div>
-                    </div>
-                  </div>
                   <div>
                     <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Club logo</label>
                     {(() => {
@@ -24021,7 +24101,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                         if (!file) return;
                         const reader = new FileReader();
                         reader.onload = ev => {
-                          // Downscale to a small square so the logo doesn't blow the localStorage budget.
                           const img = new Image();
                           img.onload = () => {
                             const MAX = 256;
@@ -24058,8 +24137,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                               {draft.logo && (
                                 <button type="button" onClick={() => setDraft(d => ({ ...d, logo: null }))}
                                   style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                                  <i className="ti ti-trash" style={{ fontSize: 13 }} aria-hidden="true" />
-                                  Remove
+                                  <i className="ti ti-trash" style={{ fontSize: 13 }} aria-hidden="true" />Remove
                                 </button>
                               )}
                             </div>
@@ -24087,16 +24165,8 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                     </div>
                     <p style={{ margin: "5px 0 0", fontSize: 11, color: T.textFaint }}>Used to brand the club's cards in the app. Tip: match it to your logo.</p>
                   </div>
-                  <div style={{ display: "grid", gap: 10 }}>
-                    {[["address","Address","text"],["phone","Phone","tel"],["website","Website","url"],["email","Email","email"]].map(([key, label, type]) => (
-                      <div key={key}>
-                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</label>
-                        <input type={type} value={draft[key] || ""} onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))} style={{ width: "100%" }} />
-                      </div>
-                    ))}
-                  </div>
                   <div>
-                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</label>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Description</label>
                     <textarea value={draft.notes || ""} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))} rows={3} style={{ width: "100%", fontFamily: "inherit", fontSize: 13, lineHeight: 1.6, resize: "vertical" }} />
                   </div>
                   <div>
@@ -24108,7 +24178,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                         if (!file) return;
                         const reader = new FileReader();
                         reader.onload = ev => {
-                          // Downscale to a sensible max so two photos don't blow the localStorage budget.
                           const img = new Image();
                           img.onload = () => {
                             const MAXW = 1200;
@@ -24173,7 +24242,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                             </div>
                           </div>
                         )}
-                        <p style={{ margin: "5px 0 0", fontSize: 11, color: T.textFaint }}>Up to {MAX} photos of the club — lawns, clubhouse, or members at play. Shown at the top of the About page.</p>
+                        <p style={{ margin: "5px 0 0", fontSize: 11, color: T.textFaint }}>Up to {MAX} photos — lawns, clubhouse, or members at play. Shown at the top of the About page.</p>
                       </>
                       );
                     })()}
@@ -24207,7 +24276,76 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                       );
                     })()}
                   </div>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button onClick={cancel} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", fontSize: 13, cursor: "pointer", color: T.textMuted }}>Cancel</button>
+                    <button onClick={save} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: accent, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Save</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            </>)}
+
+            {/* ── Contact section ── */}
+            {adminSub === "contact" && (<>
+
+            {/* Contact details card */}
+            <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
+              <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
+                <i className="ti ti-address-book" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em", flex: 1 }}>Contact details</span>
+                {!editing && (
+                  <button onClick={() => { setDraft({...profile}); setEditing(true); }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                    <i className="ti ti-pencil" style={{ fontSize: 12 }} aria-hidden="true" />Edit
+                  </button>
+                )}
+              </div>
+              {!editing ? (
+                <div style={{ padding: "4px 0" }}>
+                  {[
+                    { icon: "ti-map-pin", key: "address", label: "Address" },
+                    { icon: "ti-phone",   key: "phone",   label: "Phone" },
+                    { icon: "ti-mail",    key: "email",   label: "Email" },
+                    { icon: "ti-world",   key: "website", label: "Website" },
+                  ].map(f => (
+                    <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 14px", borderBottom: `1px solid ${T.cardBorder}` }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: accent + "14", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <i className={`ti ${f.icon}`} style={{ fontSize: 15, color: accent }} aria-hidden="true" />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 9.5, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.04em" }}>{f.label}</p>
+                        <p style={{ margin: 0, fontSize: 13, color: profile[f.key] ? T.text : T.textFaint, fontStyle: profile[f.key] ? "normal" : "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {profile[f.key] || "Not set"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {/* Map status */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 14px" }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: accent + "14", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <i className="ti ti-map-2" style={{ fontSize: 15, color: accent }} aria-hidden="true" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 9.5, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.04em" }}>Map embed</p>
+                      <p style={{ margin: 0, fontSize: 13, color: profile.mapEmbed ? T.text : T.textFaint, fontStyle: profile.mapEmbed ? "normal" : "italic" }}>
+                        {profile.mapEmbed ? "Map set" : "Not set"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: "1rem 1.25rem", display: "grid", gap: 14 }}>
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {[["address","Address","text"],["phone","Phone","tel"],["website","Website","url"],["email","Email","email"]].map(([key, label, type]) => (
+                      <div key={key}>
+                        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</label>
+                        <input type={type} value={draft[key] || ""} onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))} style={{ width: "100%" }} />
+                      </div>
+                    ))}
+                  </div>
                   <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Map</label>
                     {(() => {
                       const makeEmbed = q => `<iframe src="https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed" width="100%" height="240" style="border:0;"></iframe>`;
                       const currentSrc = (() => { if (!draft.mapEmbed) return null; const m = draft.mapEmbed.match(/src="([^"]+)"/); return m ? m[1] : null; })();
@@ -24241,11 +24379,113 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                           <textarea value={draft.mapEmbed || ""} onChange={e => setDraft(d => ({ ...d, mapEmbed: e.target.value }))}
                             placeholder="Paste a Google Maps <iframe …> embed code here" rows={3}
                             style={{ width: "100%", marginTop: 6, fontFamily: "monospace", fontSize: 11, lineHeight: 1.5, resize: "vertical" }} />
-                          <p style={{ margin: "4px 0 0", fontSize: 11, color: T.textFaint }}>In Google Maps → Share → Embed a map → copy the iframe code. Most clubs won't need this — typing the address above is enough.</p>
+                          <p style={{ margin: "4px 0 0", fontSize: 11, color: T.textFaint }}>In Google Maps → Share → Embed a map → copy the iframe code.</p>
                         </details>
                       </>
                       );
                     })()}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button onClick={cancel} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", fontSize: 13, cursor: "pointer", color: T.textMuted }}>Cancel</button>
+                    <button onClick={save} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: accent, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Save</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            </>)}
+
+            {/* ── Settings section ── */}
+            {adminSub === "settings" && (<>
+
+            {/* Gameplay & operations card */}
+            <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
+              <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
+                <i className="ti ti-tournament" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>Gameplay &amp; operations</span>
+              </div>
+              {!editing ? (
+                <button onClick={() => { setDraft({...profile}); setEditing(true); }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
+                  <i className="ti ti-cards" style={{ fontSize: 18, color: accent, flexShrink: 0 }} aria-hidden="true" />
+                  <span style={{ flex: 1 }}>
+                    <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: T.text }}>Codes, lawns &amp; presence</span>
+                    <span style={{ display: "block", fontSize: 11.5, color: T.textMuted, marginTop: 1 }}>
+                      {(() => {
+                        const codes = (profile.codes || []).map(v => (CROQUET_CODES.find(c => c.value === v) || {}).short || v);
+                        return codes.length ? codes.join(" · ") : "No codes set";
+                      })()}
+                      {" · "}{lawnCount || "—"} lawn{lawnCount === 1 ? "" : "s"}
+                      {" · "}Board clears after {profile.presenceTimeoutHours || 4}h
+                    </span>
+                  </span>
+                  <i className="ti ti-pencil" style={{ fontSize: 15, color: accent, flexShrink: 0 }} aria-hidden="true" />
+                </button>
+              ) : (
+                <div style={{ padding: "1rem 1.25rem", display: "grid", gap: 14 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Codes played</label>
+                    <p style={{ margin: "0 0 8px", fontSize: 11, color: T.textFaint }}>Select every mallet-sport code this club plays.</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {CROQUET_CODES.map(c => {
+                        const sel = (draft.codes || []).includes(c.value);
+                        return (
+                          <button key={c.value} type="button"
+                            onClick={() => setDraft(d => {
+                              const cur = d.codes || [];
+                              return { ...d, codes: sel ? cur.filter(x => x !== c.value) : [...cur, c.value] };
+                            })}
+                            style={{ width: "100%", display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 11px", borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                              background: sel ? accent + "0E" : "transparent",
+                              border: `1.5px solid ${sel ? accent : T.cardBorder}` }}>
+                            <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, marginTop: 1,
+                              background: sel ? accent : "transparent", border: `1.5px solid ${sel ? accent : T.cardBorder}`,
+                              display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {sel && <i className="ti ti-check" style={{ fontSize: 12, color: "#fff" }} aria-hidden="true" />}
+                            </span>
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: T.text }}>{c.label}</span>
+                              <span style={{ display: "block", fontSize: 11.5, color: T.textMuted, lineHeight: 1.4, marginTop: 2 }}>{c.desc}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Lawns</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 12px", borderRadius: 9, border: `1px solid ${T.cardBorder}`, background: T.greenPale }}>
+                      <i className="ti ti-layout-grid" style={{ fontSize: 16, color: accent, flexShrink: 0 }} aria-hidden="true" />
+                      <p style={{ margin: 0, fontSize: 11.5, color: T.textMuted, lineHeight: 1.45 }}>Lawns are managed on the <strong style={{ color: T.text }}>Lawns</strong> tab — add, name, and set the status of each one there. The club's lawn count and capacity update automatically.</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Live board presence</label>
+                    <p style={{ margin: "0 0 10px", fontSize: 11.5, color: T.textFaint, lineHeight: 1.45 }}>People rarely sign out, so the board ages them automatically. Anyone seated in a game is always kept "here".</p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+                      <div>
+                        <span style={{ display: "block", fontSize: 10.5, fontWeight: 700, color: T.textMuted, marginBottom: 6 }}>Mark away after</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <button onClick={() => setDraft(d => ({ ...d, presenceTimeoutHours: Math.max(1, (d.presenceTimeoutHours || 4) - 1) }))}
+                            style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.card, fontSize: 17, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.text, fontWeight: 700 }}>−</button>
+                          <span style={{ minWidth: 58, textAlign: "center", fontSize: 15, fontWeight: 700, color: accent }}>{draft.presenceTimeoutHours || 4} hr{(draft.presenceTimeoutHours || 4) === 1 ? "" : "s"}</span>
+                          <button onClick={() => setDraft(d => ({ ...d, presenceTimeoutHours: Math.min(24, (d.presenceTimeoutHours || 4) + 1) }))}
+                            style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.card, fontSize: 17, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.text, fontWeight: 700 }}>+</button>
+                        </div>
+                        <p style={{ margin: "6px 0 0", fontSize: 10.5, color: T.textFaint }}>of no activity</p>
+                      </div>
+                      <div>
+                        <span style={{ display: "block", fontSize: 10.5, fontWeight: 700, color: T.textMuted, marginBottom: 6 }}>New day starts at</span>
+                        <select value={draft.dayStartHour != null ? draft.dayStartHour : 3}
+                          onChange={e => setDraft(d => ({ ...d, dayStartHour: parseInt(e.target.value, 10) }))}
+                          style={{ fontSize: 14, padding: "7px 10px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.card, color: T.text, fontFamily: "inherit", cursor: "pointer" }}>
+                          {Array.from({ length: 12 }, (_, h) => (
+                            <option key={h} value={h}>{h === 0 ? "Midnight" : `${h}:00 am`}</option>
+                          ))}
+                        </select>
+                        <p style={{ margin: "6px 0 0", fontSize: 10.5, color: T.textFaint }}>clears the board overnight</p>
+                      </div>
+                    </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                     <button onClick={cancel} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", fontSize: 13, cursor: "pointer", color: T.textMuted }}>Cancel</button>
@@ -24316,6 +24556,8 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 <p style={{ margin: 0, fontSize: 12, color: T.textFaint }}>Grant other members admin access — coming soon</p>
               </div>
             </div>
+
+            </>)}
           </div>
         )}
 
@@ -33603,6 +33845,7 @@ function SuperAdminUserEditor({ user, onClose, onChanged }) {
     roles: Array.isArray(user.roles) ? [...user.roles] : [],
     isAdmin: user.isAdmin === true,
     notes: user.notes || "",
+    memberStatus: user.memberStatus || "active",
     _key: user._key || null,
     id: user.id || null,
   }));
@@ -33768,6 +34011,23 @@ function SuperAdminUserEditor({ user, onClose, onChanged }) {
               </div>
             );
           })()}
+          {/* Membership status */}
+          <div>
+            <label style={labelStyle}><i className="ti ti-id-badge-2" style={{ fontSize: 11, marginRight: 4 }} />Membership status</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {(typeof MEMBER_STATUSES !== "undefined" ? MEMBER_STATUSES : []).map(s => {
+                const cur = draft.memberStatus === s.id;
+                return (
+                  <button key={s.id} onClick={() => set("memberStatus", s.id)}
+                    style={{ padding: "5px 13px", borderRadius: 20, fontSize: 12, fontWeight: cur ? 700 : 500, cursor: "pointer", fontFamily: "inherit",
+                      border: `1px solid ${cur ? s.color : T.cardBorder}`, background: cur ? s.bg : "transparent", color: cur ? s.color : T.textFaint }}>
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Handicaps */}
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
@@ -41806,14 +42066,37 @@ function SecMembersView({ onBack }) {
           ]}
         />
 
-        {/* Primary nav — segmented control */}
-        <SecSegNav active={activeTab} onChange={setActiveTab} accent={accent} iconForward items={[
-          { id: "welcome",  label: "Welcome",  icon: "ti-confetti" },
-          { id: "view",     label: "Manage",   icon: "ti-users" },
-          { id: "add",      label: "Add",      icon: "ti-user-plus" },
-          { id: "lapsing",  label: "Lapsing",  icon: "ti-user-exclamation", badge: lapsing.length },
-          { id: "packages", label: "Packages", icon: "ti-package" },
-        ]} />
+        {/* Primary nav — grid */}
+        {(() => {
+          const navItems = [
+            { id: "welcome",  label: "Welcome",  icon: "ti-confetti" },
+            { id: "view",     label: "Manage",   icon: "ti-users" },
+            { id: "packages", label: "Packages", icon: "ti-package" },
+          ];
+          return (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+              {navItems.map(it => {
+                const on = activeTab === it.id;
+                return (
+                  <button key={it.id} onClick={() => setActiveTab(it.id)}
+                    style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
+                      padding: "12px 8px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit", border: `1.5px solid ${on ? accent : T.cardBorder}`,
+                      background: on ? accent : T.card, color: on ? "#fff" : T.textMuted,
+                      boxShadow: on ? "0 2px 8px rgba(15,118,110,0.25)" : "0 1px 3px rgba(0,0,0,0.04)",
+                      transition: "background 0.15s, color 0.15s, border-color 0.15s", WebkitTapHighlightColor: "transparent" }}>
+                    <i className={`ti ${it.icon}`} style={{ fontSize: 22, flexShrink: 0 }} aria-hidden="true" />
+                    <span style={{ fontSize: 12, fontWeight: on ? 700 : 600, letterSpacing: "0.01em" }}>{it.label}</span>
+                    {it.badge > 0 && (
+                      <span style={{ position: "absolute", top: 8, right: 10, minWidth: 18, height: 18, padding: "0 4px", boxSizing: "border-box",
+                        borderRadius: 9, background: on ? "rgba(255,255,255,0.3)" : "#D97706", color: "#fff",
+                        fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{it.badge}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* ── VIEW tab ── */}
         {activeTab === "view" && (
@@ -41839,22 +42122,6 @@ function SecMembersView({ onBack }) {
               </div>
             </div>
 
-            {/* Welcome-flow link — makes the trial/full → welcome connection explicit */}
-            <button onClick={() => setActiveTab("welcome")}
-              style={{ width: "100%", textAlign: "left", background: accent + "0A", border: `1px solid ${accent}33`, borderRadius: 11, padding: "11px 13px", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 11 }}>
-              <i className="ti ti-confetti" style={{ fontSize: 19, color: accent, flexShrink: 0 }} />
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: T.text }}>
-                  {introCount > 0
-                    ? `${introCount} trial member${introCount === 1 ? "" : "s"} get the Introductory welcome`
-                    : "New members get a welcome based on their status"}
-                </span>
-                <span style={{ display: "block", fontSize: 11, color: T.textMuted, marginTop: 1 }}>
-                  Trial members see the Introductory flow; everyone else sees the Members flow. Tap to edit both.
-                </span>
-              </span>
-              <i className="ti ti-chevron-right" style={{ fontSize: 16, color: accent, flexShrink: 0 }} />
-            </button>
 
             {all.length === 0 && (
               <div style={{ textAlign: "center", padding: "3rem 1rem", background: T.card, borderRadius: 12, border: `1px solid ${T.cardBorder}` }}>
@@ -41867,113 +42134,38 @@ function SecMembersView({ onBack }) {
               </div>
             )}
 
-            {all.map(m => {
-              const initials = (m.name || "?").trim().split(/\s+/).map(w => w[0]).join("").slice(0,2).toUpperCase();
-              const status = MEMBER_STATUSES.find(s => s.id === getMemberStatus(m)) || MEMBER_STATUSES[0];
-              const fee = fees[m._key] || {};
-              const paid = !!fee.paid;
-              const welcomeAud = memberWelcomeAudience(getMemberStatus(m));
-              const welcomeMeta = welcomeAud ? obAudience(welcomeAud) : null;
-              return (
-                <div key={m._key} style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ display: "flex", alignItems: "center", padding: "12px 14px", gap: 12 }}>
-                    {/* Avatar */}
-                    <div style={{ width: 44, height: 44, borderRadius: "50%", background: status.bg, border: `2px solid ${status.color}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: status.color }}>{initials}</span>
-                    </div>
-                    {/* Name + status */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</p>
-                      <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: status.color, background: status.bg, borderRadius: 5, padding: "2px 7px" }}>{status.label}</span>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: paid ? "#16A34A" : "#D97706", background: paid ? "#F0FDF4" : "#FFFBEB", borderRadius: 5, padding: "2px 7px" }}>
-                          {paid ? `✓ Paid ${currentYear}` : "Outstanding"}
-                        </span>
-                        {welcomeMeta && (
-                          <span title={`Receives the ${welcomeMeta.label} welcome flow`} style={{ fontSize: 10, fontWeight: 700, color: accent, background: accent + "12", borderRadius: 5, padding: "2px 7px", display: "inline-flex", alignItems: "center", gap: 3 }}>
-                            <i className={`ti ${welcomeMeta.icon}`} style={{ fontSize: 11 }} /> {welcomeMeta.label} welcome
-                          </span>
-                        )}
+            {all.length > 0 && (
+              <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden" }}>
+                {all.map((m, idx) => {
+                  const initials = (m.name || "?").trim().split(/\s+/).map(w => w[0]).join("").slice(0,2).toUpperCase();
+                  const status = MEMBER_STATUSES.find(s => s.id === getMemberStatus(m)) || MEMBER_STATUSES[0];
+                  const fee = fees[m._key] || {};
+                  const paid = !!fee.paid;
+                  return (
+                    <button key={m._key} onClick={() => setEditMember({ ...m, _openedFromManage: true })}
+                      style={{ width: "100%", borderTop: idx > 0 ? `1px solid ${T.cardBorder}` : "none", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left", display: "flex", alignItems: "center", padding: "7px 13px", gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: status.bg, border: `2px solid ${status.color}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {m.avatar
+                          ? <img src={m.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
+                          : <span style={{ fontSize: 11, fontWeight: 700, color: status.color }}>{initials}</span>}
                       </div>
-                    </div>
-                    {/* Quick-pay coin */}
-                    <button onClick={() => togglePaid(m)} title={paid ? "Mark outstanding" : "Mark paid"}
-                      style={{ width: 36, height: 36, borderRadius: 8, border: `1.5px solid ${paid ? "#16A34A" : "#D97706"}`, background: paid ? "#F0FDF4" : "#FFFBEB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <i className={`ti ${paid ? "ti-coin" : "ti-coin-off"}`} style={{ fontSize: 16, color: paid ? "#16A34A" : "#D97706" }} />
+                      <p style={{ margin: 0, flex: 1, fontSize: 13.5, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</p>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: status.color, flexShrink: 0 }}>{status.label}</span>
+                      {m._lapsing && <span style={{ fontSize: 10, fontWeight: 700, color: "#D97706", background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 5, padding: "1px 6px", flexShrink: 0 }}>Lapsing</span>}
+                      <span style={{ fontSize: 10, fontWeight: 600, color: paid ? "#16A34A" : "#D97706", flexShrink: 0 }}>{paid ? "✓ Paid" : "Outstanding"}</span>
+                      <i className="ti ti-chevron-right" style={{ fontSize: 13, color: T.textFaint, flexShrink: 0 }} />
                     </button>
-                    {/* Edit */}
-                    <button onClick={() => setEditMember(m)}
-                      style={{ width: 36, height: 36, borderRadius: 8, border: `1.5px solid ${T.cardBorder}`, background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: T.textMuted }}>
-                      <i className="ti ti-pencil" style={{ fontSize: 16 }} />
-                    </button>
-                  </div>
-                  {/* Status quick-change */}
-                  <div style={{ borderTop: `1px solid ${T.cardBorder}`, padding: "8px 10px", display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none" }}>
-                    {MEMBER_STATUSES.map(s => {
-                      const cur = getMemberStatus(m) === s.id;
-                      return (
-                        <button key={s.id} onClick={() => { setMemberStatus(m, s.id); setTick(t=>t+1); }}
-                          style={{ flexShrink: 0, padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: cur ? 700 : 500, cursor: "pointer", fontFamily: "inherit",
-                            border: `1px solid ${cur ? s.color : T.cardBorder}`, background: cur ? s.bg : "transparent", color: cur ? s.color : T.textFaint }}>
-                          {s.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  );
+                })}
+                {/* Add member row */}
+                <div style={{ borderTop: `1px solid ${T.cardBorder}` }}>
+                  <button onClick={() => setActiveTab("add")}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "10px 13px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", color: accent, fontSize: 13, fontWeight: 600 }}>
+                    <i className="ti ti-user-plus" style={{ fontSize: 15 }} />
+                    Add member
+                  </button>
                 </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ── LAPSING tab ── */}
-        {activeTab === "lapsing" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 10, padding: "12px 14px" }}>
-              <p style={{ margin: 0, fontSize: 13, color: "#92400E", lineHeight: 1.6 }}>
-                These members haven't been seen in <strong>6 or more weeks</strong>. A quick friendly email can make all the difference.
-              </p>
-            </div>
-
-            {lapsing.length === 0 && (
-              <div style={{ textAlign: "center", padding: "3rem 1rem", background: T.card, borderRadius: 12, border: `1px solid ${T.cardBorder}` }}>
-                <i className="ti ti-circle-check" style={{ fontSize: 40, color: "#16A34A", display: "block", marginBottom: 12 }} />
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>Everyone's been seen recently</p>
-                <p style={{ margin: "6px 0 0", fontSize: 12, color: T.textFaint }}>No one has been away for more than 6 weeks.</p>
               </div>
-            )}
-
-            {lapsing.map(m => {
-              const nudged = nudgedIds[m._key];
-              const initials = (m.name||"?").trim().split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
-              return (
-                <div key={m._key} style={{ background: T.card, border: "1.5px solid #FCD34D", borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ display: "flex", alignItems: "center", padding: "14px", gap: 12 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#FEF3C7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: "#92400E" }}>{initials}</span>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>{m.name}</p>
-                      <p style={{ margin: "2px 0 0", fontSize: 12, color: T.textFaint }}>
-                        {m._weeksAgo != null ? `Away for ${m._weeksAgo} weeks` : "No visit on record"}
-                        {!m.email && " · No email on file"}
-                      </p>
-                    </div>
-                    <button onClick={() => sendNudge(m)} disabled={nudged}
-                      style={{ flexShrink: 0, padding: "10px 16px", borderRadius: 9, border: "none", cursor: nudged ? "default" : "pointer", fontSize: 13, fontWeight: 700,
-                        background: nudged ? T.cardBorder : "#D97706", color: nudged ? T.textMuted : "#fff" }}>
-                      <i className={`ti ${nudged ? "ti-check" : "ti-mail-forward"}`} style={{ fontSize: 14, marginRight: 5 }} />
-                      {nudged ? "Sent" : "Send nudge"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-
-            {lapsing.length > 0 && (
-              <p style={{ margin: 0, fontSize: 11, color: T.textFaint, textAlign: "center", lineHeight: 1.6 }}>
-                Tapping "Send nudge" opens a pre-written email in your mail app. Add an email address by tapping edit on the member in the View tab.
-              </p>
             )}
           </div>
         )}
@@ -42183,7 +42375,6 @@ function SecMembersView({ onBack }) {
           </div>
         )}
 
-        {/* Edit profile drawer */}
         {editMember && (
           <SuperAdminUserEditor user={editMember} onClose={() => setEditMember(null)} onChanged={() => setTick(t => t+1)} />
         )}
@@ -42240,16 +42431,32 @@ function SecMembersView({ onBack }) {
                     </button>
                   </div>
                   <div style={{ padding: "13px", display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "80px 1fr", gap: 8 }}>
-                      <div>
-                        <label style={lbl}>Icon</label>
-                        <select value={pkg.icon || "ti-award"} onChange={e => updatePkg(idx, { icon: e.target.value })} style={inp}>
-                          {[["ti-award","Award"],["ti-seedling","Seedling"],["ti-star","Star"],["ti-crown","Crown"],["ti-leaf","Leaf"],["ti-heart","Heart"],["ti-users","Users"],["ti-certificate","Certificate"]].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label style={lbl}>Name</label>
-                        <input value={pkg.name || ""} onChange={e => updatePkg(idx, { name: e.target.value })} placeholder="e.g. Full Membership" style={inp} />
+                    <div>
+                      <label style={lbl}>Name</label>
+                      <input value={pkg.name || ""} onChange={e => updatePkg(idx, { name: e.target.value })} placeholder="e.g. Full Membership" style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Icon</label>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 5 }}>
+                        {[
+                          ["ti-award","Award"],["ti-certificate","Certificate"],["ti-crown","Crown"],["ti-star","Star"],
+                          ["ti-seedling","Seedling"],["ti-leaf","Leaf"],["ti-plant","Plant"],["ti-flower","Flower"],
+                          ["ti-heart","Heart"],["ti-users","Group"],["ti-user","Member"],["ti-user-star","VIP"],
+                          ["ti-trophy","Trophy"],["ti-medal","Medal"],["ti-shield-star","Shield"],["ti-bolt","Bolt"],
+                        ].map(([v, label]) => {
+                          const sel = (pkg.icon || "ti-award") === v;
+                          return (
+                            <button key={v} title={label} onClick={() => updatePkg(idx, { icon: v })}
+                              style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+                                padding: "7px 4px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+                                border: `1.5px solid ${sel ? accent : T.cardBorder}`,
+                                background: sel ? accent + "12" : T.pageBg,
+                                WebkitTapHighlightColor: "transparent" }}>
+                              <i className={`ti ${v}`} style={{ fontSize: 18, color: sel ? accent : T.textMuted }} aria-hidden="true" />
+                              <span style={{ fontSize: 8, fontWeight: 600, color: sel ? accent : T.textFaint, letterSpacing: "0.02em", lineHeight: 1, textAlign: "center" }}>{label}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                     <div>
