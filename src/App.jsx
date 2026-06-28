@@ -27693,30 +27693,27 @@ function ClubLawnEditor({ initialObjects, courts, lawns = [], clubName, onSave, 
           </button>
         </div>
 
-        {/* Row 2: Grass pattern + colour */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+        {/* Row 2: Grass pattern + colour — single scrollable strip */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
           <span style={{ fontSize: 9, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>Surface</span>
-          {/* Pattern mini-previews */}
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 3, overflowX: "auto", flex: 1, minWidth: 0, paddingBottom: 2 }}>
             {GRASS_STYLES.map(s => {
-              const pal = GRASS_COLORS[grassColorKey] || GRASS_COLORS.green;
               const isActive = grassStyle === s;
               return (
                 <button key={s} onClick={() => setGrassStyle(s)} title={GRASS_STYLE_LABELS[s]}
-                  style={{ width: 32, height: 22, borderRadius: 4, overflow: "hidden", padding: 0, border: `2px solid ${isActive ? T.green : T.cardBorder}`, cursor: "pointer", flexShrink: 0, position: "relative" }}>
-                  <svg width="32" height="22" viewBox="0 0 32 22" style={{ display: "block" }}>
-                    <GrassPattern style={s} color={grassColorKey} vw={32} vh={22} />
+                  style={{ width: 28, height: 20, borderRadius: 4, overflow: "hidden", padding: 0, border: `2px solid ${isActive ? T.green : T.cardBorder}`, cursor: "pointer", flexShrink: 0, position: "relative" }}>
+                  <svg width="28" height="20" viewBox="0 0 28 20" style={{ display: "block" }}>
+                    <GrassPattern style={s} color={grassColorKey} vw={28} vh={20} />
                   </svg>
                   {isActive && <div style={{ position: "absolute", inset: 0, background: "rgba(26,74,46,0.18)", pointerEvents: "none" }} />}
                 </button>
               );
             })}
           </div>
-          {/* Colour swatches */}
-          <div style={{ display: "flex", gap: 4, marginLeft: 2 }}>
+          <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
             {Object.entries(GRASS_COLORS).map(([key, pal]) => (
               <button key={key} onClick={() => setGrassColorKey(key)} title={key}
-                style={{ width: 18, height: 18, borderRadius: "50%", background: pal.a, border: grassColorKey === key ? `2.5px solid ${T.green}` : "1.5px solid #aaa", cursor: "pointer", flexShrink: 0 }} />
+                style={{ width: 16, height: 16, borderRadius: "50%", background: pal.a, border: grassColorKey === key ? `2.5px solid ${T.green}` : "1.5px solid #aaa", cursor: "pointer", flexShrink: 0 }} />
             ))}
           </div>
         </div>
@@ -28020,34 +28017,22 @@ function ClubLawnEditor({ initialObjects, courts, lawns = [], clubName, onSave, 
 
       {/* Selected object controls */}
       {selected && (
-        <div style={{ background: T.card, borderTop: `1px solid ${T.cardBorder}`, padding: "10px 14px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: typeMap[selected.type]?.color || T.text, flex: 1 }}>
+        <div style={{ background: T.card, borderTop: `1px solid ${T.cardBorder}`, padding: "9px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: typeMap[selected.type]?.color || T.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
               <i className={`ti ${typeMap[selected.type]?.icon}`} style={{ marginRight: 4 }} aria-hidden="true" />
               {typeMap[selected.type]?.label}
             </span>
-            {/* Label edit */}
             {selected.type !== "path" && selected.type !== "road" && (
               <input value={selected.label || ""} onChange={e => updateLabel(e.target.value)}
                 placeholder="Label…"
-                style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: `1px solid ${T.cardBorder}`, background: T.pageBg, color: T.text, width: 100 }} />
+                style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: `1px solid ${T.cardBorder}`, background: T.pageBg, color: T.text, width: 90, flexShrink: 0 }} />
             )}
-            {/* Rotate nudge */}
-            <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 600 }}>{Math.round(selected.rot || 0)}°</span>
-            <button onClick={() => rotateSelected(-5)} style={{ background: T.pageBg, border: `1px solid ${T.cardBorder}`, borderRadius: 6, padding: "4px 7px", cursor: "pointer", fontSize: 12 }} title="Rotate CCW 5°">↺</button>
-            <button onClick={() => rotateSelected(5)} style={{ background: T.pageBg, border: `1px solid ${T.cardBorder}`, borderRadius: 6, padding: "4px 7px", cursor: "pointer", fontSize: 12 }} title="Rotate CW 5°">↻</button>
-            <button onClick={() => rotateSelected(-45)} style={{ background: T.pageBg, border: `1px solid ${T.cardBorder}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", fontSize: 10, color: T.textMuted }} title="−45°">−45°</button>
-            <button onClick={() => rotateSelected(45)} style={{ background: T.pageBg, border: `1px solid ${T.cardBorder}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", fontSize: 10, color: T.textMuted }} title="+45°">+45°</button>
-            <button onClick={() => setObjects(prev => prev.map(o => o.id === selectedId ? { ...o, rot: 0 } : o))} style={{ background: T.pageBg, border: `1px solid ${T.cardBorder}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", fontSize: 10, color: T.textMuted }} title="Reset rotation">0°</button>
-            {/* Resize — show dimensions and nudge buttons */}
-            <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 600 }}>{Math.round(selected.w)}×{Math.round(selected.h)}</span>
-            <button onClick={() => resizeSelected(10, 0)} style={{ background: T.pageBg, border: `1px solid ${T.cardBorder}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", fontSize: 10, color: T.textMuted }}>W+</button>
-            <button onClick={() => resizeSelected(-10, 0)} style={{ background: T.pageBg, border: `1px solid ${T.cardBorder}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", fontSize: 10, color: T.textMuted }}>W−</button>
-            <button onClick={() => resizeSelected(0, 10)} style={{ background: T.pageBg, border: `1px solid ${T.cardBorder}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", fontSize: 10, color: T.textMuted }}>H+</button>
-            <button onClick={() => resizeSelected(0, -10)} style={{ background: T.pageBg, border: `1px solid ${T.cardBorder}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", fontSize: 10, color: T.textMuted }}>H−</button>
-            {/* Delete */}
+            <button onClick={() => rotateSelected(-5)} style={{ background: T.pageBg, border: `1px solid ${T.cardBorder}`, borderRadius: 6, padding: "4px 7px", cursor: "pointer", fontSize: 12, flexShrink: 0 }} title="Rotate CCW 5°">↺</button>
+            <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 600, flexShrink: 0, minWidth: 28, textAlign: "center" }}>{Math.round(selected.rot || 0)}°</span>
+            <button onClick={() => rotateSelected(5)} style={{ background: T.pageBg, border: `1px solid ${T.cardBorder}`, borderRadius: 6, padding: "4px 7px", cursor: "pointer", fontSize: 12, flexShrink: 0 }} title="Rotate CW 5°">↻</button>
             <button onClick={deleteSelected}
-              style={{ background: "#FDF4F4", border: "1px solid #E8C4C4", borderRadius: 6, color: "#B83232", padding: "4px 8px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+              style={{ background: "#FDF4F4", border: "1px solid #E8C4C4", borderRadius: 6, color: "#B83232", padding: "4px 8px", cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
               <i className="ti ti-trash" aria-hidden="true" />
             </button>
           </div>
