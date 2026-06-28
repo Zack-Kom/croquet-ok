@@ -17651,6 +17651,7 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
   const [addShapeFor, setAddShapeFor] = React.useState(null); // lawnId awaiting a shape choice
   const [openLawnId, setOpenLawnId] = React.useState(null); // lawn whose card is shown in the modal
   const [openLawnObj, setOpenLawnObj] = React.useState(null); // a map lawn with no matching real lawn (fallback)
+  const [lawnFocusSheet, setLawnFocusSheet] = React.useState(null); // assignmentId for focused game sheet
 
   // Effective organiser permission: qualified by role, OR added to today's
   // manual manager list. Manager-list edits are gated separately (secretary/admin).
@@ -18487,8 +18488,9 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
                 const onThis = a.slots.map(id => (id ? presentById.get(id) : null)).filter(Boolean);
                 if (onThis.length === 0) return null;
                 return (
-                  <div key={a.id} style={{ marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 2px 6px", color: T.textMuted }}>
+                  <button key={a.id} onClick={() => setLawnFocusSheet(a.id)}
+                    style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", border: "none", borderRadius: 8, padding: "6px 6px", marginBottom: 4, cursor: "pointer", fontFamily: "inherit" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, paddingBottom: 6, color: T.textMuted }}>
                       <i className="ti ti-layout-grid" style={{ fontSize: 12 }} aria-hidden="true" />
                       <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{a.lawnName || "Lawn"}</span>
                       {(() => {
@@ -18499,35 +18501,26 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
                         const mins = Math.floor(ms / 60000);
                         const label = mins < 1 ? "just now" : mins < 60 ? `${mins} min` : `${Math.floor(mins/60)}h ${mins%60}m`;
                         return (
-                          <span title={a.startedAt ? "Time since scoring started" : "Time on the lawn"}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 3, marginLeft: "auto", fontSize: 10, fontWeight: 700, color: T.textFaint }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginLeft: "auto", fontSize: 10, fontWeight: 700, color: T.textFaint }}>
                             <i className="ti ti-clock" style={{ fontSize: 11 }} aria-hidden="true" />{label}
                           </span>
                         );
                       })()}
+                      <i className="ti ti-chevron-right" style={{ fontSize: 12, color: T.textFaint, marginLeft: "auto" }} aria-hidden="true" />
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                       {onThis.map(p => (
                         <PlayerChip key={p.id} p={p} small selected={false} onClick={null} onToggleRest={null} resting={false} onProfile={p => setProfileModal({ id: p.id, name: p.name })} />
                       ))}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           </div>
         )}
-        {/* On the Sidelines — standalone card, always shown when anyone is present */}
-        <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
-        <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
-          <i className="ti ti-armchair" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>On the sidelines</span>
-          <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{available.length} ready{benchResting.length ? ` · ${benchResting.length} resting` : ""}</span>
-        </div>
+        {/* ── Quick Draw — standalone card, organiser only ── */}
         {isOrganiser && (() => {
-          // Players a draw could place: free now, plus anyone in an UNSCORED
-          // lineup (a fresh round frees them). Resting and scored-game players
-          // are not drawable, so don't offer Quick draw when nobody can play.
           const unscoredSeated = new Set();
           assignments.filter(a => !a.gameId).forEach(a => a.slots.forEach(s => { if (s) unscoredSeated.add(s); }));
           const drawable = available.length + present.filter(p => unscoredSeated.has(p.id) && !isResting(p) && !isAway(p)).length;
@@ -18535,26 +18528,41 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
           const canReset = assignments.length > 0;
           if (!canDraw && !canReset) return null;
           return (
-            <div style={{ padding: "10px 12px 4px", display: "flex", gap: 8 }}>
-              {canDraw && (
-                <button onClick={() => {
-                    const hasUnscored = assignments.some(a => !a.gameId && a.slots.some(Boolean));
-                    setDrawOpen(true); setDrawShape(null); setDrawBank(false); setDrawConfirmRound(false);
-                    setDrawScope("fill"); setDrawStep(hasUnscored ? "scope" : "shape");
-                  }}
-                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px", borderRadius: 8, border: "none", background: accent, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                  <i className="ti ti-wand" style={{ fontSize: 14 }} aria-hidden="true" /> Quick draw
-                </button>
-              )}
-              {canReset && (
-                <button onClick={clearAll}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flex: canDraw ? "0 0 auto" : 1 }}>
-                  <i className="ti ti-arrow-back-up" style={{ fontSize: 14 }} aria-hidden="true" /> Reset
-                </button>
-              )}
+            <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
+              <div style={{ padding: "9px 14px", display: "flex", alignItems: "center", gap: 7, borderBottom: `1px solid ${T.cardBorder}` }}>
+                <i className="ti ti-wand" style={{ fontSize: 13, color: accent }} aria-hidden="true" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: T.text, letterSpacing: "0.04em" }}>Quick draw</span>
+                <span style={{ marginLeft: "auto", fontSize: 11, color: T.textFaint }}>{drawable} available</span>
+              </div>
+              <div style={{ padding: "10px 12px", display: "flex", gap: 8 }}>
+                {canDraw && (
+                  <button onClick={() => {
+                      const hasUnscored = assignments.some(a => !a.gameId && a.slots.some(Boolean));
+                      setDrawOpen(true); setDrawShape(null); setDrawBank(false); setDrawConfirmRound(false);
+                      setDrawScope("fill"); setDrawStep(hasUnscored ? "scope" : "shape");
+                    }}
+                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px", borderRadius: 8, border: "none", background: accent, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                    <i className="ti ti-wand" style={{ fontSize: 14 }} aria-hidden="true" /> Draw games
+                  </button>
+                )}
+                {canReset && (
+                  <button onClick={clearAll}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "9px 13px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flex: canDraw ? "0 0 auto" : 1 }}>
+                    <i className="ti ti-arrow-back-up" style={{ fontSize: 14 }} aria-hidden="true" /> Reset
+                  </button>
+                )}
+              </div>
             </div>
           );
         })()}
+
+        {/* On the Sidelines — standalone card, always shown when anyone is present */}
+        <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
+        <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
+          <i className="ti ti-armchair" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>On the sidelines</span>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{available.length} ready{benchResting.length ? ` · ${benchResting.length} resting` : ""}</span>
+        </div>
         {presentActive.length === 0 ? (
           <div style={{ padding: "1.2rem 1rem", textAlign: "center" }}>
             <i className="ti ti-map-pin" style={{ fontSize: 22, color: T.textFaint, opacity: 0.5, display: "block", marginBottom: 8 }} aria-hidden="true" />
@@ -18563,7 +18571,15 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
         ) : (
           <>
 
-            <div style={{ padding: "12px", display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ padding: "12px" }}>
+              {available.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 2px 8px", color: T.textMuted }}>
+                  <i className="ti ti-player-play" style={{ fontSize: 12, color: accent }} aria-hidden="true" />
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: accent }}>Waiting to play</span>
+                  <span style={{ fontSize: 10, color: T.textFaint, fontWeight: 600 }}>· {available.length}</span>
+                </div>
+              )}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {bench.length === 0 ? (
                 <p style={{ margin: "2px auto", fontSize: 11.5, color: T.textFaint, fontStyle: "italic" }}>Nobody on the sidelines — everyone here is on the lawns.</p>
               ) : available.length === 0 ? (
@@ -18573,6 +18589,7 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
                   onProfile={p => setProfileModal({ id: p.id, name: p.name })}
                   resting={false} />
               ))}
+            </div>
             </div>
             {benchResting.length > 0 && (
               <div style={{ padding: "0 12px 10px" }}>
@@ -18640,6 +18657,146 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
           </div>
         );
       })()}
+
+      {/* ── Game focus sheet ── */}
+      {lawnFocusSheet && ReactDOM.createPortal(
+        (() => {
+          const a = assignments.find(x => x.id === lawnFocusSheet);
+          if (!a) { setLawnFocusSheet(null); return null; }
+          const meta = liveShapeMeta(a.shape);
+          const codeLabel = (CROQUET_CODES.find(c => c.value === a.code || c.short === a.code)?.short) || a.code || "";
+          const casual = a.code === "Training" || a.code === "Practice";
+          const codeColor = casual ? "#6B7280" : accent;
+          const ballOrder = a.shape === "doubles" ? ["blue","black","red","yellow"] : a.shape === "singles" ? ["blue","red"] : null;
+          const since = a.startedAt || a.placedAt;
+          const elapsed = (() => {
+            if (!since) return null;
+            const ms = Date.now() - Date.parse(since);
+            if (isNaN(ms) || ms < 0) return null;
+            const mins = Math.floor(ms / 60000);
+            return mins < 1 ? "Just started" : mins < 60 ? `${mins} min on the lawn` : `${Math.floor(mins/60)}h ${mins%60}m on the lawn`;
+          })();
+          const players = a.slots.map((pid, si) => ({ pid, si, p: pid ? presentById.get(pid) : null }));
+          return (
+            <div onClick={() => setLawnFocusSheet(null)}
+              style={{ position: "fixed", inset: 0, zIndex: 615, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "rolesheet-overlay 0.2s ease" }}>
+              <div onClick={e => e.stopPropagation()}
+                style={{ width: "100%", maxWidth: 520, background: T.pageBg, borderRadius: "18px 18px 0 0", overflow: "hidden", animation: "rolesheet-up 0.28s cubic-bezier(0.22,1,0.36,1)", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+                {/* Header */}
+                <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`, padding: "14px 16px 16px" }}>
+                  <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.35)", margin: "0 auto 14px" }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <i className={`ti ${meta.icon}`} style={{ fontSize: 20, color: "#fff" }} aria-hidden="true" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#fff", fontFamily: "'Libre Baskerville', Georgia, serif" }}>{a.lawnName || "Lawn"}</p>
+                      <p style={{ margin: "2px 0 0", fontSize: 11, color: "rgba(255,255,255,0.8)", display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>{meta.label}</span>
+                        {codeLabel && <><span style={{ opacity: 0.5 }}>·</span><span>{codeLabel}</span></>}
+                        {elapsed && <><span style={{ opacity: 0.5 }}>·</span><span>{elapsed}</span></>}
+                      </p>
+                    </div>
+                    <button onClick={() => setLawnFocusSheet(null)} style={{ background: "rgba(255,255,255,0.18)", border: "none", cursor: "pointer", color: "#fff", fontSize: 16, padding: "5px 7px", borderRadius: 8 }}>×</button>
+                  </div>
+                </div>
+                {/* Body */}
+                <div style={{ padding: "14px 16px 4px", maxHeight: "60vh", overflowY: "auto" }}>
+                  {/* Player slots */}
+                  <p style={{ margin: "0 0 8px 2px", fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }}>Players</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {players.map(({ pid, si, p }) => {
+                      const ballKey = ballOrder ? ballOrder[si] : null;
+                      const dot = ballColorFor(ballKey, a.colourSet);
+                      const ballName = ballLabelFor(ballKey, a.colourSet);
+                      const isDivider = a.shape === "doubles" && si === 2;
+                      return (
+                        <React.Fragment key={si}>
+                          {isDivider && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ flex: 1, height: 1, background: T.cardBorder }} />
+                              <span style={{ fontSize: 10, fontWeight: 800, color: T.textFaint, letterSpacing: "0.08em" }}>VS</span>
+                              <div style={{ flex: 1, height: 1, background: T.cardBorder }} />
+                            </div>
+                          )}
+                          {p ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, border: `1px solid ${T.cardBorder}`, background: T.card }}>
+                              <div style={{ position: "relative", flexShrink: 0 }}>
+                                <MemberAvatar name={p.name} avatar={p.avatar} accent={accent} titles={p.titles} years={p.years} size={36} />
+                                {dot && <span style={{ position: "absolute", top: -2, right: -2, width: 11, height: 11, borderRadius: "50%", background: dot, border: "2px solid #fff", boxShadow: "0 0 0 0.5px rgba(0,0,0,0.15)" }} />}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.name}</p>
+                                {ballName && <p style={{ margin: "1px 0 0", fontSize: 10.5, color: T.textMuted }}>{ballName}</p>}
+                              </div>
+                              {isOrganiser && (
+                                <button onClick={() => clearSeat(a.id, si)} style={{ background: "none", border: "none", color: T.textFaint, cursor: "pointer", padding: 4, lineHeight: 1, flexShrink: 0 }}>
+                                  <i className="ti ti-x" style={{ fontSize: 16 }} aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <button onClick={() => { if (isOrganiser) setSeatPicker({ assignmentId: a.id, seatIdx: si }); }}
+                              style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, border: `1.5px dashed ${T.cardBorder}`, background: "transparent", cursor: isOrganiser ? "pointer" : "default", fontFamily: "inherit", width: "100%", textAlign: "left" }}>
+                              <div style={{ width: 36, height: 36, borderRadius: "50%", background: T.cardBorder + "60", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <i className="ti ti-plus" style={{ fontSize: 16, color: T.textFaint }} aria-hidden="true" />
+                              </div>
+                              <p style={{ margin: 0, fontSize: 13, color: T.textFaint }}>{isOrganiser ? `Add ${seatLabelFor(a.shape, si)}` : "Empty seat"}</p>
+                            </button>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+
+                  {/* Shape switcher + code picker (organiser only) */}
+                  {isOrganiser && (
+                    <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {LIVE_SHAPES.map(s => (
+                          <button key={s.value} onClick={() => setShape(a.id, s.value)}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 7, border: `1px solid ${a.shape === s.value ? accent : T.cardBorder}`, background: a.shape === s.value ? accent + "12" : "transparent", color: a.shape === s.value ? accent : T.textMuted, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                            <i className={`ti ${s.icon}`} style={{ fontSize: 12 }} aria-hidden="true" />{s.label}
+                          </button>
+                        ))}
+                      </div>
+                      <select value={a.code} onChange={e => setCode(a.id, e.target.value)}
+                        style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: codeColor, background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 7, padding: "5px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                        {codeOptions.map(c => <option key={c} value={c}>{(CROQUET_CODES.find(x => x.value === c || x.short === c)?.short) || c}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8, paddingBottom: 8 }}>
+                    {a.gameId ? (
+                      <button onClick={() => { setLawnFocusSheet(null); if (onOpenGame) onOpenGame(a.gameId); }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "12px", borderRadius: 11, border: "none", background: accent, color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                        <i className="ti ti-trending-up" style={{ fontSize: 16 }} aria-hidden="true" />
+                        Open scorecard
+                      </button>
+                    ) : isOrganiser && a.slots.every(Boolean) ? (
+                      <button onClick={() => { setLawnFocusSheet(null); setStartFor(a.id); }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "12px", borderRadius: 11, border: "none", background: "#2D6B45", color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                        <i className="ti ti-device-gamepad-2" style={{ fontSize: 16 }} aria-hidden="true" />
+                        Start scoring
+                      </button>
+                    ) : null}
+                    {isOrganiser && (
+                      <button onClick={() => { removeGame(a.id); setLawnFocusSheet(null); }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "10px", borderRadius: 11, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                        <i className="ti ti-trash" style={{ fontSize: 14 }} aria-hidden="true" />
+                        Remove game
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })(),
+        document.body
+      )}
 
       {/* ── Quick draw sheet ── */}
       {drawOpen && ReactDOM.createPortal(
@@ -22469,24 +22626,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 );
               })()}
 
-                  {/* ── Super-admin strip ── */}
-                  {isClubAdmin && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderTop: `1px solid ${T.cardBorder}`, background: "#16A34A08" }}>
-                      <i className="ti ti-shield-bolt" style={{ fontSize: 11, color: "#16A34A", flexShrink: 0 }} aria-hidden="true" />
-                      <span style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>Super Admin</span>
-                      <button onClick={seedTestDay}
-                        style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid #16A34A55", borderRadius: 6, color: "#16A34A", padding: "3px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                        <i className="ti ti-flask" style={{ fontSize: 10 }} aria-hidden="true" />
-                        Seed test day
-                      </button>
-                      <button onClick={clearSeed}
-                        style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid #16A34A55", borderRadius: 6, color: "#16A34A", padding: "3px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                        <i className="ti ti-eraser" style={{ fontSize: 10 }} aria-hidden="true" />
-                        Clear
-                      </button>
-                    </div>
-                  )}
-
                   {/* Today's play */}
                   <div style={{ padding: "9px 14px", display: "flex", alignItems: "center", gap: 7, borderBottom: `1px solid ${T.cardBorder}`, borderTop: `1px solid ${T.cardBorder}` }}>
                     <i className="ti ti-calendar-event" style={{ fontSize: 14, color: accent }} aria-hidden="true" />
@@ -22545,6 +22684,24 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 </>
               )}
             </div>
+
+            {/* ── Super-admin strip ── */}
+            {isClubAdmin && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 8, border: "1px dashed #16A34A55", background: "#16A34A08" }}>
+                <i className="ti ti-shield-bolt" style={{ fontSize: 11, color: "#16A34A", flexShrink: 0 }} aria-hidden="true" />
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>Super Admin</span>
+                <button onClick={seedTestDay}
+                  style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid #16A34A55", borderRadius: 6, color: "#16A34A", padding: "3px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                  <i className="ti ti-flask" style={{ fontSize: 10 }} aria-hidden="true" />
+                  Seed test day
+                </button>
+                <button onClick={clearSeed}
+                  style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid #16A34A55", borderRadius: 6, color: "#16A34A", padding: "3px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                  <i className="ti ti-eraser" style={{ fontSize: 10 }} aria-hidden="true" />
+                  Clear
+                </button>
+              </div>
+            )}
 
             {showLive && (
             <>
