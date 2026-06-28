@@ -4385,7 +4385,7 @@ function App() {
         /* Mobile active state — darken any button when tapped so text stays readable */
         @media (hover: none) {
           button:hover { background: initial !important; }
-          button:active { filter: brightness(0.82) !important; }
+          button:not(.no-tap-dim):active { filter: brightness(0.82) !important; }
         }
         .game-card { transition: box-shadow 0.15s, transform 0.1s; }
         .game-card:hover { box-shadow: 0 4px 14px rgba(26,74,46,0.14) !important; transform: translateY(-1px); }
@@ -19156,20 +19156,6 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
         );
       })(), document.body)}
 
-      {/* ── Bridge to the formal engine ── */}
-      {isOrganiser && present.length >= 4 && (
-        <button onClick={() => onStartStructured && onStartStructured()}
-          style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 14px", borderRadius: 12, border: `1px dashed ${accent}66`, background: accent + "08", cursor: "pointer", textAlign: "left", fontFamily: "inherit", width: "100%" }}>
-          <div style={{ width: 36, height: 36, borderRadius: 9, background: accent + "16", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <i className="ti ti-tournament" style={{ fontSize: 18, color: accent }} aria-hidden="true" />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>Run today as a structured event</p>
-            <p style={{ margin: "1px 0 0", fontSize: 11, color: T.textMuted, lineHeight: 1.4 }}>Hand everyone here to the draw tools — round robin, blocks, knockout.</p>
-          </div>
-          <i className="ti ti-chevron-right" style={{ fontSize: 16, color: T.textFaint, flexShrink: 0 }} aria-hidden="true" />
-        </button>
-      )}
     </div>
   );
 }
@@ -20091,13 +20077,14 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
             <div style={{ flex: 1, minWidth: 0 }} />
             {!editing && (
               <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                {!isMemberClub && (
                 <button onClick={toggleFollow}
-                  aria-label={isMemberClub ? "Your club — always following" : isFollowing ? "Unfollow" : "Follow"}
-                  title={isMemberClub ? "You're a member — this club is always in your circuit" : isFollowing ? "Unfollow" : "Follow"}
-                  disabled={isMemberClub}
-                  style={{ background: isFollowing ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.14)", border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 8, padding: "7px 9px", color: "#fff", cursor: isMemberClub ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                  aria-label={isFollowing ? "Unfollow" : "Follow"}
+                  title={isFollowing ? "Unfollow" : "Follow"}
+                  style={{ background: isFollowing ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.14)", border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 8, padding: "7px 9px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
                   <i className={`ti ${isFollowing ? "ti-star-filled" : "ti-star"}`} style={{ fontSize: 16, color: isFollowing ? "#FFD700" : "#fff" }} aria-hidden="true" />
                 </button>
+                )}
                 <button onClick={() => setShowPostCircuit(true)}
                   aria-label="Post to The Circuit"
                   title="Post to The Circuit"
@@ -20172,9 +20159,9 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 <button key={t.id} onClick={() => setTab(t.id)}
                   style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
                     flexShrink: 0, minWidth: 64, padding: "6px 6px", borderRadius: 9,
-                    background: active ? accent + "18" : "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                  <i className={`ti ${t.icon}`} style={{ fontSize: 19, color: accent }} aria-hidden="true" />
-                  <span style={{ fontSize: 10, fontWeight: active ? 700 : 600, color: active ? accent : T.text, lineHeight: 1.15, whiteSpace: "nowrap" }}>{t.label}</span>
+                    background: active ? accent : "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                  <i className={`ti ${t.icon}`} style={{ fontSize: 19, color: active ? "#fff" : accent }} aria-hidden="true" />
+                  <span style={{ fontSize: 10, fontWeight: active ? 700 : 600, color: active ? "#fff" : T.text, lineHeight: 1.15, whiteSpace: "nowrap" }}>{t.label}</span>
                 </button>
               );
             })}
@@ -22376,6 +22363,94 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 </div>
               ) : (
                 <>
+                  {/* ── My availability + Organiser status ── */}
+                  {showLive && (() => {
+                // Read presence/availability from ClubLiveSession's session store directly.
+                const slug = clubKey.replace("clubProfile_", "");
+                const t = new Date();
+                const dk = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
+                let sess = {};
+                try { sess = JSON.parse(localStorage.getItem(`liveSession_${slug}_${dk}`) || "null") || {}; } catch {}
+                const myAvail = (sess.availability || {})[me.key] || null;
+                const AVAIL = [
+                  { value: "all_day",   label: "Here all day",      icon: "ti-sun",          rests: false },
+                  { value: "few_hours", label: "Here a few hours",  icon: "ti-clock",         rests: false },
+                  { value: "one_more",  label: "One more game",     icon: "ti-run",           rests: false },
+                  { value: "leaving",   label: "Leaving soon",      icon: "ti-door-exit",     rests: false },
+                  { value: "social",    label: "Just socialising",  icon: "ti-coffee",        rests: true  },
+                ];
+                const curAvail = AVAIL.find(s => s.value === myAvail);
+                const restOverride = (sess.restOverride || {})[me.key];
+                const isRestingMe = restOverride === true;
+                const availLabel = curAvail ? curAvail.label : (isRestingMe ? "Just here to socialise" : "Ready to play");
+                const availIcon  = curAvail ? curAvail.icon  : (isRestingMe ? "ti-coffee" : "ti-player-play");
+                const availColor = isRestingMe || (curAvail && curAvail.rests) ? "#9A7A00" : T.greenMid;
+
+                // isOrganiser logic mirrors ClubLiveSession: base role or manual manager
+                let isManMgr = false;
+                try {
+                  const managers = sess.managers || [];
+                  isManMgr = managers.includes(me.key) || managers.includes((me.name || "").toLowerCase().trim());
+                } catch {}
+                const iAmOrganiser = isClubAdmin || isClubSecretary || (me.titles || []).includes("Captain") || isManMgr;
+
+                const hasMeCheckedIn = (allCheckIns || []).some(c => {
+                  const nm = (c.name || "").trim().toLowerCase();
+                  return nm === (me.name || "").trim().toLowerCase();
+                });
+
+                if (!hasMeCheckedIn && !iAmOrganiser) return null;
+
+                return (
+                  <div style={{ borderTop: `1px solid ${T.cardBorder}` }}>
+                    {/* Availability row */}
+                    {hasMeCheckedIn && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: iAmOrganiser ? `1px solid ${T.cardBorder}` : "none" }}>
+                        <div style={{ width: 30, height: 30, borderRadius: 8, background: availColor + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <i className={`ti ${availIcon}`} style={{ fontSize: 16, color: availColor }} aria-hidden="true" />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }}>My availability</p>
+                          <p style={{ margin: "1px 0 0", fontSize: 13, fontWeight: 700, color: T.text }}>{availLabel}</p>
+                        </div>
+                        <span onClick={() => window.dispatchEvent(new CustomEvent("croquet:open-avail"))} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: accent, flexShrink: 0, cursor: "pointer" }}>Change <i className="ti ti-chevron-right" style={{ fontSize: 13 }} aria-hidden="true" /></span>
+                      </div>
+                    )}
+                    {/* Organiser row */}
+                    {iAmOrganiser && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px" }}>
+                          <div style={{ width: 30, height: 30, borderRadius: 8, background: accent + "16", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <i className="ti ti-clipboard-check" style={{ fontSize: 16, color: accent }} aria-hidden="true" />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>You're organising today</p>
+                            <p style={{ margin: "1px 0 0", fontSize: 10.5, color: T.textMuted }}>{isManMgr && !isClubAdmin && !isClubSecretary ? "Added as a session manager" : "By your club role"}</p>
+                          </div>
+                          <button onClick={() => window.dispatchEvent(new CustomEvent("croquet:open-managers"))}
+                            style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: `1px solid ${accent}55`, background: T.card, color: accent, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                            <i className="ti ti-building-pavilion" style={{ fontSize: 13 }} aria-hidden="true" /> Organisers
+                          </button>
+                        </div>
+                        {presentPlayers.length >= 4 && (
+                          <button onClick={() => onNewEvent && onNewEvent(clubName, presentPlayers.map(p => p.name))}
+                            style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 14px", borderTop: `1px solid ${T.cardBorder}`, border: "none", borderTop: `1px solid ${T.cardBorder}`, background: accent + "08", cursor: "pointer", textAlign: "left", fontFamily: "inherit", width: "100%" }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 8, background: accent + "16", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <i className="ti ti-tournament" style={{ fontSize: 16, color: accent }} aria-hidden="true" />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>Run today as a structured event</p>
+                              <p style={{ margin: "1px 0 0", fontSize: 11, color: T.textMuted }}>Round robin, blocks, knockout…</p>
+                            </div>
+                            <i className="ti ti-chevron-right" style={{ fontSize: 14, color: T.textFaint, flexShrink: 0 }} aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
                   {/* Today's play */}
                   <div style={{ padding: "9px 14px", display: "flex", alignItems: "center", gap: 7, borderBottom: `1px solid ${T.cardBorder}`, borderTop: `1px solid ${T.cardBorder}` }}>
                     <i className="ti ti-calendar-event" style={{ fontSize: 14, color: accent }} aria-hidden="true" />
@@ -22433,83 +22508,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                   </div>
                 </>
               )}
-
-              {/* ── Merged footer: My availability + Organiser status ── */}
-              {showLive && (() => {
-                // Read presence/availability from ClubLiveSession's session store directly.
-                const slug = clubKey.replace("clubProfile_", "");
-                const t = new Date();
-                const dk = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
-                let sess = {};
-                try { sess = JSON.parse(localStorage.getItem(`liveSession_${slug}_${dk}`) || "null") || {}; } catch {}
-                const myAvail = (sess.availability || {})[me.key] || null;
-                const AVAIL = [
-                  { value: "all_day",   label: "Here all day",      icon: "ti-sun",          rests: false },
-                  { value: "few_hours", label: "Here a few hours",  icon: "ti-clock",         rests: false },
-                  { value: "one_more",  label: "One more game",     icon: "ti-run",           rests: false },
-                  { value: "leaving",   label: "Leaving soon",      icon: "ti-door-exit",     rests: false },
-                  { value: "social",    label: "Just socialising",  icon: "ti-coffee",        rests: true  },
-                ];
-                const curAvail = AVAIL.find(s => s.value === myAvail);
-                const restOverride = (sess.restOverride || {})[me.key];
-                const isRestingMe = restOverride === true;
-                const availLabel = curAvail ? curAvail.label : (isRestingMe ? "Just here to socialise" : "Ready to play");
-                const availIcon  = curAvail ? curAvail.icon  : (isRestingMe ? "ti-coffee" : "ti-player-play");
-                const availColor = isRestingMe || (curAvail && curAvail.rests) ? "#9A7A00" : accent;
-
-                // isOrganiser logic mirrors ClubLiveSession: base role or manual manager
-                let isManMgr = false;
-                try {
-                  const managers = sess.managers || [];
-                  isManMgr = managers.includes(me.key) || managers.includes((me.name || "").toLowerCase().trim());
-                } catch {}
-                const iAmOrganiser = isClubAdmin || isClubSecretary || (me.titles || []).includes("Captain") || isManMgr;
-
-                const hasMeCheckedIn = (allCheckIns || []).some(c => {
-                  const nm = (c.name || "").trim().toLowerCase();
-                  return nm === (me.name || "").trim().toLowerCase();
-                });
-
-                if (!hasMeCheckedIn && !iAmOrganiser) return null;
-
-                return (
-                  <div style={{ borderTop: `1px solid ${T.cardBorder}` }}>
-                    {/* Availability row */}
-                    {hasMeCheckedIn && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: iAmOrganiser ? `1px solid ${T.cardBorder}` : "none" }}>
-                        <div style={{ width: 30, height: 30, borderRadius: 8, background: availColor + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <i className={`ti ${availIcon}`} style={{ fontSize: 16, color: availColor }} aria-hidden="true" />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }}>My availability</p>
-                          <p style={{ margin: "1px 0 0", fontSize: 13, fontWeight: 700, color: T.text }}>{availLabel}</p>
-                        </div>
-                        <span onClick={() => window.dispatchEvent(new CustomEvent("croquet:open-avail"))} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: accent, flexShrink: 0, cursor: "pointer" }}>Change <i className="ti ti-chevron-right" style={{ fontSize: 13 }} aria-hidden="true" /></span>
-                      </div>
-                    )}
-                    {/* Organiser row */}
-                    {iAmOrganiser && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px" }}>
-                        <div style={{ width: 30, height: 30, borderRadius: 8, background: accent + "16", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <i className="ti ti-clipboard-check" style={{ fontSize: 16, color: accent }} aria-hidden="true" />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>You're organising today</p>
-                          <p style={{ margin: "1px 0 0", fontSize: 10.5, color: T.textMuted }}>{isManMgr && !isClubAdmin && !isClubSecretary ? "Added as a session manager" : "By your club role"}</p>
-                        </div>
-                        <button onClick={() => {
-                          // Find and open the manager sheet inside ClubLiveSession by
-                          // dispatching a custom event it can listen for.
-                          window.dispatchEvent(new CustomEvent("croquet:open-managers"));
-                        }}
-                          style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: `1px solid ${accent}55`, background: T.card, color: accent, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                          <i className="ti ti-building-pavilion" style={{ fontSize: 13 }} aria-hidden="true" /> Organisers
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
             </div>
 
             {showLive && (
@@ -37666,13 +37664,13 @@ function PostToCircuitSheet({ entity, entityKey, name, color, logo, avatar, onCl
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
+    <div style={{ position: "fixed", inset: 0, zIndex: 1200, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       {/* Scrim */}
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} onClick={onClose} />
 
       {/* Sheet */}
-      <div style={{ position: "relative", background: T.card, borderRadius: "18px 18px 0 0", padding: "0 0 env(safe-area-inset-bottom)", boxShadow: "0 -4px 24px rgba(0,0,0,0.18)" }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: 520, background: T.card, borderRadius: "18px 18px 0 0", padding: "0 0 env(safe-area-inset-bottom)", boxShadow: "0 -4px 24px rgba(0,0,0,0.18)" }}>
         {/* Handle */}
         <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: T.cardBorder }} />
@@ -39800,12 +39798,13 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
                       const sel = presence === o.v;
                       return (
                         <button key={o.v} onClick={() => writePresence(o.v)}
+                          className="no-tap-dim"
                           style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "16px 8px 14px", borderRadius: 13,
                             border: `2px solid ${sel ? o.color : T.cardBorder}`,
                             background: sel ? `linear-gradient(160deg, ${o.color} 0%, ${o.colorDark} 100%)` : T.card,
                             cursor: "pointer", fontFamily: "inherit",
                             boxShadow: sel ? `0 4px 14px ${o.color}44` : "none",
-                            transition: "box-shadow 0.15s ease" }}>
+                            transition: "border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease" }}>
                           <i className={`ti ${o.icon}`} style={{ fontSize: 28, color: sel ? "#fff" : T.textMuted }} aria-hidden="true" />
                           <span style={{ fontSize: 12.5, fontWeight: 700, color: sel ? "#fff" : T.textMuted, letterSpacing: "0.01em" }}>{o.label}</span>
                         </button>
