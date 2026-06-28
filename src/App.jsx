@@ -1463,6 +1463,72 @@ const ROLE_DEFS = [
     ],
   },
   {
+    id: "committee", label: "Committee Member", short: "Committee", icon: "ti-clipboard-list",
+    color: "#475569", free: false, tagline: "Help shape the club from the inside",
+    benefits: [
+      "Stay informed about what's happening at the club without chasing updates",
+      "Access the members list and key club info to support your committee role",
+      "Contribute to decisions with full visibility of the club's activity and health",
+    ],
+    riverTypes: ["Community", "Club"],
+    live: [
+      { icon: "ti-calendar-event", label: "Committee meeting Tue", sublabel: "7pm · Clubhouse", urgent: true, color: "#475569", badge: "Soon" },
+      { icon: "ti-users", label: "Membership at 84", sublabel: "Up 3 from last season", urgent: false, color: "#475569" },
+      { icon: "ti-report", label: "AGM report due", sublabel: "Sec needs your section", urgent: false, color: "#B45309" },
+    ],
+    menuItems: [
+      { label: "Members",   icon: "ti-users",          nav: "sec-members" },
+      { label: "Events",    icon: "ti-trophy",         nav: "events" },
+      { label: "Games",     icon: "ti-ball-football",  nav: "games" },
+      { label: "Directory", icon: "ti-address-book",   nav: "directory" },
+    ],
+  },
+  {
+    id: "captain", label: "Club Captain", short: "Captain", icon: "ti-shield-star",
+    color: "#0369A1", free: false, tagline: "Set the standard on and off the lawn",
+    benefits: [
+      "See who's playing, who's improving, and who might need a nudge to enter events",
+      "Coordinate team selections and pennant squads without the back-and-forth",
+      "Be the first to know about competition results and upcoming fixtures",
+    ],
+    riverTypes: ["Community", "Club"],
+    live: [
+      { icon: "ti-users-group", label: "Pennant squad incomplete", sublabel: "2 spots unfilled for Sat", urgent: true, color: "#B45309", badge: "Select" },
+      { icon: "ti-trophy", label: "Club champs draw out", sublabel: "32 entries · starts Thu", urgent: false, color: "#0369A1" },
+      { icon: "ti-chart-arrows-vertical", label: "5 members improved", sublabel: "Handicap moves this month", urgent: false, color: "#0369A1" },
+    ],
+    menuItems: [
+      { label: "Members",   icon: "ti-users",             nav: "sec-members" },
+      { label: "Events",    icon: "ti-trophy",            nav: "events" },
+      { label: "Games",     icon: "ti-ball-football",     nav: "games" },
+      { label: "Groups",    icon: "ti-users-group",       nav: "squad" },
+      { label: "Directory", icon: "ti-address-book",      nav: "directory" },
+    ],
+  },
+  {
+    id: "president", label: "Club President", short: "President", icon: "ti-crown",
+    color: "#7C3AED", free: false, tagline: "Lead the club with vision and accountability",
+    benefits: [
+      "Stay across member sentiment, financials, and upcoming events at a glance",
+      "Approve key decisions and track committee actions without chasing emails",
+      "Represent the club with up-to-date info on membership, results, and plans",
+    ],
+    riverTypes: ["Community", "Club"],
+    live: [
+      { icon: "ti-users", label: "Membership up 8%", sublabel: "vs same time last year", urgent: false, color: "#7C3AED" },
+      { icon: "ti-alert-triangle", label: "AGM in 3 weeks", sublabel: "Reports due from Secretary & Treasurer", urgent: true, color: "#B45309", badge: "Soon" },
+      { icon: "ti-trophy", label: "Club champs this Sat", sublabel: "GC Singles · Final", urgent: false, color: "#7C3AED" },
+    ],
+    menuItems: [
+      { label: "Dashboard",  icon: "ti-layout-dashboard", nav: "sec-dashboard" },
+      { label: "Members",    icon: "ti-users",             nav: "sec-members" },
+      { label: "Events",     icon: "ti-trophy",            nav: "events" },
+      { label: "Announce",   icon: "ti-speakerphone",      nav: "announcements" },
+      { label: "Reports",    icon: "ti-report",            nav: "sec-reports" },
+      { label: "Club Admin", icon: "ti-settings",          nav: "sec-admin" },
+    ],
+  },
+  {
     id: "secretary", label: "Club Secretary", short: "Secretary", icon: "ti-id-badge-2",
     color: "#0F766E", free: false, tagline: "Run the club without the burnout",
     benefits: [
@@ -5370,7 +5436,15 @@ function App() {
       })()}
 
       {view === "circuit" && (
-        <CircuitView onBack={() => setView("home")} onNavigate={(dest) => { setDirTab("clubs"); setView(dest === "directory" ? "directory" : dest); }} />
+        <CircuitView onBack={() => setView("home")} onNavigate={(dest) => {
+          if (dest && typeof dest === "object") {
+            if (dest.eventId) { setEventTabTarget("view"); setEventView(dest.eventId); setView("event"); return; }
+            if (dest.clubName) { try { setClubTarget(dest.clubName); } catch {} setDirTab("clubs"); setView("directory"); return; }
+            if (dest.playerKey) { setDirTab("players"); setView("directory"); return; }
+            setView("directory"); return;
+          }
+          setDirTab("clubs"); setView(dest === "directory" ? "directory" : dest);
+        }} />
       )}
 
       {view === "strategy" && (
@@ -8867,6 +8941,7 @@ function EventDetailView({ event, games, onBack, onOpenGame, onUpdateEvent, onNe
   const [nameInput, setNameInput] = useState(event?.name || "");
   const [evTab, setEvTab] = useState(initialTab || "details");
   const [showShare, setShowShare] = useState(false);
+  const [showPostCircuit, setShowPostCircuit] = useState(false);
   // Swipe nav for event tabs
   const evTabList = React.useMemo(() => {
     const tabs = ["details","players","matches","view"];
@@ -9188,8 +9263,30 @@ function EventDetailView({ event, games, onBack, onOpenGame, onUpdateEvent, onNe
             }} aria-label="Share event">
             <i className="ti ti-share" aria-hidden="true" />
           </button>
+          {/* Post to Circuit */}
+          <button onClick={() => setShowPostCircuit(true)}
+            style={{
+              width: 38, flexShrink: 0,
+              background: "none", border: "none",
+              borderBottom: "2px solid transparent", marginBottom: -2,
+              cursor: "pointer", color: CIRCUIT_SPARK,
+              fontSize: 18, lineHeight: 1,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              WebkitTapHighlightColor: "transparent",
+            }} aria-label="Post to The Circuit">
+            <i className="ti ti-wave-sine" aria-hidden="true" />
+          </button>
         </div>
       </div>
+
+      {showPostCircuit && (
+        <PostToCircuitSheet
+          entity="event"
+          entityKey={event.id}
+          name={event.name || "Event"}
+          onClose={() => setShowPostCircuit(false)}
+        />
+      )}
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "0 1rem 3rem" }}>
 
@@ -19213,6 +19310,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
   });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(profile);
+  const [showPostCircuit, setShowPostCircuit] = useState(false);
   const [tab, setTab] = useState(() => {
     // Honour a deep-link tab target set just before navigation, once.
     if (_pendingClubTab) { const t = _pendingClubTab; _pendingClubTab = null; return t; }
@@ -19229,9 +19327,15 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
   const [regEdit, setRegEdit] = useState(null);
   const [regConfirmDelete, setRegConfirmDelete] = useState(null);
   const [regFilter, setRegFilter] = useState("all");
-  // Editing the club's recorded secretary (admin tab). When non-null, holds the
+  // Editing the club's recorded officers (admin tab). When non-null, holds the
   // draft name string being entered.
   const [secEdit, setSecEdit] = useState(null);
+  const [presEdit, setPresEdit] = useState(null);
+  const [treasEdit, setTreasEdit] = useState(null);
+  const [captEdit, setCaptEdit] = useState(null);
+  const [committeeNoteEdit, setCommitteeNoteEdit] = useState(null); // null | { id, title, body, date }
+  const [assetEdit, setAssetEdit] = useState(null); // null | asset object being edited/created
+  const [contactEdit, setContactEdit] = useState(null); // null | contact object being edited/created
   const [previewPublic, setPreviewPublic] = useState(false);
   const [expandedMember, setExpandedMember] = useState(null);
   // When set to { key, name }, show the full rich player profile as a full-screen overlay.
@@ -19579,7 +19683,11 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
   // rather than just "holds the secretary role". Super-admins retain access for
   // oversight/testing. Falls back to acting-role + membership only when no
   // secretary has been recorded yet, so behaviour isn't lost before it's set.
-  const recordedSecretary = (profile.secretaryName || "").trim().toLowerCase();
+  const recordedSecretary  = (profile.secretaryName  || "").trim().toLowerCase();
+  const recordedPresident  = (profile.presidentName  || "").trim().toLowerCase();
+  const recordedTreasurer  = (profile.treasurerName  || "").trim().toLowerCase();
+  const recordedCaptain    = (profile.captainName    || "").trim().toLowerCase();
+  const recordedCommittee  = (profile.committeeMembers || []).map(n => n.trim()).filter(Boolean);
   const isClubSecretary = !isPublicView && (() => {
     if (lockTab) return true; // entered via the secretary area, already gated
     if (isSuperAdmin) return true;
@@ -19588,6 +19696,42 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
     try {
       const role = localStorage.getItem("currentRole");
       return role === "secretary" && (me.clubs || []).includes(clubName);
+    } catch { return false; }
+  })();
+  const isClubPresident = !isPublicView && (() => {
+    if (isSuperAdmin) return true;
+    const myName = (me.name || "").trim().toLowerCase();
+    if (recordedPresident) return !!myName && myName === recordedPresident;
+    try {
+      const role = localStorage.getItem("currentRole");
+      return role === "president" && (me.clubs || []).includes(clubName);
+    } catch { return false; }
+  })();
+  const isClubTreasurer = !isPublicView && (() => {
+    if (isSuperAdmin) return true;
+    const myName = (me.name || "").trim().toLowerCase();
+    if (recordedTreasurer) return !!myName && myName === recordedTreasurer;
+    try {
+      const role = localStorage.getItem("currentRole");
+      return role === "treasurer" && (me.clubs || []).includes(clubName);
+    } catch { return false; }
+  })();
+  const isClubCaptain = !isPublicView && (() => {
+    if (isSuperAdmin) return true;
+    const myName = (me.name || "").trim().toLowerCase();
+    if (recordedCaptain) return !!myName && myName === recordedCaptain;
+    try {
+      const role = localStorage.getItem("currentRole");
+      return role === "captain" && (me.clubs || []).includes(clubName);
+    } catch { return false; }
+  })();
+  const isClubCommittee = !isPublicView && (() => {
+    if (isSuperAdmin) return true;
+    const myName = (me.name || "").trim().toLowerCase();
+    if (recordedCommittee.length) return !!myName && recordedCommittee.some(n => n.toLowerCase() === myName);
+    try {
+      const role = localStorage.getItem("currentRole");
+      return role === "committee" && (me.clubs || []).includes(clubName);
     } catch { return false; }
   })();
   const meName = (me.name || "").trim().toLowerCase();
@@ -19727,10 +19871,13 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
     { id: "about",     label: "About",      icon: "ti-info-circle" },
     ...((clubGradeConfig(profile).enabled || isClubSecretary) ? [{ id: "grade",  label: "Club Grade", icon: "ti-trophy" }] : []),
     ...((ladderState(profile).config.enabled || isClubSecretary) ? [{ id: "ladder", label: "Ladder",     icon: "ti-stairs-up" }] : []),
-    // Secretary extras
+    // Committee officer extras
     ...(isClubSecretary ? [{ id: "bookings", label: "Event Hire", icon: "ti-calendar-star" }] : []),
     ...(isClubSecretary ? [{ id: "lawns",    label: "Lawns",      icon: "ti-layout-grid" }] : []),
     ...(isClubSecretary ? [{ id: "checkins", label: "Check-Ins",  icon: "ti-map-pin" }] : []),
+    ...((isClubPresident || isClubTreasurer) && !isClubSecretary ? [{ id: "sec-dashboard", label: "Dashboard", icon: "ti-layout-dashboard" }] : []),
+    ...((isClubCaptain || isClubCommittee) && !isClubSecretary ? [{ id: "sec-members", label: "All Members", icon: "ti-users" }] : []),
+    ...((isClubSecretary || isClubPresident || isClubTreasurer || isClubCaptain || isClubCommittee) ? [{ id: "committee", label: "Committee", icon: "ti-clipboard-list" }] : []),
   ] : [
     // ── Visitor view: public-facing only ─────────────────────────────────────
     { id: "about",    label: "About",    icon: "ti-info-circle" },
@@ -19747,7 +19894,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
   React.useEffect(() => {
     if (lockTab) return;
     if (!TABS.some(t => t.id === tab)) setTab(isClubMember ? "live" : "about");
-  }, [tab, profile.bookingsPageEnabled, lockTab, isClubSecretary, isClubMember]);
+  }, [tab, profile.bookingsPageEnabled, lockTab, isClubSecretary, isClubPresident, isClubTreasurer, isClubCaptain, isClubCommittee, isClubMember]);
 
   // ── Unregistered club: show a calm stub instead of the full experience ──
   // The club can be linked as a home club, but it isn't on Croquet OK yet, so
@@ -19948,9 +20095,25 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                   <i className={`ti ${isFollowing ? "ti-star-filled" : "ti-star"}`} style={{ fontSize: 16, color: isFollowing ? "#FFD700" : "#fff" }} aria-hidden="true" />
                   {isMemberClub && <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.8)", letterSpacing: "0.04em" }}>Member</span>}
                 </button>
+                <button onClick={() => setShowPostCircuit(true)}
+                  aria-label="Post to The Circuit"
+                  title="Post to The Circuit"
+                  style={{ background: "rgba(255,255,255,0.14)", border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 8, padding: "7px 9px", color: CIRCUIT_SPARK, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <i className="ti ti-wave-sine" style={{ fontSize: 16 }} aria-hidden="true" />
+                </button>
               </div>
             )}
           </div>
+          {showPostCircuit && (
+            <PostToCircuitSheet
+              entity="club"
+              entityKey={clubName}
+              name={clubName}
+              color={profile.primaryColor || T.greenMid}
+              logo={profile.logo || null}
+              onClose={() => setShowPostCircuit(false)}
+            />
+          )}
           {/* Quick facts */}
           {!editing && (() => {
             const heroCodes = (profile.codes && profile.codes.length ? profile.codes : (profile.variant ? [profile.variant] : []));
@@ -20163,6 +20326,53 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
               </div>
             )}
 
+
+            {/* ── Executive & Committee ── */}
+            {(() => {
+              const execRows = [
+                profile.presidentName  && { role: "President",  name: profile.presidentName,  icon: "ti-crown",          color: "#7C3AED" },
+                profile.secretaryName  && { role: "Secretary",  name: profile.secretaryName,  icon: "ti-id-badge-2",     color: "#0F766E" },
+                profile.treasurerName  && { role: "Treasurer",  name: profile.treasurerName,  icon: "ti-coins",          color: "#CA8A04" },
+                profile.captainName    && { role: "Captain",    name: profile.captainName,    icon: "ti-shield-star",    color: "#0369A1" },
+              ].filter(Boolean);
+              const committeeList = (profile.committeeMembers || []).filter(Boolean);
+              if (!execRows.length && !committeeList.length) return null;
+              return (
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", marginBottom: 12, boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
+                  {sectionHead("ti-users-group", "Executive & Committee")}
+                  <div style={{ padding: "8px 14px 12px" }}>
+                    {execRows.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: committeeList.length ? 10 : 0 }}>
+                        {execRows.map((r, i) => (
+                          <div key={r.role} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < execRows.length - 1 ? `1px solid ${T.cardBorder}` : "none" }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 8, background: r.color + "14", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <i className={`ti ${r.icon}`} style={{ fontSize: 15, color: r.color }} aria-hidden="true" />
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>{r.name}</p>
+                              <p style={{ margin: 0, fontSize: 10.5, fontWeight: 600, color: r.color, textTransform: "uppercase", letterSpacing: "0.04em" }}>{r.role}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {committeeList.length > 0 && (
+                      <>
+                        {execRows.length > 0 && <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }}>Committee</p>}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {committeeList.map(name => (
+                            <span key={name} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 20, background: "#47556914", border: "1px solid #47556930", fontSize: 12, fontWeight: 600, color: T.text }}>
+                              <i className="ti ti-user" style={{ fontSize: 11, color: "#475569" }} aria-hidden="true" />
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ── Club intro video ── */}
             {(() => {
@@ -22933,6 +23143,419 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
           );
         })()}
 
+        {tab === "committee" && (() => {
+          const canEdit = isClubSecretary || isClubPresident;
+          const COMMITTEE_COLOR = "#475569";
+          const saveCommitteeData = (patch) => {
+            const np = { ...profile, committeePortal: { ...(profile.committeePortal || {}), ...patch } };
+            setProfile(np); saveClubProfile(getClubId(clubName), np);
+          };
+          const portal = profile.committeePortal || {};
+          const notes  = portal.meetingNotes || [];
+          const fmtDate = (d) => { try { if (!d) return ""; const dt = new Date(d); return dt.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }); } catch { return d || ""; } };
+          const cardStyle = { background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)", marginBottom: 12 };
+          const headStyle = (color) => ({ background: `linear-gradient(135deg, ${color} 0%, ${color}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 });
+          const headText = { fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" };
+
+          return (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+
+              {/* ── Next committee meeting ── */}
+              <div style={cardStyle}>
+                <div style={headStyle(COMMITTEE_COLOR)}>
+                  <i className="ti ti-calendar-event" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                  <span style={headText}>Next committee meeting</span>
+                  {canEdit && <button onClick={() => { const d = prompt("Next meeting date (YYYY-MM-DD):", portal.nextMeeting || ""); if (d !== null) saveCommitteeData({ nextMeeting: d.trim(), nextMeetingLocation: prompt("Location (optional):", portal.nextMeetingLocation || "") || "" }); }}
+                    style={{ marginLeft: "auto", background: "rgba(255,255,255,0.18)", border: "none", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer" }}>
+                    {portal.nextMeeting ? "Edit" : "Set"}
+                  </button>}
+                </div>
+                <div style={{ padding: "14px 16px" }}>
+                  {portal.nextMeeting ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 10, background: COMMITTEE_COLOR + "14", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <i className="ti ti-calendar-event" style={{ fontSize: 20, color: COMMITTEE_COLOR }} aria-hidden="true" />
+                      </div>
+                      <div>
+                        <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>{fmtDate(portal.nextMeeting)}</p>
+                        {portal.nextMeetingLocation && <p style={{ margin: "2px 0 0", fontSize: 12, color: T.textMuted }}>{portal.nextMeetingLocation}</p>}
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 13, color: T.textFaint, fontStyle: "italic" }}>
+                      {canEdit ? "No meeting scheduled — tap Set to add one." : "No meeting date set yet."}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* ── AGM ── */}
+              <div style={cardStyle}>
+                <div style={headStyle("#1D4ED8")}>
+                  <i className="ti ti-building-community" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                  <span style={headText}>Annual General Meeting</span>
+                  {canEdit && <button onClick={() => { const d = prompt("AGM date (YYYY-MM-DD):", portal.agmDate || ""); if (d !== null) saveCommitteeData({ agmDate: d.trim(), agmLocation: prompt("Location (optional):", portal.agmLocation || "") || "", agmNotes: prompt("Notes (optional):", portal.agmNotes || "") || "" }); }}
+                    style={{ marginLeft: "auto", background: "rgba(255,255,255,0.18)", border: "none", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer" }}>
+                    {portal.agmDate ? "Edit" : "Set"}
+                  </button>}
+                </div>
+                <div style={{ padding: "14px 16px" }}>
+                  {portal.agmDate ? (
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: portal.agmNotes ? 10 : 0 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 10, background: "#1D4ED814", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <i className="ti ti-building-community" style={{ fontSize: 20, color: "#1D4ED8" }} aria-hidden="true" />
+                        </div>
+                        <div>
+                          <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>{fmtDate(portal.agmDate)}</p>
+                          {portal.agmLocation && <p style={{ margin: "2px 0 0", fontSize: 12, color: T.textMuted }}>{portal.agmLocation}</p>}
+                        </div>
+                      </div>
+                      {portal.agmNotes && <p style={{ margin: 0, fontSize: 13, color: T.textMuted, lineHeight: 1.5, paddingTop: 10, borderTop: `1px solid ${T.cardBorder}` }}>{portal.agmNotes}</p>}
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 13, color: T.textFaint, fontStyle: "italic" }}>
+                      {canEdit ? "AGM date not set — tap Set to add one." : "AGM date not set yet."}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Meeting notes ── */}
+              <div style={cardStyle}>
+                <div style={headStyle(COMMITTEE_COLOR)}>
+                  <i className="ti ti-notes" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                  <span style={headText}>Meeting notes</span>
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.75)" }}>{notes.length} {notes.length === 1 ? "entry" : "entries"}</span>
+                </div>
+
+                {committeeNoteEdit && (
+                  <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.cardBorder}`, display: "flex", flexDirection: "column", gap: 10 }}>
+                    <input value={committeeNoteEdit.title || ""}
+                      onChange={e => setCommitteeNoteEdit(n => ({ ...n, title: e.target.value }))}
+                      placeholder="Meeting title / date" style={{ width: "100%", fontFamily: "inherit" }} />
+                    <input type="date" value={committeeNoteEdit.date || ""}
+                      onChange={e => setCommitteeNoteEdit(n => ({ ...n, date: e.target.value }))}
+                      style={{ width: "100%", fontFamily: "inherit" }} />
+                    <textarea value={committeeNoteEdit.body || ""}
+                      onChange={e => setCommitteeNoteEdit(n => ({ ...n, body: e.target.value }))}
+                      placeholder="Notes, decisions, action items…"
+                      rows={6} style={{ width: "100%", fontFamily: "inherit", resize: "vertical", fontSize: 13, lineHeight: 1.6 }} />
+                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                      {committeeNoteEdit.id && <button onClick={() => { saveCommitteeData({ meetingNotes: notes.filter(n => n.id !== committeeNoteEdit.id) }); setCommitteeNoteEdit(null); }}
+                        style={{ marginRight: "auto", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: "#B83232", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>}
+                      <button onClick={() => setCommitteeNoteEdit(null)}
+                        style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                      <button onClick={() => {
+                        const title = (committeeNoteEdit.title || "").trim();
+                        const body  = (committeeNoteEdit.body  || "").trim();
+                        if (!title) return;
+                        const existing = committeeNoteEdit.id ? notes.map(n => n.id === committeeNoteEdit.id ? { ...n, title, body, date: committeeNoteEdit.date, updatedAt: Date.now() } : n) : [{ id: "cm_" + Date.now().toString(36), title, body, date: committeeNoteEdit.date, createdAt: Date.now() }, ...notes];
+                        saveCommitteeData({ meetingNotes: existing });
+                        setCommitteeNoteEdit(null);
+                      }} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: COMMITTEE_COLOR, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Save</button>
+                    </div>
+                  </div>
+                )}
+
+                {notes.length === 0 && !committeeNoteEdit && (
+                  <div style={{ padding: "18px 16px", textAlign: "center" }}>
+                    <i className="ti ti-notes" style={{ fontSize: 24, color: T.textFaint, opacity: 0.35, display: "block", marginBottom: 6 }} aria-hidden="true" />
+                    <p style={{ margin: 0, fontSize: 13, color: T.textFaint }}>{canEdit ? "No notes yet — add the first one below." : "No meeting notes posted yet."}</p>
+                  </div>
+                )}
+
+                {notes.map((n, i) => (
+                  <div key={n.id} style={{ padding: "12px 16px", borderTop: i === 0 && !committeeNoteEdit ? "none" : `1px solid ${T.cardBorder}` }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: n.body ? 6 : 0 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>{n.title}</p>
+                        {n.date && <p style={{ margin: "1px 0 0", fontSize: 11, color: T.textMuted }}>{fmtDate(n.date)}</p>}
+                      </div>
+                      {canEdit && <button onClick={() => setCommitteeNoteEdit({ id: n.id, title: n.title, body: n.body || "", date: n.date || "" })}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: T.textFaint, padding: 2, flexShrink: 0 }}>
+                        <i className="ti ti-pencil" style={{ fontSize: 13 }} aria-hidden="true" />
+                      </button>}
+                    </div>
+                    {n.body && <p style={{ margin: 0, fontSize: 13, color: T.textMuted, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{n.body}</p>}
+                  </div>
+                ))}
+
+                {canEdit && !committeeNoteEdit && (
+                  <div style={{ padding: "10px 14px", borderTop: `1px solid ${T.cardBorder}` }}>
+                    <button onClick={() => setCommitteeNoteEdit({ id: null, title: "", body: "", date: new Date().toISOString().slice(0, 10) })}
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: `1.5px dashed ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer", width: "100%", justifyContent: "center", fontFamily: "inherit" }}>
+                      <i className="ti ti-plus" style={{ fontSize: 14 }} aria-hidden="true" />Add meeting notes
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Asset register ── */}
+              {(() => {
+                const assets = portal.assets || [];
+                const saveAssets = (list) => saveCommitteeData({ assets: list });
+                const ASSET_CATS = ["Grounds", "Clubhouse", "Equipment", "IT & AV", "Finance", "Other"];
+                const COND_OPTS = [
+                  { value: "good",    label: "Good",          color: "#16A34A" },
+                  { value: "fair",    label: "Fair",          color: "#CA8A04" },
+                  { value: "needs",   label: "Needs attention", color: "#B83232" },
+                ];
+                const condColor = (v) => (COND_OPTS.find(o => o.value === v) || COND_OPTS[0]).color;
+                const condLabel = (v) => (COND_OPTS.find(o => o.value === v) || COND_OPTS[0]).label;
+                const BLANK = { id: null, name: "", category: "Equipment", makeModel: "", serial: "", condition: "good", purchaseDate: "", lastServiced: "", notes: "" };
+
+                return (
+                  <div style={cardStyle}>
+                    <div style={headStyle(COMMITTEE_COLOR)}>
+                      <i className="ti ti-clipboard-check" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                      <span style={headText}>Asset register</span>
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.75)" }}>{assets.length} {assets.length === 1 ? "item" : "items"}</span>
+                    </div>
+
+                    {/* Edit / add form */}
+                    {assetEdit && (
+                      <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.cardBorder}`, display: "flex", flexDirection: "column", gap: 10 }}>
+                        <p style={{ margin: "0 0 2px", fontSize: 11, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }}>{assetEdit.id ? "Edit asset" : "New asset"}</p>
+
+                        <input value={assetEdit.name} onChange={e => setAssetEdit(a => ({ ...a, name: e.target.value }))}
+                          placeholder="Asset name (e.g. Lawn mower)" style={{ width: "100%", fontFamily: "inherit", fontWeight: 600 }} />
+
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <select value={assetEdit.category} onChange={e => setAssetEdit(a => ({ ...a, category: e.target.value }))}
+                            style={{ flex: 1, fontFamily: "inherit", fontSize: 13, borderRadius: 8, border: `1px solid ${T.cardBorder}`, padding: "7px 10px", background: T.card, color: T.text }}>
+                            {ASSET_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          <select value={assetEdit.condition} onChange={e => setAssetEdit(a => ({ ...a, condition: e.target.value }))}
+                            style={{ flex: 1, fontFamily: "inherit", fontSize: 13, borderRadius: 8, border: `1px solid ${T.cardBorder}`, padding: "7px 10px", background: T.card, color: condColor(assetEdit.condition), fontWeight: 700 }}>
+                            {COND_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <input value={assetEdit.makeModel} onChange={e => setAssetEdit(a => ({ ...a, makeModel: e.target.value }))}
+                            placeholder="Make / model" style={{ flex: 1, fontFamily: "inherit" }} />
+                          <input value={assetEdit.serial} onChange={e => setAssetEdit(a => ({ ...a, serial: e.target.value }))}
+                            placeholder="Serial / ID" style={{ flex: 1, fontFamily: "inherit" }} />
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Purchased</label>
+                            <input type="date" value={assetEdit.purchaseDate} onChange={e => setAssetEdit(a => ({ ...a, purchaseDate: e.target.value }))}
+                              style={{ width: "100%", fontFamily: "inherit" }} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Last serviced</label>
+                            <input type="date" value={assetEdit.lastServiced} onChange={e => setAssetEdit(a => ({ ...a, lastServiced: e.target.value }))}
+                              style={{ width: "100%", fontFamily: "inherit" }} />
+                          </div>
+                        </div>
+
+                        <textarea value={assetEdit.notes} onChange={e => setAssetEdit(a => ({ ...a, notes: e.target.value }))}
+                          placeholder="Notes (location, warranty info, service contact…)"
+                          rows={3} style={{ width: "100%", fontFamily: "inherit", resize: "vertical", fontSize: 13, lineHeight: 1.5 }} />
+
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          {assetEdit.id && <button onClick={() => { saveAssets(assets.filter(a => a.id !== assetEdit.id)); setAssetEdit(null); }}
+                            style={{ marginRight: "auto", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: "#B83232", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>}
+                          <button onClick={() => setAssetEdit(null)}
+                            style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                          <button onClick={() => {
+                            if (!(assetEdit.name || "").trim()) return;
+                            const saved = assetEdit.id
+                              ? assets.map(a => a.id === assetEdit.id ? { ...assetEdit, updatedAt: Date.now() } : a)
+                              : [{ ...assetEdit, id: "ast_" + Date.now().toString(36), createdAt: Date.now() }, ...assets];
+                            saveAssets(saved); setAssetEdit(null);
+                          }} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: COMMITTEE_COLOR, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Save</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Asset list */}
+                    {assets.length === 0 && !assetEdit ? (
+                      <div style={{ padding: "18px 16px", textAlign: "center" }}>
+                        <i className="ti ti-clipboard-check" style={{ fontSize: 24, color: T.textFaint, opacity: 0.35, display: "block", marginBottom: 6 }} aria-hidden="true" />
+                        <p style={{ margin: 0, fontSize: 13, color: T.textFaint }}>{canEdit ? "No assets recorded yet — add the first one below." : "No assets in the register yet."}</p>
+                      </div>
+                    ) : (
+                      <div>
+                        {/* Group by category */}
+                        {ASSET_CATS.filter(cat => assets.some(a => a.category === cat)).map(cat => (
+                          <div key={cat}>
+                            <p style={{ margin: 0, padding: "6px 16px", fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em", background: T.pageBg, borderTop: `1px solid ${T.cardBorder}` }}>{cat}</p>
+                            {assets.filter(a => a.category === cat).map((a, i, arr) => (
+                              <div key={a.id} style={{ padding: "10px 16px", borderTop: `1px solid ${T.cardBorder}`, display: "flex", alignItems: "flex-start", gap: 10 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{a.name}</span>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: condColor(a.condition), background: condColor(a.condition) + "14", border: `1px solid ${condColor(a.condition)}44`, borderRadius: 20, padding: "1px 7px" }}>{condLabel(a.condition)}</span>
+                                  </div>
+                                  {a.makeModel && <p style={{ margin: "2px 0 0", fontSize: 11.5, color: T.textMuted }}>{a.makeModel}{a.serial ? ` · ${a.serial}` : ""}</p>}
+                                  <div style={{ display: "flex", gap: 10, marginTop: 3, flexWrap: "wrap" }}>
+                                    {a.purchaseDate && <span style={{ fontSize: 10.5, color: T.textFaint }}>Purchased {fmtDate(a.purchaseDate)}</span>}
+                                    {a.lastServiced && <span style={{ fontSize: 10.5, color: T.textFaint }}>Serviced {fmtDate(a.lastServiced)}</span>}
+                                  </div>
+                                  {a.notes && <p style={{ margin: "4px 0 0", fontSize: 11.5, color: T.textMuted, lineHeight: 1.5 }}>{a.notes}</p>}
+                                </div>
+                                {canEdit && <button onClick={() => setAssetEdit({ ...a })}
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: T.textFaint, padding: 2, flexShrink: 0 }}>
+                                  <i className="ti ti-pencil" style={{ fontSize: 13 }} aria-hidden="true" />
+                                </button>}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {canEdit && !assetEdit && (
+                      <div style={{ padding: "10px 14px", borderTop: `1px solid ${T.cardBorder}` }}>
+                        <button onClick={() => setAssetEdit({ ...BLANK })}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: `1.5px dashed ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer", width: "100%", justifyContent: "center", fontFamily: "inherit" }}>
+                          <i className="ti ti-plus" style={{ fontSize: 14 }} aria-hidden="true" />Add asset
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ── Contacts register ── */}
+              {(() => {
+                const contacts = portal.contacts || [];
+                const saveContacts = (list) => saveCommitteeData({ contacts: list });
+                const CONTACT_CATS = [
+                  { value: "government", label: "Government & Sport", icon: "ti-building-arch" },
+                  { value: "patron",     label: "Patrons & VIPs",     icon: "ti-star" },
+                  { value: "trade",      label: "Trades & Suppliers", icon: "ti-tool" },
+                  { value: "media",      label: "Media & Comms",      icon: "ti-speakerphone" },
+                  { value: "legal",      label: "Legal & Finance",    icon: "ti-scale" },
+                  { value: "other",      label: "Other",              icon: "ti-user" },
+                ];
+                const catLabel = (v) => (CONTACT_CATS.find(c => c.value === v) || CONTACT_CATS.at(-1)).label;
+                const catIcon  = (v) => (CONTACT_CATS.find(c => c.value === v) || CONTACT_CATS.at(-1)).icon;
+                const BLANK_C  = { id: null, name: "", role: "", organisation: "", category: "other", phone: "", email: "", notes: "" };
+
+                return (
+                  <div style={cardStyle}>
+                    <div style={headStyle(COMMITTEE_COLOR)}>
+                      <i className="ti ti-address-book" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                      <span style={headText}>Contacts</span>
+                      <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.75)" }}>{contacts.length} {contacts.length === 1 ? "contact" : "contacts"}</span>
+                    </div>
+
+                    {/* Edit / add form */}
+                    {contactEdit && (
+                      <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.cardBorder}`, display: "flex", flexDirection: "column", gap: 10 }}>
+                        <p style={{ margin: "0 0 2px", fontSize: 11, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }}>{contactEdit.id ? "Edit contact" : "New contact"}</p>
+
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <input value={contactEdit.name} onChange={e => setContactEdit(c => ({ ...c, name: e.target.value }))}
+                            placeholder="Name" style={{ flex: 1, fontFamily: "inherit", fontWeight: 600 }} />
+                          <select value={contactEdit.category} onChange={e => setContactEdit(c => ({ ...c, category: e.target.value }))}
+                            style={{ flex: 1, fontFamily: "inherit", fontSize: 13, borderRadius: 8, border: `1px solid ${T.cardBorder}`, padding: "7px 10px", background: T.card, color: T.text }}>
+                            {CONTACT_CATS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                          </select>
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <input value={contactEdit.role} onChange={e => setContactEdit(c => ({ ...c, role: e.target.value }))}
+                            placeholder="Role / title (e.g. Sport & Rec Officer)" style={{ flex: 1, fontFamily: "inherit" }} />
+                          <input value={contactEdit.organisation} onChange={e => setContactEdit(c => ({ ...c, organisation: e.target.value }))}
+                            placeholder="Organisation" style={{ flex: 1, fontFamily: "inherit" }} />
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <input type="tel" value={contactEdit.phone} onChange={e => setContactEdit(c => ({ ...c, phone: e.target.value }))}
+                            placeholder="Phone" style={{ flex: 1, fontFamily: "inherit" }} />
+                          <input type="email" value={contactEdit.email} onChange={e => setContactEdit(c => ({ ...c, email: e.target.value }))}
+                            placeholder="Email" style={{ flex: 1, fontFamily: "inherit" }} />
+                        </div>
+
+                        <textarea value={contactEdit.notes} onChange={e => setContactEdit(c => ({ ...c, notes: e.target.value }))}
+                          placeholder="Notes (when to call, what they help with, contract details…)"
+                          rows={2} style={{ width: "100%", fontFamily: "inherit", resize: "vertical", fontSize: 13, lineHeight: 1.5 }} />
+
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          {contactEdit.id && <button onClick={() => { saveContacts(contacts.filter(c => c.id !== contactEdit.id)); setContactEdit(null); }}
+                            style={{ marginRight: "auto", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: "#B83232", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>}
+                          <button onClick={() => setContactEdit(null)}
+                            style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                          <button onClick={() => {
+                            if (!(contactEdit.name || "").trim()) return;
+                            const saved = contactEdit.id
+                              ? contacts.map(c => c.id === contactEdit.id ? { ...contactEdit, updatedAt: Date.now() } : c)
+                              : [{ ...contactEdit, id: "cnt_" + Date.now().toString(36), createdAt: Date.now() }, ...contacts];
+                            saveContacts(saved); setContactEdit(null);
+                          }} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: COMMITTEE_COLOR, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Save</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Contact list */}
+                    {contacts.length === 0 && !contactEdit ? (
+                      <div style={{ padding: "18px 16px", textAlign: "center" }}>
+                        <i className="ti ti-address-book" style={{ fontSize: 24, color: T.textFaint, opacity: 0.35, display: "block", marginBottom: 6 }} aria-hidden="true" />
+                        <p style={{ margin: 0, fontSize: 13, color: T.textFaint }}>{canEdit ? "No contacts yet — add patrons, trades, and key contacts below." : "No contacts recorded yet."}</p>
+                      </div>
+                    ) : (
+                      <div>
+                        {CONTACT_CATS.filter(cat => contacts.some(c => c.category === cat.value)).map(cat => (
+                          <div key={cat.value}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 16px", background: T.pageBg, borderTop: `1px solid ${T.cardBorder}` }}>
+                              <i className={`ti ${cat.icon}`} style={{ fontSize: 11, color: T.textFaint }} aria-hidden="true" />
+                              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }}>{cat.label}</p>
+                            </div>
+                            {contacts.filter(c => c.category === cat.value).map((c) => (
+                              <div key={c.id} style={{ padding: "10px 16px", borderTop: `1px solid ${T.cardBorder}`, display: "flex", alignItems: "flex-start", gap: 10 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 9, background: COMMITTEE_COLOR + "14", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                  <i className={`ti ${cat.icon}`} style={{ fontSize: 16, color: COMMITTEE_COLOR }} aria-hidden="true" />
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>{c.name}</p>
+                                  {(c.role || c.organisation) && (
+                                    <p style={{ margin: "1px 0 0", fontSize: 11.5, color: T.textMuted }}>
+                                      {[c.role, c.organisation].filter(Boolean).join(" · ")}
+                                    </p>
+                                  )}
+                                  <div style={{ display: "flex", gap: 8, marginTop: 5, flexWrap: "wrap" }}>
+                                    {c.phone && <a href={`tel:${c.phone}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: COMMITTEE_COLOR, fontWeight: 600, textDecoration: "none" }}>
+                                      <i className="ti ti-phone" style={{ fontSize: 12 }} />{c.phone}
+                                    </a>}
+                                    {c.email && <a href={`mailto:${c.email}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: COMMITTEE_COLOR, fontWeight: 600, textDecoration: "none" }}>
+                                      <i className="ti ti-mail" style={{ fontSize: 12 }} />{c.email}
+                                    </a>}
+                                  </div>
+                                  {c.notes && <p style={{ margin: "4px 0 0", fontSize: 11.5, color: T.textMuted, lineHeight: 1.5 }}>{c.notes}</p>}
+                                </div>
+                                {canEdit && <button onClick={() => setContactEdit({ ...c })}
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: T.textFaint, padding: 2, flexShrink: 0 }}>
+                                  <i className="ti ti-pencil" style={{ fontSize: 13 }} aria-hidden="true" />
+                                </button>}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {canEdit && !contactEdit && (
+                      <div style={{ padding: "10px 14px", borderTop: `1px solid ${T.cardBorder}` }}>
+                        <button onClick={() => setContactEdit({ ...BLANK_C })}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: `1.5px dashed ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer", width: "100%", justifyContent: "center", fontFamily: "inherit" }}>
+                          <i className="ti ti-plus" style={{ fontSize: 14 }} aria-hidden="true" />Add contact
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+            </div>
+          );
+        })()}
+
         {tab === "admin" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <p style={{ margin: "0 2px", fontSize: 11.5, color: T.textFaint, lineHeight: 1.45 }}>
@@ -22979,23 +23602,18 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                       </div>
                     ) : (
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        <input type="text" value={secEdit} list="club-member-names" autoFocus
-                          onChange={e => setSecEdit(e.target.value)}
-                          placeholder="Secretary's name" style={{ width: "100%" }} />
-                        <datalist id="club-member-names">
-                          {memberNames.map(n => <option key={n} value={n} />)}
-                        </datalist>
-                        {memberNames.length > 0 && (
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            {memberNames.slice(0, 8).map(n => (
-                              <button key={n} onClick={() => setSecEdit(n)}
-                                style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 600, cursor: "pointer",
-                                  border: `1px solid ${secEdit.trim().toLowerCase() === n.toLowerCase() ? accent : T.cardBorder}`,
-                                  background: secEdit.trim().toLowerCase() === n.toLowerCase() ? accent + "12" : T.card,
-                                  color: secEdit.trim().toLowerCase() === n.toLowerCase() ? accent : T.textMuted }}>{n}</button>
-                            ))}
-                          </div>
-                        )}
+                        {memberNames.length === 0
+                          ? <p style={{ margin: 0, fontSize: 12, color: T.textFaint, fontStyle: "italic" }}>No current members — add members to this club before assigning a secretary.</p>
+                          : <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {memberNames.map(n => (
+                                <button key={n} onClick={() => setSecEdit(n)}
+                                  style={{ padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                    border: `1.5px solid ${secEdit?.trim().toLowerCase() === n.toLowerCase() ? accent : T.cardBorder}`,
+                                    background: secEdit?.trim().toLowerCase() === n.toLowerCase() ? accent + "15" : T.card,
+                                    color: secEdit?.trim().toLowerCase() === n.toLowerCase() ? accent : T.textMuted }}>{n}</button>
+                              ))}
+                            </div>
+                        }
                         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                           {current && (
                             <button onClick={() => { saveSecretary(""); setSecEdit(null); }}
@@ -23005,11 +23623,246 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                           )}
                           <button onClick={() => setSecEdit(null)}
                             style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                          <button onClick={() => { saveSecretary(secEdit); setSecEdit(null); }}
-                            style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: accent, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Save</button>
+                          <button onClick={() => { saveSecretary(secEdit); setSecEdit(null); }} disabled={!secEdit?.trim()}
+                            style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: secEdit?.trim() ? accent : T.cardBorder, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: secEdit?.trim() ? "pointer" : "default" }}>Save</button>
                         </div>
                       </div>
                     )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Club president */}
+            {(() => {
+              const current = (profile.presidentName || "").trim();
+              const savePresident = (name) => {
+                const np = { ...profile, presidentName: (name || "").trim() };
+                setProfile(np); saveClubProfile(getClubId(clubName), np);
+              };
+              const memberNames = Array.from(new Set((currentMembers || []).map(m => (m.name || "").trim()).filter(Boolean)));
+              return (
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
+                  <div style={{ background: "linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)", padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
+                    <i className="ti ti-crown" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>Club president</span>
+                  </div>
+                  <div style={{ padding: "12px 14px" }}>
+                    <p style={{ margin: "0 0 10px", fontSize: 11.5, color: T.textMuted, lineHeight: 1.5 }}>
+                      Who is the president for this club. Setting this grants the President role access to the club dashboard, members, and reports.
+                    </p>
+                    {presEdit === null ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: "50%", flexShrink: 0, background: current ? "#7C3AED18" : T.pageBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <i className={`ti ${current ? "ti-user-check" : "ti-user-question"}`} style={{ fontSize: 18, color: current ? "#7C3AED" : T.textFaint }} aria-hidden="true" />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {current ? <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: T.text }}>{current}</p>
+                                   : <p style={{ margin: 0, fontSize: 13, color: T.textFaint, fontStyle: "italic" }}>No president recorded</p>}
+                        </div>
+                        <button onClick={() => setPresEdit(current)}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+                          <i className="ti ti-pencil" style={{ fontSize: 13 }} aria-hidden="true" />{current ? "Change" : "Set"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {memberNames.length === 0
+                          ? <p style={{ margin: 0, fontSize: 12, color: T.textFaint, fontStyle: "italic" }}>No current members — add members to this club before assigning a president.</p>
+                          : <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {memberNames.map(n => (
+                                <button key={n} onClick={() => setPresEdit(n)}
+                                  style={{ padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                    border: `1.5px solid ${presEdit?.trim().toLowerCase() === n.toLowerCase() ? "#7C3AED" : T.cardBorder}`,
+                                    background: presEdit?.trim().toLowerCase() === n.toLowerCase() ? "#7C3AED15" : T.card,
+                                    color: presEdit?.trim().toLowerCase() === n.toLowerCase() ? "#7C3AED" : T.textMuted }}>{n}</button>
+                              ))}
+                            </div>
+                        }
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          {current && <button onClick={() => { savePresident(""); setPresEdit(null); }}
+                            style={{ marginRight: "auto", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: "#B83232", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Clear</button>}
+                          <button onClick={() => setPresEdit(null)}
+                            style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                          <button onClick={() => { savePresident(presEdit); setPresEdit(null); }} disabled={!presEdit?.trim()}
+                            style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: presEdit?.trim() ? "#7C3AED" : T.cardBorder, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: presEdit?.trim() ? "pointer" : "default" }}>Save</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Club treasurer */}
+            {(() => {
+              const current = (profile.treasurerName || "").trim();
+              const saveTreasurer = (name) => {
+                const np = { ...profile, treasurerName: (name || "").trim() };
+                setProfile(np); saveClubProfile(getClubId(clubName), np);
+              };
+              const memberNames = Array.from(new Set((currentMembers || []).map(m => (m.name || "").trim()).filter(Boolean)));
+              return (
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
+                  <div style={{ background: "linear-gradient(135deg, #CA8A04 0%, #A16207 100%)", padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
+                    <i className="ti ti-coins" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>Club treasurer</span>
+                  </div>
+                  <div style={{ padding: "12px 14px" }}>
+                    <p style={{ margin: "0 0 10px", fontSize: 11.5, color: T.textMuted, lineHeight: 1.5 }}>
+                      Who is the treasurer for this club. Setting this grants the Treasurer role access to the club dashboard and financial overview.
+                    </p>
+                    {treasEdit === null ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: "50%", flexShrink: 0, background: current ? "#CA8A0418" : T.pageBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <i className={`ti ${current ? "ti-user-check" : "ti-user-question"}`} style={{ fontSize: 18, color: current ? "#CA8A04" : T.textFaint }} aria-hidden="true" />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {current ? <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: T.text }}>{current}</p>
+                                   : <p style={{ margin: 0, fontSize: 13, color: T.textFaint, fontStyle: "italic" }}>No treasurer recorded</p>}
+                        </div>
+                        <button onClick={() => setTreasEdit(current)}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+                          <i className="ti ti-pencil" style={{ fontSize: 13 }} aria-hidden="true" />{current ? "Change" : "Set"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {memberNames.length === 0
+                          ? <p style={{ margin: 0, fontSize: 12, color: T.textFaint, fontStyle: "italic" }}>No current members — add members to this club before assigning a treasurer.</p>
+                          : <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {memberNames.map(n => (
+                                <button key={n} onClick={() => setTreasEdit(n)}
+                                  style={{ padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                    border: `1.5px solid ${treasEdit?.trim().toLowerCase() === n.toLowerCase() ? "#CA8A04" : T.cardBorder}`,
+                                    background: treasEdit?.trim().toLowerCase() === n.toLowerCase() ? "#CA8A0415" : T.card,
+                                    color: treasEdit?.trim().toLowerCase() === n.toLowerCase() ? "#CA8A04" : T.textMuted }}>{n}</button>
+                              ))}
+                            </div>
+                        }
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          {current && <button onClick={() => { saveTreasurer(""); setTreasEdit(null); }}
+                            style={{ marginRight: "auto", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: "#B83232", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Clear</button>}
+                          <button onClick={() => setTreasEdit(null)}
+                            style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                          <button onClick={() => { saveTreasurer(treasEdit); setTreasEdit(null); }} disabled={!treasEdit?.trim()}
+                            style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: treasEdit?.trim() ? "#CA8A04" : T.cardBorder, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: treasEdit?.trim() ? "pointer" : "default" }}>Save</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Club captain */}
+            {(() => {
+              const current = (profile.captainName || "").trim();
+              const saveCaptain = (name) => {
+                const np = { ...profile, captainName: (name || "").trim() };
+                setProfile(np); saveClubProfile(getClubId(clubName), np);
+              };
+              const memberNames = Array.from(new Set((currentMembers || []).map(m => (m.name || "").trim()).filter(Boolean)));
+              return (
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
+                  <div style={{ background: "linear-gradient(135deg, #0369A1 0%, #075985 100%)", padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
+                    <i className="ti ti-shield-star" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>Club captain</span>
+                  </div>
+                  <div style={{ padding: "12px 14px" }}>
+                    <p style={{ margin: "0 0 10px", fontSize: 11.5, color: T.textMuted, lineHeight: 1.5 }}>
+                      Who is the captain for this club. Setting this grants the Captain role access to the full members list and competition tools.
+                    </p>
+                    {captEdit === null ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: "50%", flexShrink: 0, background: current ? "#0369A118" : T.pageBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <i className={`ti ${current ? "ti-user-check" : "ti-user-question"}`} style={{ fontSize: 18, color: current ? "#0369A1" : T.textFaint }} aria-hidden="true" />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {current ? <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: T.text }}>{current}</p>
+                                   : <p style={{ margin: 0, fontSize: 13, color: T.textFaint, fontStyle: "italic" }}>No captain recorded</p>}
+                        </div>
+                        <button onClick={() => setCaptEdit(current)}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+                          <i className="ti ti-pencil" style={{ fontSize: 13 }} aria-hidden="true" />{current ? "Change" : "Set"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {memberNames.length === 0
+                          ? <p style={{ margin: 0, fontSize: 12, color: T.textFaint, fontStyle: "italic" }}>No current members — add members to this club before assigning a captain.</p>
+                          : <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {memberNames.map(n => (
+                                <button key={n} onClick={() => setCaptEdit(n)}
+                                  style={{ padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                    border: `1.5px solid ${captEdit?.trim().toLowerCase() === n.toLowerCase() ? "#0369A1" : T.cardBorder}`,
+                                    background: captEdit?.trim().toLowerCase() === n.toLowerCase() ? "#0369A115" : T.card,
+                                    color: captEdit?.trim().toLowerCase() === n.toLowerCase() ? "#0369A1" : T.textMuted }}>{n}</button>
+                              ))}
+                            </div>
+                        }
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          {current && <button onClick={() => { saveCaptain(""); setCaptEdit(null); }}
+                            style={{ marginRight: "auto", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: "#B83232", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Clear</button>}
+                          <button onClick={() => setCaptEdit(null)}
+                            style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                          <button onClick={() => { saveCaptain(captEdit); setCaptEdit(null); }} disabled={!captEdit?.trim()}
+                            style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: captEdit?.trim() ? "#0369A1" : T.cardBorder, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: captEdit?.trim() ? "pointer" : "default" }}>Save</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Committee members */}
+            {(() => {
+              const members = (profile.committeeMembers || []).filter(Boolean);
+              const saveCommittee = (list) => {
+                const np = { ...profile, committeeMembers: list };
+                setProfile(np); saveClubProfile(getClubId(clubName), np);
+              };
+              const memberNames = Array.from(new Set((currentMembers || []).map(m => (m.name || "").trim()).filter(Boolean)));
+              return (
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
+                  <div style={{ background: "linear-gradient(135deg, #475569 0%, #334155 100%)", padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
+                    <i className="ti ti-clipboard-list" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>Committee members</span>
+                  </div>
+                  <div style={{ padding: "12px 14px" }}>
+                    <p style={{ margin: "0 0 10px", fontSize: 11.5, color: T.textMuted, lineHeight: 1.5 }}>
+                      Add all committee members here. They'll appear on the club's About page and get access to the members list.
+                    </p>
+                    {members.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                        {members.map((name, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, background: T.pageBg, border: `1px solid ${T.cardBorder}` }}>
+                            <i className="ti ti-user" style={{ fontSize: 13, color: "#475569", flexShrink: 0 }} aria-hidden="true" />
+                            <span style={{ flex: 1, fontSize: 13, color: T.text, fontWeight: 600 }}>{name}</span>
+                            <button onClick={() => saveCommittee(members.filter((_, j) => j !== i))}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "#B83232", padding: 2, display: "flex", alignItems: "center" }}>
+                              <i className="ti ti-x" style={{ fontSize: 13 }} aria-hidden="true" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {memberNames.length === 0
+                      ? <p style={{ margin: 0, fontSize: 12, color: T.textFaint, fontStyle: "italic" }}>No current members — add members to this club before assigning committee roles.</p>
+                      : (() => {
+                          const available = memberNames.filter(n => !members.includes(n));
+                          return available.length === 0
+                            ? <p style={{ margin: 0, fontSize: 12, color: T.textFaint, fontStyle: "italic" }}>All current members are already on the committee.</p>
+                            : <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                {available.map(n => (
+                                  <button key={n} onClick={() => saveCommittee([...members, n])}
+                                    style={{ padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                      border: `1.5px solid #475569`, background: T.card, color: "#475569" }}>+ {n}</button>
+                                ))}
+                              </div>;
+                        })()
+                    }
                   </div>
                 </div>
               );
@@ -27348,6 +28201,7 @@ function PlayerProfileView({ playerKey, playerName, events, games, onBack, onUpd
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(profile);
   const [clubSearch, setClubSearch] = useState("");
+  const [showPostCircuit, setShowPostCircuit] = useState(false);
 
   function saveProfile(next) {
     setProfile(next);
@@ -27475,10 +28329,21 @@ function PlayerProfileView({ playerKey, playerName, events, games, onBack, onUpd
           {!editing && (
             <div style={{ display: "flex", gap: 6 }}>
               <FollowPlayerBtn playerKey={playerKey} playerName={playerName} />
+              <Btn variant="ghost" size="sm" onClick={() => setShowPostCircuit(true)} title="Post to The Circuit">
+                <i className="ti ti-wave-sine" style={{ color: CIRCUIT_SPARK }} aria-hidden="true" />
+              </Btn>
               <Btn variant="ghost" size="sm" onClick={() => { setDraft({...profile}); setEditing(true); }}>
                 <i className="ti ti-pencil" aria-hidden="true" /> Edit
               </Btn>
             </div>
+          )}
+          {showPostCircuit && (
+            <PostToCircuitSheet
+              entity="player"
+              entityKey={playerKey}
+              name={playerName}
+              onClose={() => setShowPostCircuit(false)}
+            />
           )}
         </div>
 
@@ -36588,6 +37453,97 @@ const CIRCUIT_SEED_GAMES = [
   { key: "gm_semifinal", name: "Surbiton Semi-Final",  type: "game",  color: "#2E6B8E" },
 ];
 
+// ── PostToCircuitSheet ─────────────────────────────────────────────────────────
+// A compact bottom-sheet that lets users post a quick update about a club,
+// player, or event to The Circuit feed.
+function PostToCircuitSheet({ entity, entityKey, name, color, logo, avatar, onClose }) {
+  const [message, setMessage] = React.useState("");
+  const [posted, setPosted] = React.useState(false);
+  const inputRef = React.useRef(null);
+
+  React.useEffect(() => { if (inputRef.current) inputRef.current.focus(); }, []);
+
+  const defaultHeadlines = {
+    club:   "Posted a club update",
+    player: "Added a player update",
+    event:  "Posted an event update",
+  };
+
+  function handlePost() {
+    const headline = message.trim() || defaultHeadlines[entity] || "Posted an update";
+    const icons = { club: "ti-speakerphone", player: "ti-user", event: "ti-calendar-event" };
+    postToCircuit({
+      entity,
+      entityKey: entityKey || name,
+      key: entityKey || name,
+      name,
+      color: color || T.greenMid,
+      logo: logo || null,
+      avatar: avatar || null,
+      type: "notice",
+      icon: icons[entity] || "ti-speakerphone",
+      headline,
+      detail: "",
+    });
+    setPosted(true);
+    setTimeout(onClose, 1200);
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1200, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      {/* Scrim */}
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} onClick={onClose} />
+
+      {/* Sheet */}
+      <div style={{ position: "relative", background: T.card, borderRadius: "18px 18px 0 0", padding: "0 0 env(safe-area-inset-bottom)", boxShadow: "0 -4px 24px rgba(0,0,0,0.18)" }}>
+        {/* Handle */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: T.cardBorder }} />
+        </div>
+
+        <div style={{ padding: "0 1rem 1.25rem" }}>
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <i className="ti ti-wave-sine" style={{ fontSize: 17, color: CIRCUIT_SPARK }} aria-hidden="true" />
+            <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Post to The Circuit</span>
+            <span style={{ marginLeft: "auto", fontSize: 11, color: T.textMuted, fontWeight: 600 }}>{name}</span>
+          </div>
+
+          {posted ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 0", justifyContent: "center" }}>
+              <i className="ti ti-circle-check-filled" style={{ fontSize: 20, color: T.green }} aria-hidden="true" />
+              <span style={{ fontSize: 14, fontWeight: 700, color: T.green }}>Posted to The Circuit</span>
+            </div>
+          ) : (
+            <>
+              <textarea
+                ref={inputRef}
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                placeholder={`What's the update? (optional — leave blank for a default post)`}
+                rows={3}
+                style={{ width: "100%", borderRadius: 10, border: `1.5px solid ${T.cardBorder}`, padding: "10px 12px", fontSize: 13, color: T.text, background: T.bg, resize: "none", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button onClick={onClose}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `1.5px solid ${T.cardBorder}`, background: "none", color: T.textMuted, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+                  Cancel
+                </button>
+                <button onClick={handlePost}
+                  style={{ flex: 2, padding: "10px 0", borderRadius: 10, border: "none", background: CIRCUIT_SPARK, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <i className="ti ti-wave-sine" style={{ fontSize: 14 }} aria-hidden="true" />
+                  Post to Circuit
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function buildCircuitSeedActivity() {
   const now = Date.now(); // ← called fresh each time — not captured at module load
   const h = 3600000, d = 86400000;
@@ -36841,12 +37797,28 @@ function clearCircuitSeedData() {
   } catch {}
 }
 
+// Save a manual post to The Circuit
+function postToCircuit(item) {
+  try {
+    const posts = JSON.parse(localStorage.getItem("circuit_manual_posts") || "[]");
+    posts.unshift({ ...item, ts: Date.now(), _manual: true });
+    // Keep last 100 manual posts
+    localStorage.setItem("circuit_manual_posts", JSON.stringify(posts.slice(0, 100)));
+    // Invalidate the cached unread count so the badge refreshes
+    localStorage.removeItem("circuit_total_unread");
+  } catch {}
+}
+
 // Get activity — merges seeded activity with real follow lists
 function getCircuitActivity(followingPlayers, followingClubs) {
   const now = Date.now();
   // Seeded activity (rich, pre-built)
   let seeded = [];
   try { seeded = JSON.parse(localStorage.getItem("circuit_seed_activity") || "[]"); } catch {}
+
+  // Manual posts from "Post to Circuit" actions
+  let manual = [];
+  try { manual = JSON.parse(localStorage.getItem("circuit_manual_posts") || "[]"); } catch {}
 
   // Real follow activity (sparse — generates one item per followed entity not in seed)
   const seedKeys = new Set([
@@ -36877,9 +37849,8 @@ function getCircuitActivity(followingPlayers, followingClubs) {
       detail: "", ts: now - Math.random() * 1.8e6 });
   });
 
-  // Merge and sort
-  const all = [...seeded, ...real];
-  // Add synthetic event/game nodes from seed activity (so they show as nodes on the track)
+  // Merge and sort (manual posts take priority over seed/real for same entity)
+  const all = [...manual, ...seeded, ...real];
   return all.sort((a, b) => b.ts - a.ts);
 }
 
@@ -37838,10 +38809,19 @@ function CircuitView({ onBack, onNavigate }) {
               const latestSignal = nodeSignals.length ? nodeSignals[0] : null;
               const nodeColor = selectedNode.color || T.greenMid;
               const isClubNode = selectedNode.entity === "club";
+              const isEventNode = selectedNode.entity === "event";
+              const selectedTrackColor = { player: TRACK_COLORS.people, club: TRACK_COLORS.clubs, event: TRACK_COLORS.events, game: TRACK_COLORS.games }[selectedNode.entity] || T.greenMid;
+              const selectedNavPayload = isEventNode
+                ? { eventId: selectedNode.key }
+                : isClubNode
+                  ? { clubName: selectedNode.name }
+                  : selectedNode.entity === "game"
+                    ? { dest: "directory" }
+                    : { dest: "directory", playerKey: selectedNode.key };
               return (
-                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", marginBottom: 10 }}>
-                  {/* Dark green header — entity identity */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: T.green }}>
+                <div style={{ background: T.card, border: `1px solid ${selectedTrackColor}`, borderRadius: 12, overflow: "hidden", marginBottom: 10 }}>
+                  {/* Category-colour header — entity identity */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: selectedTrackColor }}>
                     {/* Avatar matches node shape */}
                     {(() => {
                       const e = selectedNode.entity;
@@ -37874,6 +38854,10 @@ function CircuitView({ onBack, onNavigate }) {
                         ? <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.04em", flexShrink: 0 }}>Member</span>
                         : <UnfollowButton node={selectedNode} onUnfollow={unfollowNode} />;
                     })()}
+                    <button onClick={() => onNavigate(selectedNavPayload)}
+                      style={{ background: "none", border: "none", color: "rgba(255,255,255,0.7)", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: "0 2px", flexShrink: 0, display: "flex", alignItems: "center" }} aria-label={`Go to ${selectedNode.name}`}>
+                      <i className="ti ti-arrow-right" />
+                    </button>
                     <button onClick={() => setSelected(null)}
                       style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 2px", flexShrink: 0 }} aria-label="Clear filter">×</button>
                   </div>
@@ -37958,20 +38942,29 @@ function CircuitView({ onBack, onNavigate }) {
 
                     const cardTrackColor = { player: TRACK_COLORS.people, club: TRACK_COLORS.clubs, event: TRACK_COLORS.events, game: TRACK_COLORS.games }[group.entity] || T.greenMid;
                     return (
-                      <div key={group.key} style={{ background: T.card, border: `1px solid ${cardTrackColor}33`, borderRadius: 12, overflow: "hidden", animation: "circuit-fade-up 0.25s ease", animationFillMode: "both", animationDelay: `${gi * 0.05}s` }}>
-                        {/* When showing all (no filter), show a slim entity label at top of each group */}
+                      <div key={group.key} style={{ background: T.card, border: `1px solid ${cardTrackColor}`, borderRadius: 12, overflow: "hidden", animation: "circuit-fade-up 0.25s ease", animationFillMode: "both", animationDelay: `${gi * 0.05}s` }}>
+                        {/* When showing all (no filter), show a solid-colour entity header at top of each group */}
                         {!selected && (() => {
                           const trackColor = { player: TRACK_COLORS.people, club: TRACK_COLORS.clubs, event: TRACK_COLORS.events, game: TRACK_COLORS.games }[group.entity] || T.greenMid;
+                          const navPayload = isEvent
+                            ? { eventId: group.key }
+                            : isClub
+                              ? { clubName: group.name }
+                              : isGame
+                                ? { dest: "directory" }
+                                : { dest: "directory", playerKey: group.key };
                           return (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px 7px", borderBottom: `1px solid ${trackColor}33`, background: trackColor + "18" }}>
-                            <span style={{ width: 18, height: 18, borderRadius: isClub ? 4 : "50%", background: nodeColor, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+                          <button onClick={() => onNavigate(navPayload)}
+                            style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px 7px", width: "100%", border: "none", borderBottom: `1px solid rgba(0,0,0,0.12)`, background: trackColor, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
+                            <span style={{ width: 18, height: 18, borderRadius: isClub ? 4 : "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
                               {isClub && group.logo
                                 ? <img src={group.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", padding: 2 }} />
                                 : <span style={{ fontSize: 7.5, fontWeight: 800, color: "#fff" }}>{initials}</span>}
                             </span>
-                            <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{group.name}</span>
-                            <span style={{ fontSize: 10, color: T.textFaint }}>{group.signals.length}</span>
-                          </div>
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: "#fff", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{group.name}</span>
+                            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.65)" }}>{group.signals.length}</span>
+                            <i className="ti ti-chevron-right" style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", flexShrink: 0 }} />
+                          </button>
                           );
                         })()}
 
@@ -38202,7 +39195,10 @@ function CircuitStripCard({ onClick }) {
       </svg>
 
       {/* Title row */}
-      <span style={{ fontSize: 12, fontWeight: 700, color: T.text, lineHeight: 1.3, position: "relative" }}>The Circuit</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: T.text, lineHeight: 1.3, position: "relative", display: "flex", alignItems: "center", gap: 5 }}>
+        <i className="ti ti-wave-sine" style={{ fontSize: 14, color: CIRCUIT_SPARK }} aria-hidden="true" />
+        The Circuit
+      </span>
 
       {/* Subtitle + badge inline */}
       <span style={{ fontSize: 11, color: "#9A8040", lineHeight: 1.3, position: "relative", display: "flex", alignItems: "center", gap: 5 }}>
