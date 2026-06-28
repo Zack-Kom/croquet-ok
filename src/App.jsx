@@ -1321,7 +1321,7 @@ const ROLE_DEFS = [
     ],
   },
   {
-    id: "coach", label: "Coach", short: "Coach", icon: "ti-whistle",
+    id: "coach", label: "Coach", short: "Coach", icon: "ti-school",
     color: "#2563EB", free: false, tagline: "Develop your players between sessions",
     benefits: [
       "Track every player's practice, drills and handicap arc in one place",
@@ -4912,71 +4912,59 @@ function App() {
                   variantFilter={variantFilter} setVariantFilter={setVariantFilter}
                   listView={listView} setListView={setListView}
                   dateFilter={dateFilter} setDateFilter={setDateFilter}
+                  gameFocus={gameFocus} setGameFocus={setGameFocus}
+                  gameWhen={gameWhen} setGameWhen={setGameWhen}
                   triggerOnly
                 />
               }
             />
 
-            {/* Focus pills — two rows, grouped by purpose */}
+            {/* ── Single smart filter row ── */}
             {(() => {
               const _myHomeClubName = (() => { try { return (JSON.parse(localStorage.getItem("playerProfile___me__") || "{}").clubs || [])[0] || null; } catch { return null; } })();
               const _myName = (() => { try { return (JSON.parse(localStorage.getItem("playerProfile___me__") || "{}").name || "").trim(); } catch { return ""; } })();
 
-              // Row 1: Who/What (identity + type)
-              const WHO_PILLS = [
-                { id: "all",     label: "All",         icon: null },
-                ...(_myHomeClubName ? [{ id: "club",    label: shortClubName(_myHomeClubName), icon: "ti-building-pavilion" }] : []),
-                ...(_myName     ? [{ id: "me",     label: "My Games",    icon: "ti-user" }] : []),
-                { id: "starred", label: "Starred",     icon: "ti-star" },
-                { id: "event",   label: "In an Event", icon: "ti-trophy" },
-                { id: "ac",      label: "AC",           icon: null },
-                { id: "gc",      label: "GC",           icon: null },
-              ];
-              // Row 2: When (temporal — mutually exclusive)
-              const WHEN_PILLS = [
-                { id: "anytime",  label: "Any time",  icon: null },
-                { id: "today",    label: "Today",     icon: "ti-sun" },
-                { id: "live",     label: "Live",      icon: "ti-radio" },
-                { id: "upcoming", label: "Upcoming",  icon: "ti-calendar" },
-                { id: "recent",   label: "Recent",    icon: "ti-clock" },
-                { id: "finished", label: "Finished",  icon: "ti-flag-check" },
+              // Each pill sets a (focus, when) pair atomically — scope + time in one tap.
+              // AC/GC shortcuts are kept here as they're the most-used refinements.
+              // Starred / In-an-Event / Finished / date ranges live in the FilterBar (⊞).
+              const PILLS = [
+                { id: "all",      label: "All",      icon: null,                   focus: "all",  when: "anytime"  },
+                { id: "live",     label: "Live",     icon: "ti-radio",             focus: "all",  when: "live"     },
+                { id: "upcoming", label: "Upcoming", icon: "ti-calendar",          focus: "all",  when: "upcoming" },
+                ...(_myHomeClubName ? [{ id: "club", label: shortClubName(_myHomeClubName), icon: "ti-building-pavilion", focus: "club", when: "anytime" }] : []),
+                ...(_myName        ? [{ id: "me",   label: "My Games", icon: "ti-user",             focus: "me",   when: "anytime" }] : []),
+                { id: "ac",       label: "AC",       icon: null,                   focus: "ac",   when: "anytime"  },
+                { id: "gc",       label: "GC",       icon: null,                   focus: "gc",   when: "anytime"  },
               ];
 
-              const isFiltered = gameFocus !== "all" || gameWhen !== "anytime";
+              // Active pill = exact (focus, when) match; fall back to "all"
+              const activePillId = (PILLS.find(p => p.focus === gameFocus && p.when === gameWhen) || PILLS[0]).id;
 
-              function setWho(id) {
-                setGameFocus(id);
-                if (id === "ac") setVariantFilter("AC");
-                else if (id === "gc") setVariantFilter("GC");
-                else setVariantFilter("all");
-                if (id !== "ac" && id !== "gc") setStatusFilter("all");
-              }
-              function setWhen(id) {
-                setGameWhen(id);
-                if (id === "today")    setDateFilter("today");
-                else if (id === "live")     { setStatusFilter("live"); setDateFilter("all"); }
-                else if (id === "finished") { setStatusFilter("finished"); setDateFilter("all"); }
-                else { setStatusFilter("all"); setDateFilter("all"); }
-              }
-
-              function Pill({ p, active, onClick }) {
-                return (
-                  <button onClick={onClick}
-                    style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 11px", borderRadius: 20, border: `1.5px solid ${active ? T.green : T.cardBorder}`, background: active ? T.green : T.card, color: active ? "#fff" : T.textMuted, fontSize: 11.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0, transition: "all 0.15s" }}>
-                    {p.icon && <i className={`ti ${p.icon}`} style={{ fontSize: 10 }} aria-hidden="true" />}
-                    {p.label}
-                  </button>
-                );
+              function applyPill(p) {
+                setGameFocus(p.focus);
+                setGameWhen(p.when);
+                // keep derived state in sync
+                if (p.focus === "ac")       setVariantFilter("AC");
+                else if (p.focus === "gc")  setVariantFilter("GC");
+                else                        setVariantFilter("all");
+                if (p.when === "live")      setStatusFilter("live");
+                else if (p.when === "finished") setStatusFilter("finished");
+                else                        setStatusFilter("all");
+                setDateFilter(p.when === "today" ? "today" : "all");
               }
 
               return (
-                <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 4 }}>
-                  <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", paddingBottom: 1 }}>
-                    {WHO_PILLS.map(p => <Pill key={p.id} p={p} active={gameFocus === p.id} onClick={() => setWho(p.id)} />)}
-                  </div>
-                  <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", paddingBottom: 1 }}>
-                    {WHEN_PILLS.map(p => <Pill key={p.id} p={p} active={gameWhen === p.id} onClick={() => setWhen(p.id)} />)}
-                  </div>
+                <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", paddingBottom: 2, marginBottom: 6 }}>
+                  {PILLS.map(p => {
+                    const active = activePillId === p.id;
+                    return (
+                      <button key={p.id} onClick={() => applyPill(p)}
+                        style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 13px", borderRadius: 20, border: `1.5px solid ${active ? T.green : T.cardBorder}`, background: active ? T.green : T.card, color: active ? "#fff" : T.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0, transition: "background 0.13s, border-color 0.13s, color 0.13s" }}>
+                        {p.icon && <i className={`ti ${p.icon}`} style={{ fontSize: 11 }} aria-hidden="true" />}
+                        {p.label}
+                      </button>
+                    );
+                  })}
                 </div>
               );
             })()}
@@ -14682,7 +14670,7 @@ const PRACTICE_SESSION_TYPES = [
     desc: "A block you schedule for yourself." },
   { id: "group",    label: "Group session",  short: "Group",    icon: "ti-users",        color: "#5A6B8E",
     desc: "Practise with other players — a squad prepping together." },
-  { id: "assigned", label: "Coach-assigned", short: "Assigned", icon: "ti-whistle",      color: "#2563EB",
+  { id: "assigned", label: "Coach-assigned", short: "Assigned", icon: "ti-school",      color: "#2563EB",
     desc: "Set by your coach to complete when you find time." },
   { id: "adhoc",    label: "Practice now",   short: "Now",      icon: "ti-player-play",  color: "#7A4F00",
     desc: "Jump straight in — no schedule." },
@@ -14799,7 +14787,84 @@ const SQUAD_KINDS = [
 
 const SQUAD_ROLES = ["Member", "Captain", "Vice-Captain", "Manager", "Selector", "Coach"];
 
-const SQUAD_LOGOS = ["🏑", "🏆", "🎯", "🛡️", "⭐", "🌱", "🚩", "🎉", "✈️", "📋", "🦔", "🔥"];
+const EMOJI_CATS = [
+  { id: "sport",  label: "Sport",       icon: "ti-ball-football",  emojis: ["🏑","🏅","🏆","🥇","🥈","🥉","🎯","⛳","🎱","🏓","🏸","🥊","🤸","🚴","🏊","🧗","🤼","🏋","⚽","🏀","🎽","👟","🦺","🏐","🎾"] },
+  { id: "team",   label: "Team",        icon: "ti-users",          emojis: ["🛡️","🚩","⭐","🌟","💫","🔥","⚡","💥","🎖","🏵","🎗","✅","💪","👊","🤝","🙌","👏","🫱","🫶","❤️","🧡","💛","💚","💙","💜"] },
+  { id: "nature", label: "Nature",      icon: "ti-leaf",           emojis: ["🌱","🌿","🍀","🌾","🌻","🌸","🌺","🌹","🍁","🍂","🌲","🌳","🌴","🌵","🪴","🌊","🌙","☀️","⛅","🌈","🌍","🌏","⛰","🦔","🦁"] },
+  { id: "people", label: "People",      icon: "ti-user",           emojis: ["😊","😎","🤩","😄","😂","🥳","😤","🧠","👀","👋","✌️","🤟","👍","👎","🙏","💪","🤔","😏","🥹","😇","🤓","😈","👾","🤖","👑"] },
+  { id: "object", label: "Objects",     icon: "ti-bulb",           emojis: ["🎉","🎊","🎁","🪅","🎈","🎵","🎶","🎸","🎺","🥁","📯","🏠","🏡","🏰","🗺","📋","📌","📍","🔖","📎","✉️","📣","📢","🔔","🏳"] },
+  { id: "food",   label: "Food & Fun",  icon: "ti-coffee",         emojis: ["☕","🍵","🧋","🍺","🥂","🍾","🎂","🍰","🧁","🍫","🍬","🍭","🍕","🥗","🥘","🫕","🍣","🌮","🍔","🥪","🥜","🫐","🍇","🍓","🍊"] },
+];
+const ALL_EMOJIS = EMOJI_CATS.flatMap(c => c.emojis);
+
+function EmojiPicker({ value, onChange }) {
+  const [open, setOpen]     = React.useState(false);
+  const [cat, setCat]       = React.useState("sport");
+  const [search, setSearch] = React.useState("");
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const displayed = search.trim()
+    ? ALL_EMOJIS.filter(e => e.includes(search.trim()))
+    : (EMOJI_CATS.find(c => c.id === cat)?.emojis || []);
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      {/* Trigger button */}
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{ width: 52, height: 52, fontSize: 26, borderRadius: 12, cursor: "pointer", border: `1.5px solid ${open ? T.green : T.cardBorder}`, background: value ? T.greenPale : T.card, display: "flex", alignItems: "center", justifyContent: "center", transition: "border-color 0.15s" }}
+        title="Choose emoji">
+        {value || <i className="ti ti-mood-smile" style={{ fontSize: 22, color: T.textFaint }} />}
+      </button>
+
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 400, background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 14, boxShadow: "0 8px 28px rgba(0,0,0,0.18)", width: 280, overflow: "hidden" }}>
+          {/* Search */}
+          <div style={{ padding: "8px 8px 0" }}>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search…" autoFocus
+              style={{ width: "100%", boxSizing: "border-box", padding: "7px 10px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.pageBg, fontSize: 13, color: T.text, outline: "none" }} />
+          </div>
+
+          {/* Category tabs */}
+          {!search.trim() && (
+            <div style={{ display: "flex", gap: 2, padding: "6px 8px 4px", overflowX: "auto" }}>
+              {EMOJI_CATS.map(c => (
+                <button key={c.id} onClick={() => setCat(c.id)} type="button"
+                  style={{ flexShrink: 0, padding: "4px 8px", borderRadius: 7, border: "none", cursor: "pointer", background: cat === c.id ? T.green + "18" : "transparent", color: cat === c.id ? T.green : T.textFaint, fontSize: 11, fontWeight: cat === c.id ? 700 : 500, display: "flex", alignItems: "center", gap: 4 }}>
+                  <i className={`ti ${c.icon}`} style={{ fontSize: 13 }} />
+                  <span>{c.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 2, padding: "4px 8px 8px", maxHeight: 180, overflowY: "auto" }}>
+            {displayed.map(emo => (
+              <button key={emo} type="button" onClick={() => { onChange(emo === value ? "" : emo); setOpen(false); setSearch(""); }}
+                style={{ width: "100%", aspectRatio: "1", fontSize: 20, border: "none", borderRadius: 7, cursor: "pointer", background: emo === value ? T.green + "22" : "transparent", outline: emo === value ? `2px solid ${T.green}` : "none", display: "flex", alignItems: "center", justifyContent: "center" }}
+                title={emo}>
+                {emo}
+              </button>
+            ))}
+            {displayed.length === 0 && (
+              <span style={{ gridColumn: "1/-1", textAlign: "center", fontSize: 12, color: T.textFaint, padding: "16px 0" }}>No match</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SQUAD_LOGOS = ["🏑","🏆","🎯","🛡️","⭐","🌱","🚩","🎉","✈️","📋","🦔","🔥"];
 
 // Derive a group's lifecycle status from its dates.
 // Returns one of: "upcoming" | "active" | "ended" (ended ⇒ read-only).
@@ -15151,19 +15216,19 @@ function SquadView({ onBack }) {
           <textarea value={sq.description || ""} onChange={e => setEditingSquad({ ...sq, description: e.target.value })}
             placeholder="What this group is about, who it's for…" rows={3} style={{ ...SQUAD_INPUT, resize: "vertical" }} />
 
-          <label style={SQUAD_LBL}>Icon / logo</label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-            {SQUAD_LOGOS.map(emo => {
-              const on = (sq.logo || "") === emo;
-              return (
-                <button key={emo} onClick={() => setEditingSquad({ ...sq, logo: on ? "" : emo })}
-                  style={{ width: 44, height: 44, fontSize: 22, borderRadius: 10, cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: on ? T.greenPale : T.card, border: `1.5px solid ${on ? T.green : T.cardBorder}` }}>
-                  {emo}
-                </button>
-              );
-            })}
+          <label style={SQUAD_LBL}>Emoji</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <EmojiPicker value={sq.logo || ""} onChange={emo => setEditingSquad({ ...sq, logo: emo })} />
+            {sq.logo && (
+              <span style={{ fontSize: 12, color: T.textMuted }}>
+                Tap the emoji to change, or tap it again to clear.
+              </span>
+            )}
+            {!sq.logo && (
+              <span style={{ fontSize: 12, color: T.textFaint }}>
+                Pick an emoji to represent this group.
+              </span>
+            )}
           </div>
 
           <label style={SQUAD_LBL}>Visibility</label>
@@ -16080,7 +16145,7 @@ function PracticePage({ data, isCoach, onPlan, onOpen, onEdit, onStatus, onDelet
           typeCard("solo"),
           ...(isCoach ? [typeCard("assigned")] : []),
           {
-            icon: "ti-whistle",
+            icon: "ti-school",
             label: "Ask my coach",
             urgent: false, color: "#2563EB",
             onClick: openAsk,
@@ -16792,7 +16857,7 @@ function SearchBar({ value, onChange, placeholder = "Search…", trailing = null
   );
 }
 
-function FilterBar({ statusFilter, setStatusFilter, variantFilter, setVariantFilter, listView, setListView, dateFilter, setDateFilter, onNewGame, triggerOnly = false }) {
+function FilterBar({ statusFilter, setStatusFilter, variantFilter, setVariantFilter, listView, setListView, dateFilter, setDateFilter, gameFocus, setGameFocus, gameWhen, setGameWhen, onNewGame, triggerOnly = false }) {
   const [panelOpen, setPanelOpen] = React.useState(false);
   const panelRef = React.useRef(null);
 
@@ -16804,7 +16869,9 @@ function FilterBar({ statusFilter, setStatusFilter, variantFilter, setVariantFil
     return () => { document.removeEventListener("mousedown", handle); document.removeEventListener("touchstart", handle); };
   }, [panelOpen]);
 
-  const activeCount = (statusFilter !== "all" ? 1 : 0) + (variantFilter !== "all" ? 1 : 0) + (listView !== "info" ? 1 : 0) + (dateFilter !== "all" ? 1 : 0);
+  const scopeFocus = gameFocus || "all";
+  const scopeWhen  = gameWhen  || "anytime";
+  const activeCount = (statusFilter !== "all" ? 1 : 0) + (variantFilter !== "all" ? 1 : 0) + (listView !== "info" ? 1 : 0) + (dateFilter !== "all" ? 1 : 0) + (["starred","event"].includes(scopeFocus) ? 1 : 0) + (["finished","recent"].includes(scopeWhen) ? 1 : 0);
   const statusLabel  = { all: "All games", live: "Live", finished: "Finished" };
   const variantLabel = { all: "AC & GC", AC: "AC only", GC: "GC only" };
   const viewLabel    = { info: "Normal", flow: "Flow", compact: "Compact" };
@@ -16812,13 +16879,13 @@ function FilterBar({ statusFilter, setStatusFilter, variantFilter, setVariantFil
 
   function Row({ label, options, value, set }) {
     return (
-      <div style={{ borderBottom: `1px solid ${T.cardBorder}`, paddingBottom: 12, marginBottom: 12 }}>
-        <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</p>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <div style={{ borderBottom: `1px solid ${T.cardBorder}`, paddingBottom: 8, marginBottom: 8 }}>
+        <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</p>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {options.map(opt => (
             <button key={opt.value} onClick={() => set(opt.value)}
               style={{
-                fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 20, cursor: "pointer",
+                fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit",
                 background: value === opt.value ? T.green : "transparent",
                 border: `1.5px solid ${value === opt.value ? T.green : T.cardBorder}`,
                 color: value === opt.value ? "#fff" : T.textMuted,
@@ -16857,10 +16924,22 @@ function FilterBar({ statusFilter, setStatusFilter, variantFilter, setVariantFil
       {panelOpen && (
         <div style={{
           position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 300,
-          background: T.card, borderRadius: 12, padding: "1rem 1.25rem",
+          background: T.card, borderRadius: 12, padding: "10px 14px",
           boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)",
-          border: `1px solid ${T.cardBorder}`, width: "min(320px, calc(100vw - 2rem))",
+          border: `1px solid ${T.cardBorder}`, width: "min(280px, calc(100vw - 2rem))",
         }}>
+          {setGameFocus && <Row label="Scope" value={scopeFocus} set={v => { if (setGameFocus) { setGameFocus(v); if (setGameWhen) setGameWhen("anytime"); } }}
+            options={[
+              { value: "all",     label: "All" },
+              { value: "starred", label: "Starred" },
+              { value: "event",   label: "In an Event" },
+            ]} />}
+          {setGameWhen && <Row label="Time" value={scopeWhen} set={v => { if (setGameWhen) { setGameWhen(v); if (v === "finished") setStatusFilter("finished"); else if (v === "anytime") setStatusFilter("all"); } }}
+            options={[
+              { value: "anytime",  label: "Any time" },
+              { value: "recent",   label: "Recent" },
+              { value: "finished", label: "Finished" },
+            ]} />}
           <Row label="Status" value={statusFilter} set={v => { setStatusFilter(v); }}
             options={[
               { value: "all",      label: "All" },
@@ -17028,7 +17107,7 @@ const OFFICER_BADGES = [
   { code: "Sec",     label: "Secretary",  icon: "ti-id-badge-2" },
   { code: "Treas",   label: "Treasurer",  icon: "ti-coins" },
   { code: "Captain", label: "Captain",    icon: "ti-star" },
-  { code: "Coach",   label: "Coach",      icon: "ti-whistle" },
+  { code: "Coach",   label: "Coach",      icon: "ti-school" },
 ];
 function officerMeta(code) { return OFFICER_BADGES.find(b => b.code === code) || null; }
 // The "primary" (most senior) title a member holds, used for the medallion.
@@ -17395,7 +17474,7 @@ function MemberAvatar({ name, avatar, accent, titles = [], years = null, size = 
   );
 }
 
-function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHours = 4, meId, meName, baseOrganiser, canManageManagers, venue, games, onOpenGame, onStartStructured }) {
+function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHours = 4, meId, meName, baseOrganiser, canManageManagers, venue, games, onOpenGame, onStartStructured, onViewMember }) {
   const wide = useWideLayout();
   // Panel collapse state — persisted so the board remembers between reloads
   const [collapsed, setCollapsed] = React.useState(() => {
@@ -18811,6 +18890,14 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
                       </div>
                     </div>
                   )}
+                  {onViewMember && !isMe && (
+                    <button onClick={() => { setProfileModal(null); onViewMember({ key: pid.replace(/^playerProfile_/, ""), name }); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "10px", borderRadius: 10, border: `1px solid ${accent}44`, background: accent + "0d", color: accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 8 }}>
+                      <i className="ti ti-user-circle" style={{ fontSize: 15 }} aria-hidden="true" />
+                      View full profile
+                      <i className="ti ti-chevron-right" style={{ fontSize: 13 }} aria-hidden="true" />
+                    </button>
+                  )}
                   {isOrganiser && livePlayer && !isMe && (
                     <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                       <button onClick={() => { toggleRest(livePlayer.id); setProfileModal(null); }}
@@ -19211,7 +19298,15 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
       return clubs.some(c => (typeof c === "string" ? c : c.name) === clubName);
     } catch { return false; }
   });
+  // True when this club is the user's own club (member/home) — cannot be unfollowed.
+  const isMemberClub = React.useMemo(() => {
+    try {
+      const me = JSON.parse(localStorage.getItem("playerProfile___me__") || "{}");
+      return (me.clubs || []).includes(clubName);
+    } catch { return false; }
+  }, [clubName]);
   function toggleFollow() {
+    if (isMemberClub && isFollowing) return; // membership pins the follow
     try {
       const clubs = JSON.parse(localStorage.getItem("following_clubs") || "[]");
       const updated = isFollowing
@@ -19622,21 +19717,26 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
     { value: "gc", label: "Golf Croquet" },
     { value: "both", label: "Both AC & GC" },
   ];
-  const TABS = [
-    // ── Public-facing core ────────────────────────────────────────────────────
-    { id: "about",    label: "About",       icon: "ti-info-circle" },
-    ...(isClubSecretary || profile.bookingsPageEnabled ? [{ id: "bookings", label: "Event Hire", icon: "ti-calendar-star" }] : []),
-    { id: "schedule", label: "Calendar",    icon: "ti-calendar-week" },
-    { id: "members",  label: "Members",     icon: "ti-users" },
-    // ── Members only ──────────────────────────────────────────────────────────
-    ...(isClubMember ? [{ id: "live",      label: "Live",       icon: "ti-broadcast" }] : []),
-    ...(isClubMember ? [{ id: "volunteer", label: "Volunteer",  icon: "ti-hand-stop" }] : []),
-    ...((isClubMember && (clubGradeConfig(profile).enabled || isClubSecretary)) ? [{ id: "grade",  label: "Club Grade", icon: "ti-trophy" }] : []),
-    ...((isClubMember && (ladderState(profile).config.enabled || isClubSecretary)) ? [{ id: "ladder", label: "Ladder",     icon: "ti-stairs-up" }] : []),
-    ...(isClubMember ? [{ id: "policies",  label: "Policies",   icon: "ti-file-text" }] : []),
-    // ── Secretary only ────────────────────────────────────────────────────────
+  const TABS = isClubMember ? [
+    // ── Member view: Live first, then core, then deeper features ─────────────
+    { id: "live",      label: "Live",       icon: "ti-broadcast" },
+    { id: "schedule",  label: "Calendar",   icon: "ti-calendar-week" },
+    { id: "members",   label: "Members",    icon: "ti-users" },
+    { id: "volunteer", label: "Volunteer",  icon: "ti-hand-stop" },
+    { id: "policies",  label: "Policies",   icon: "ti-file-text" },
+    { id: "about",     label: "About",      icon: "ti-info-circle" },
+    ...((clubGradeConfig(profile).enabled || isClubSecretary) ? [{ id: "grade",  label: "Club Grade", icon: "ti-trophy" }] : []),
+    ...((ladderState(profile).config.enabled || isClubSecretary) ? [{ id: "ladder", label: "Ladder",     icon: "ti-stairs-up" }] : []),
+    // Secretary extras
+    ...(isClubSecretary ? [{ id: "bookings", label: "Event Hire", icon: "ti-calendar-star" }] : []),
     ...(isClubSecretary ? [{ id: "lawns",    label: "Lawns",      icon: "ti-layout-grid" }] : []),
     ...(isClubSecretary ? [{ id: "checkins", label: "Check-Ins",  icon: "ti-map-pin" }] : []),
+  ] : [
+    // ── Visitor view: public-facing only ─────────────────────────────────────
+    { id: "about",    label: "About",    icon: "ti-info-circle" },
+    { id: "schedule", label: "Calendar", icon: "ti-calendar-week" },
+    { id: "members",  label: "Members",  icon: "ti-users" },
+    ...(profile.bookingsPageEnabled ? [{ id: "bookings", label: "Event Hire", icon: "ti-calendar-star" }] : []),
   ];
   // Work Log and Admin now live in the secretary area (rendered here only when a
   // parent locks the view to that tab via lockTab); they're no longer in the club
@@ -19646,8 +19746,8 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
   // is locked to a specific tab (secretary Work Log / Admin), in which case keep it.
   React.useEffect(() => {
     if (lockTab) return;
-    if (!TABS.some(t => t.id === tab)) setTab("about");
-  }, [tab, profile.bookingsPageEnabled, lockTab, isClubSecretary]);
+    if (!TABS.some(t => t.id === tab)) setTab(isClubMember ? "live" : "about");
+  }, [tab, profile.bookingsPageEnabled, lockTab, isClubSecretary, isClubMember]);
 
   // ── Unregistered club: show a calm stub instead of the full experience ──
   // The club can be linked as a home club, but it isn't on Croquet OK yet, so
@@ -19840,9 +19940,13 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
             <div style={{ flex: 1, minWidth: 0 }} />
             {!editing && (
               <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                <button onClick={toggleFollow} aria-label={isFollowing ? "Following" : "Follow"} title={isFollowing ? "Following" : "Follow"}
-                  style={{ background: isFollowing ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.14)", border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 8, padding: "7px 9px", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <button onClick={toggleFollow}
+                  aria-label={isMemberClub ? "Your club — always following" : isFollowing ? "Unfollow" : "Follow"}
+                  title={isMemberClub ? "You're a member — this club is always in your circuit" : isFollowing ? "Unfollow" : "Follow"}
+                  disabled={isMemberClub}
+                  style={{ background: isFollowing ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.14)", border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 8, padding: "7px 9px", color: "#fff", cursor: isMemberClub ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
                   <i className={`ti ${isFollowing ? "ti-star-filled" : "ti-star"}`} style={{ fontSize: 16, color: isFollowing ? "#FFD700" : "#fff" }} aria-hidden="true" />
+                  {isMemberClub && <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.8)", letterSpacing: "0.04em" }}>Member</span>}
                 </button>
               </div>
             )}
@@ -22354,6 +22458,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 games={games}
                 onOpenGame={onOpenGame}
                 onStartStructured={() => { if (onNewEvent) onNewEvent(clubName, presentPlayers.map(p => p.name)); }}
+                onViewMember={({ key, name }) => setProfileView({ key, name })}
               />
               )}
 
@@ -22381,6 +22486,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                   games={games}
                   onOpenGame={onOpenGame}
                   onStartStructured={() => { if (onNewEvent) onNewEvent(clubName, presentPlayers.map(p => p.name)); }}
+                  onViewMember={({ key, name }) => setProfileView({ key, name })}
                 />
               </div>
             )}
@@ -26837,7 +26943,7 @@ function ClubsView({ onBack, events, games, initialClub = null, onSelectEvent, o
     const codeChips = d.codes.slice(0, 2);
 
     return (
-      <button onClick={() => { setOpenedFromList(true); setActiveClub(club); }}
+      <button onClick={() => { setOpenedFromList(true); setActiveClub(club); if (onDetailOpenChange) onDetailOpenChange(true); }}
         style={{
           background: isHome ? "linear-gradient(135deg, #2C4A35 0%, #1A3825 100%)" : T.card,
           border: isHome ? "1px solid #1A3825" : `1px solid ${reg ? accent + "33" : T.cardBorder}`,
@@ -26956,7 +27062,7 @@ function ClubsView({ onBack, events, games, initialClub = null, onSelectEvent, o
   const hiddenCount = showingAll ? filtered.length - MAX_UNFILTERED : 0;
 
   if (activeClub) {
-    const backToList = () => { setActiveClub(null); setOpenedFromList(false); };
+    const backToList = () => { setActiveClub(null); setOpenedFromList(false); if (onDetailOpenChange) onDetailOpenChange(false); };
     return <ClubDetailView clubName={activeClub} onBack={openedFromList ? backToList : onBack} events={events} games={games} onSelectEvent={onSelectEvent} onNewEvent={onNewEvent} onOpenGame={onOpenGame} />;
   }
 
@@ -28929,6 +29035,7 @@ function MyProfileView({ events, games, onBack, onPractice, onSelectEvent, darkM
                       </p>
                       {followingClubs.map((c, i) => {
                         const clubName = typeof c === "string" ? c : c.name;
+                        const isMember = (() => { try { return (JSON.parse(localStorage.getItem("playerProfile___me__") || "{}").clubs || []).includes(clubName); } catch { return false; } })();
                         const initials = clubName.replace(/\s+Croquet\s+Club$/i, "").trim().split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
                         return (
                           <div key={clubName || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderBottom: i < followingClubs.length - 1 ? `1px solid ${T.cardBorder}` : "none" }}>
@@ -28937,12 +29044,14 @@ function MyProfileView({ events, games, onBack, onPractice, onSelectEvent, darkM
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: T.text }}>{clubName}</p>
-                              <p style={{ margin: "1px 0 0", fontSize: 11, color: T.textFaint }}>Events &amp; activity</p>
+                              <p style={{ margin: "1px 0 0", fontSize: 11, color: T.textFaint }}>{isMember ? "Your club · always following" : "Events & activity"}</p>
                             </div>
-                            <UnfollowBtn onUnfollow={() => {
+                            {isMember
+                              ? <i className="ti ti-shield-check" style={{ fontSize: 14, color: T.greenMid, flexShrink: 0 }} title="Member club — cannot unfollow" aria-hidden="true" />
+                              : <UnfollowBtn onUnfollow={() => {
                               const next = followingClubs.filter((_, idx) => idx !== i);
                               try { localStorage.setItem("following_clubs", JSON.stringify(next)); } catch {}
-                            }} />
+                            }} />}
                           </div>
                         );
                       })}
@@ -29376,7 +29485,7 @@ function DirectoryView({ tab, onTabChange, onBack, events, games, initialClub, o
   const TABS = [
     { id: "clubs",        label: "Clubs",        icon: "ti-building" },
     { id: "players",      label: "Players",      icon: "ti-users" },
-    { id: "coaches",      label: "Coaches",      icon: "ti-whistle" },
+    { id: "coaches",      label: "Coaches",      icon: "ti-school" },
     { id: "equipment",    label: "Equipment",    icon: "ti-shopping-bag" },
     { id: "affiliations", label: "Affiliations", icon: "ti-world" },
   ];
@@ -33471,7 +33580,7 @@ function EventListView({ events, games, onSelectEvent, onUpdateEvent, onNewEvent
   const codeLabels = Object.fromEntries(CODE_OPTS.map(o => [o.value, o.label]));
 
   const statusLabels = { all: "All", scheduled: "Upcoming", active: "Active", completed: "Completed" };
-  const activeFilterCount = (statusFilter !== "all" ? 1 : 0) + (codeFilter !== "all" ? 1 : 0) + (dateFilt !== "all" ? 1 : 0) + (levelFilt !== "all" ? 1 : 0) + (listView !== "normal" ? 1 : 0);
+  const activeFilterCount = (statusFilter !== "all" ? 1 : 0) + (codeFilter !== "all" ? 1 : 0) + (dateFilt !== "all" ? 1 : 0) + (levelFilt !== "all" ? 1 : 0) + (listView !== "normal" ? 1 : 0) + (["starred","ladder","state"].includes(eventFocus) ? 1 : 0) + (eventWhen === "completed" ? 1 : 0);
   const dateFiltCutoff = dateFilt === "all" ? null : (() => { const d = new Date(); if (dateFilt === "today") { d.setHours(0,0,0,0); } else if (dateFilt === "week") d.setDate(d.getDate()-7); else if (dateFilt === "month") d.setMonth(d.getMonth()-1); else if (dateFilt === "year") d.setFullYear(d.getFullYear()-1); return d; })();
   const dateFilterLabel = { all: "Any date", week: "This week", month: "This month", year: "This year" };
   const levelLabels = { all: "All", club: "My club", local: "My state", regional: "Australia", global: "International" };
@@ -33570,7 +33679,7 @@ function EventListView({ events, games, onSelectEvent, onUpdateEvent, onNewEvent
   const filtered = events.filter(matchesFilters);
   const anyFilterActive = statusFilter !== "all" || codeFilter !== "all" || dateFilt !== "all" || levelFilt !== "all" || evListSearch.trim() !== "";
 
-  function clearAll() { setStatusFilter("all"); setCodeFilter("all"); setDateFilt("all"); setLevelFilt("all"); setListView("normal"); setEvListSearch(""); setPanelOpen(false); }
+  function clearAll() { setStatusFilter("all"); setCodeFilter("all"); setDateFilt("all"); setLevelFilt("all"); setListView("normal"); setEvListSearch(""); setEventFocus("all"); setEventWhen("anytime"); setPanelOpen(false); }
 
   function EventCard({ event, compact = false }) {
     const evGames = games.filter(g => g.eventId === event.id);
@@ -33799,120 +33908,96 @@ function EventListView({ events, games, onSelectEvent, onUpdateEvent, onNewEvent
               )}
             </button>
             {panelOpen && (
-              <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 300, background: T.card, borderRadius: 12, padding: "1rem 1.25rem", boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)", border: `1px solid ${T.cardBorder}`, width: "min(320px, calc(100vw - 2rem))" }}>
-                <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Status</p>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14, borderBottom: `1px solid ${T.cardBorder}`, paddingBottom: 14 }}>
-                  {[{ value: "all", label: "All" }, { value: "active", label: "Active" }, { value: "scheduled", label: "Upcoming" }, { value: "completed", label: "Completed" }].map(opt => (
-                    <button key={opt.value} onClick={() => setStatusFilter(opt.value)} style={{ fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 20, cursor: "pointer", background: statusFilter === opt.value ? T.green : "transparent", border: `1.5px solid ${statusFilter === opt.value ? T.green : T.cardBorder}`, color: statusFilter === opt.value ? "#fff" : T.textMuted }}>{opt.label}</button>
-                  ))}
-                </div>
-                <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Game code</p>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-                  {CODE_OPTS.map(opt => (
-                    <button key={opt.value} onClick={() => setCodeFilter(opt.value)} style={{ fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 20, cursor: "pointer", background: codeFilter === opt.value ? T.green : "transparent", border: `1.5px solid ${codeFilter === opt.value ? T.green : T.cardBorder}`, color: codeFilter === opt.value ? "#fff" : T.textMuted }}>{opt.label}</button>
-                  ))}
-                </div>
-                <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Date</p>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-                  {[{ value: "all", label: "All" }, { value: "today", label: "Today" }, { value: "week", label: "This week" }, { value: "month", label: "This month" }, { value: "year", label: "This year" }].map(opt => (
-                    <button key={opt.value} onClick={() => setDateFilt(opt.value)} style={{ fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 20, cursor: "pointer", background: dateFilt === opt.value ? T.green : "transparent", border: `1.5px solid ${dateFilt === opt.value ? T.green : T.cardBorder}`, color: dateFilt === opt.value ? "#fff" : T.textMuted }}>{opt.label}</button>
-                  ))}
-                </div>
-                <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Proximity</p>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: activeFilterCount > 0 ? 14 : 0 }}>
-                  {[{ value: "all", label: "All", icon: "ti-world" }, { value: "club", label: "My club", icon: "ti-building" }, { value: "local", label: "My state", icon: "ti-map-pin" }, { value: "regional", label: "Australia", icon: "ti-map" }, { value: "global", label: "International", icon: "ti-plane" }].map(opt => (
-                    <button key={opt.value} onClick={() => setLevelFilt(opt.value)} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, padding: "5px 10px", borderRadius: 20, cursor: "pointer", background: levelFilt === opt.value ? T.green : "transparent", border: `1.5px solid ${levelFilt === opt.value ? T.green : T.cardBorder}`, color: levelFilt === opt.value ? "#fff" : T.textMuted, opacity: (opt.value !== "all" && !_myClubs.length) ? 0.45 : 1 }}>
-                      <i className={`ti ${opt.icon}`} style={{ fontSize: 11 }} />{opt.label}
-                    </button>
-                  ))}
-                </div>
-                <p style={{ margin: "14px 0 8px", fontSize: 11, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.07em" }}>View</p>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: activeFilterCount > 0 ? 14 : 0 }}>
-                  {[{ value: "normal", label: "Normal" }, { value: "compact", label: "Compact" }].map(opt => (
-                    <button key={opt.value} onClick={() => setListView(opt.value)} style={{ fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 20, cursor: "pointer", background: listView === opt.value ? T.green : "transparent", border: `1.5px solid ${listView === opt.value ? T.green : T.cardBorder}`, color: listView === opt.value ? "#fff" : T.textMuted }}>{opt.label}</button>
-                  ))}
-                </div>
-                {activeFilterCount > 0 && (
-                  <button onClick={clearAll} style={{ fontSize: 12, color: "#B83232", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600, marginTop: 4 }}>Clear all filters</button>
-                )}
+              <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 300, background: T.card, borderRadius: 12, padding: "10px 14px", boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)", border: `1px solid ${T.cardBorder}`, width: "min(280px, calc(100vw - 2rem))" }}>
+                {(() => {
+                  const S = { label: { margin: "0 0 5px", fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }, row: { display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${T.cardBorder}` }, rowLast: { display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 0 } };
+                  function Chip({ label, active, onClick, icon }) {
+                    return <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", background: active ? T.green : "transparent", border: `1.5px solid ${active ? T.green : T.cardBorder}`, color: active ? "#fff" : T.textMuted }}>{icon && <i className={`ti ${icon}`} style={{ fontSize: 10 }} />}{label}</button>;
+                  }
+                  return <>
+                    <p style={S.label}>Scope</p>
+                    <div style={S.row}>
+                      {[{ value: "all", label: "All" }, { value: "starred", label: "Starred" }, { value: "ladder", label: "Ladders" }, ...(_myState ? [{ value: "state", label: "My State" }] : [])].map(o => <Chip key={o.value} label={o.label} active={eventFocus === o.value} onClick={() => { setEventFocus(o.value); if (o.value === "state") setLevelFilt("local"); else if (o.value === "all") setLevelFilt("all"); }} />)}
+                    </div>
+                    <p style={S.label}>Status</p>
+                    <div style={S.row}>
+                      {[{ value: "all", label: "All" }, { value: "active", label: "Active" }, { value: "scheduled", label: "Upcoming" }, { value: "completed", label: "Completed" }].map(o => {
+                        const act = statusFilter === o.value || (o.value === "completed" && eventWhen === "completed");
+                        return <Chip key={o.value} label={o.label} active={act} onClick={() => { setStatusFilter(o.value); if (o.value === "completed") setEventWhen("completed"); else if (eventWhen === "completed") setEventWhen("anytime"); }} />;
+                      })}
+                    </div>
+                    <p style={S.label}>Game code</p>
+                    <div style={S.row}>
+                      {CODE_OPTS.map(o => <Chip key={o.value} label={o.label} active={codeFilter === o.value} onClick={() => setCodeFilter(o.value)} />)}
+                    </div>
+                    <p style={S.label}>Date</p>
+                    <div style={S.row}>
+                      {[{ value: "all", label: "All" }, { value: "today", label: "Today" }, { value: "week", label: "Week" }, { value: "month", label: "Month" }, { value: "year", label: "Year" }].map(o => <Chip key={o.value} label={o.label} active={dateFilt === o.value} onClick={() => setDateFilt(o.value)} />)}
+                    </div>
+                    <p style={S.label}>Proximity</p>
+                    <div style={S.row}>
+                      {[{ value: "all", label: "All", icon: "ti-world" }, { value: "club", label: "Club", icon: "ti-building" }, { value: "local", label: "State", icon: "ti-map-pin" }, { value: "regional", label: "AU", icon: "ti-map" }, { value: "global", label: "Intl", icon: "ti-plane" }].map(o => <Chip key={o.value} label={o.label} active={levelFilt === o.value} onClick={() => setLevelFilt(o.value)} icon={o.icon} />)}
+                    </div>
+                    <p style={S.label}>View</p>
+                    <div style={activeFilterCount > 0 ? S.row : S.rowLast}>
+                      {[{ value: "normal", label: "Normal" }, { value: "compact", label: "Compact" }].map(o => <Chip key={o.value} label={o.label} active={listView === o.value} onClick={() => setListView(o.value)} />)}
+                    </div>
+                    {activeFilterCount > 0 && <button onClick={clearAll} style={{ fontSize: 11, color: "#B83232", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}>Clear all filters</button>}
+                  </>;
+                })()}
               </div>
             )}
           </div>
           }
         />
 
-        {/* Focus pills — two rows: Who/What + When */}
+        {/* ── Single smart filter row ── */}
         {(() => {
           const hasMyClub = _myClubs.length > 0;
           const _myEvName = (() => { try { return (JSON.parse(localStorage.getItem("playerProfile___me__") || "{}").name || "").trim(); } catch { return ""; } })();
 
-          const WHO_PILLS = [
-            { id: "all",      label: "All",        icon: null },
-            ...(hasMyClub ? [{ id: "club",    label: "My Club",    icon: "ti-building-pavilion" }] : []),
-            ...(_myEvName ? [{ id: "me",      label: "My Events",  icon: "ti-user" }] : []),
-            { id: "starred",  label: "Starred",    icon: "ti-star" },
-            { id: "ladder",   label: "Ladders",    icon: "ti-stairs-up" },
-            { id: "ac",       label: "AC",          icon: null },
-            { id: "gc",       label: "GC",          icon: null },
-            ...(_myState ? [{ id: "state", label: "My State", icon: "ti-map-pin" }] : []),
-          ];
-          const WHEN_PILLS = [
-            { id: "anytime",   label: "Any time",  icon: null },
-            { id: "today",     label: "Today",     icon: "ti-sun" },
-            { id: "active",    label: "Active",    icon: "ti-play" },
-            { id: "upcoming",  label: "Upcoming",  icon: "ti-calendar" },
-            { id: "completed", label: "Completed", icon: "ti-flag-check" },
+          // Each pill sets a (focus, when) pair atomically.
+          // Starred / Ladders / My State / Completed live in the filter dropdown (⊞).
+          const PILLS = [
+            { id: "all",      label: "All",      icon: null,                   focus: "all",  when: "anytime"   },
+            { id: "active",   label: "Active",   icon: "ti-play",              focus: "all",  when: "active"    },
+            { id: "upcoming", label: "Upcoming", icon: "ti-calendar",          focus: "all",  when: "upcoming"  },
+            ...(hasMyClub  ? [{ id: "club",  label: "My Club",   icon: "ti-building-pavilion", focus: "club",  when: "anytime" }] : []),
+            ...(_myEvName  ? [{ id: "me",    label: "My Events", icon: "ti-user",              focus: "me",    when: "anytime" }] : []),
+            { id: "ac",       label: "AC",       icon: null,                   focus: "ac",   when: "anytime"   },
+            { id: "gc",       label: "GC",       icon: null,                   focus: "gc",   when: "anytime"   },
           ];
 
-          function setWho(id) {
-            setEventFocus(id);
+          const activePillId = (PILLS.find(p => p.focus === eventFocus && p.when === eventWhen) || PILLS[0]).id;
+
+          function applyPill(p) {
+            setEventFocus(p.focus);
+            setEventWhen(p.when);
             setCodeFilter("all"); setLevelFilt("all");
-            if (id === "club")  setLevelFilt("club");
-            else if (id === "state") setLevelFilt("local");
-            else if (id === "ac") setCodeFilter("AC");
-            else if (id === "gc") setCodeFilter("GC");
-          }
-          function setWhen(id) {
-            setEventWhen(id);
-            if (id === "active")    setStatusFilter("active");
-            else if (id === "upcoming")  setStatusFilter("scheduled");
-            else if (id === "completed") setStatusFilter("completed");
-            else if (id === "today") setStatusFilter("all");
-            else setStatusFilter("all");
-          }
-
-          function Pill({ p, active, onClick }) {
-            return (
-              <button onClick={onClick}
-                style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 11px", borderRadius: 20, border: `1.5px solid ${active ? T.green : T.cardBorder}`, background: active ? T.green : T.card, color: active ? "#fff" : T.textMuted, fontSize: 11.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0, transition: "all 0.15s" }}>
-                {p.icon && <i className={`ti ${p.icon}`} style={{ fontSize: 10 }} aria-hidden="true" />}
-                {p.label}
-              </button>
-            );
+            if (p.focus === "club")       setLevelFilt("club");
+            else if (p.focus === "ac")    setCodeFilter("AC");
+            else if (p.focus === "gc")    setCodeFilter("GC");
+            if (p.when === "active")      setStatusFilter("active");
+            else if (p.when === "upcoming") setStatusFilter("scheduled");
+            else                          setStatusFilter("all");
           }
 
           return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 6 }}>
-              <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
-                {WHO_PILLS.map(p => <Pill key={p.id} p={p} active={eventFocus === p.id} onClick={() => setWho(p.id)} />)}
-              </div>
-              <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
-                {WHEN_PILLS.map(p => <Pill key={p.id} p={p} active={eventWhen === p.id} onClick={() => setWhen(p.id)} />)}
-              </div>
+            <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", paddingBottom: 2, marginBottom: 6 }}>
+              {PILLS.map(p => {
+                const active = activePillId === p.id;
+                return (
+                  <button key={p.id} onClick={() => applyPill(p)}
+                    style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 13px", borderRadius: 20, border: `1.5px solid ${active ? T.green : T.cardBorder}`, background: active ? T.green : T.card, color: active ? "#fff" : T.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0, transition: "background 0.13s, border-color 0.13s, color 0.13s" }}>
+                    {p.icon && <i className={`ti ${p.icon}`} style={{ fontSize: 11 }} aria-hidden="true" />}
+                    {p.label}
+                  </button>
+                );
+              })}
             </div>
           );
         })()}
 
-        {/* Active filter pills — only shown for power filter overrides */}
-        {anyFilterActive && (
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: "0.75rem" }}>
-            {statusFilter !== "all" && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: T.green, color: "#fff" }}>{statusLabels[statusFilter]}<button onClick={() => setStatusFilter("all")} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.75)", padding: 0, lineHeight: 1, fontSize: 13, marginLeft: 2 }}>×</button></span>}
-            {codeFilter !== "all" && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: T.green, color: "#fff" }}>{codeLabels[codeFilter]}<button onClick={() => setCodeFilter("all")} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.75)", padding: 0, lineHeight: 1, fontSize: 13, marginLeft: 2 }}>×</button></span>}
-            {dateFilt !== "all" && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: T.green, color: "#fff" }}>{dateFilterLabel[dateFilt]}<button onClick={() => setDateFilt("all")} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.75)", padding: 0, lineHeight: 1, fontSize: 13, marginLeft: 2 }}>×</button></span>}
-            {levelFilt !== "all" && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: T.green, color: "#fff" }}>{levelLabels[levelFilt]}<button onClick={() => setLevelFilt("all")} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.75)", padding: 0, lineHeight: 1, fontSize: 13, marginLeft: 2 }}>×</button></span>}
-            {listView !== "normal" && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: T.green, color: "#fff" }}>Compact<button onClick={() => setListView("normal")} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.75)", padding: 0, lineHeight: 1, fontSize: 13, marginLeft: 2 }}>×</button></span>}
-          </div>
-        )}
 
         {/* Event list — flat when pills active, grouped when All+Any time */}
         {(anyFilterActive || eventFocus !== "all" || eventWhen !== "anytime") ? (
@@ -34301,7 +34386,8 @@ function NewEventForm({ onSave, onCancel, initialVenue = "" }) {
           background: selected ? accent + "14" : T.card,
           border: `1.5px solid ${selected ? accent : T.cardBorder}`,
           borderRadius: 10, padding: "10px 12px", transition: "all 0.12s",
-          display: "flex", alignItems: "center", gap: 10,
+          display: "flex", alignItems: "center", gap: 10, overflow: "hidden",
+          fontFamily: "inherit",
         }}>
         {children}
       </button>
@@ -34387,7 +34473,7 @@ function NewEventForm({ onSave, onCancel, initialVenue = "" }) {
             {CROQUET_CODES.map(c => (
               <Card key={c.value} selected={variant === c.value} onClick={() => setVariant(c.value)}>
                 <span style={{ fontSize: 11, fontWeight: 800, color: variant === c.value ? T.green : T.textMuted, background: variant === c.value ? "transparent" : T.pageBg, borderRadius: 6, padding: "2px 6px", flexShrink: 0, minWidth: 44, textAlign: "center" }}>{c.short}</span>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.label}</p>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: T.text, lineHeight: 1.3, minWidth: 0 }}>{c.label}</p>
               </Card>
             ))}
           </div>
@@ -36052,15 +36138,12 @@ function RoleTopNav({ role = "player", onNavigate }) {
 
 // ── LiveStripCard — glanceable card in the horizontal live strip ───────
 // Club Sign-In strip card — sized to match LiveStripCards with prominent logo.
-function SolidThinCard({ icon, logo, label, sublabel, color, onClick, badge, checkedIn = false, presence = "not_here", statusIcon, statusLabel, densityDots }) {
+function SolidThinCard({ icon, logo, label, sublabel, color, onClick, badge, checkedIn = false, presence = "not_here", statusIcon, statusLabel, densityDots, bannerMedia, bannerPosition }) {
   const c = color || T.green;
   const [hovered, setHovered] = React.useState(false);
   const resting = presence === "here_resting";
-  const ready   = presence === "here_ready";
   const notHere = !checkedIn;
 
-  // Per-state palette. Ready = full club colour. Resting = warm amber wash so it
-  // reads at a glance. Not here = club colour but lighter / dashed "invitation".
   const AMBER = "#C49A0A", AMBER_D = "#9A7A00";
   const bg = resting
     ? `linear-gradient(135deg, ${AMBER} 0%, ${AMBER_D} 100%)`
@@ -36068,6 +36151,84 @@ function SolidThinCard({ icon, logo, label, sublabel, color, onClick, badge, che
   const dotColor = resting ? "#FFD96B" : "#4ADE80";
   const ringColor = resting ? AMBER : c;
 
+  if (bannerMedia) {
+    // Photo card — same outer footprint as original.
+    // Photo occupies the top ~56% (logo row space). Logo badge overlaid on photo.
+    // Club name omitted — photo + logo communicate it. Status row gets the full bottom.
+    return (
+      <button onClick={onClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          background: "none",
+          border: notHere ? "1.5px dashed rgba(255,255,255,0.5)" : "1.5px solid transparent",
+          borderRadius: 10, padding: 0,
+          minWidth: 148, maxWidth: 172, flexShrink: 0,
+          cursor: "pointer", WebkitTapHighlightColor: "transparent",
+          display: "flex", flexDirection: "column",
+          fontFamily: "inherit",
+          boxShadow: resting ? "0 2px 6px rgba(154,122,0,0.30)" : "0 2px 6px rgba(26,74,46,0.22)",
+          overflow: "hidden", textAlign: "left",
+        }} aria-label={label} title={label}>
+
+        {/* ── Photo strip ── logo+name row height (~46px) */}
+        <div style={{ position: "relative", height: 46, flexShrink: 0, overflow: "hidden" }}>
+          <img src={bannerMedia} alt=""
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: bannerPosition || "center 30%" }} />
+          {/* Gradient scrim: light at top, heavier at base so colour band reads */}
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.42) 100%)" }} />
+
+          {/* Logo badge — bottom-left, slightly inside the photo */}
+          <span style={{
+            position: "absolute", bottom: 7, left: 9,
+            width: 28, height: 28, borderRadius: 7,
+            background: logo ? "#fff" : "rgba(255,255,255,0.22)",
+            border: "1.5px solid rgba(255,255,255,0.70)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
+            flexShrink: 0,
+          }}>
+            {logo
+              ? <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              : <i className={`ti ${icon}`} style={{ fontSize: 15, color: "#fff" }} aria-hidden="true" />}
+            {checkedIn && (
+              <span style={{ position: "absolute", bottom: -1, right: -1,
+                width: 9, height: 9, borderRadius: "50%",
+                background: dotColor, border: "1.5px solid " + (resting ? AMBER_D : c),
+                display: "block" }} />
+            )}
+          </span>
+
+          {/* Invite pulse — top-right */}
+          {notHere && (
+            <span style={{ position: "absolute", top: 7, right: 9, width: 6, height: 6, borderRadius: "50%", background: "#fff", opacity: 0.85, animation: "checkin-pulse 1.8s ease-in-out infinite" }} aria-hidden="true" />
+          )}
+        </div>
+
+        {/* ── Colour band — status only; club name omitted ── */}
+        <div style={{ background: bg, padding: "7px 10px 8px", display: "flex", flexDirection: "column", gap: 0, flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5,
+            background: checkedIn ? "rgba(255,255,255,0.16)" : "transparent",
+            borderRadius: 6, padding: checkedIn ? "4px 8px" : "2px 0" }}>
+            {checkedIn ? (
+              <>
+                <i className={`ti ${statusIcon || "ti-circle-check"}`} style={{ fontSize: 12, color: "#fff" }} aria-hidden="true" />
+                <span style={{ flex: 1, fontSize: 10.5, color: "#fff", fontWeight: 700, letterSpacing: "0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{statusLabel || "At the club"}</span>
+                <i className="ti ti-dots" style={{ fontSize: 12, color: "rgba(255,255,255,0.65)" }} aria-hidden="true" />
+              </>
+            ) : (
+              <>
+                <i className="ti ti-hand-click" style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }} aria-hidden="true" />
+                <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.9)", fontWeight: 700, letterSpacing: "0.02em" }}>Tap to check in</span>
+              </>
+            )}
+          </div>
+        </div>
+      </button>
+    );
+  }
+
+  // ── No banner — original flat layout ──────────────────────────────────────
   return (
     <button onClick={onClick}
       onMouseEnter={() => setHovered(true)}
@@ -36085,10 +36246,10 @@ function SolidThinCard({ icon, logo, label, sublabel, color, onClick, badge, che
         transition: "background 0.15s, border-color 0.15s", textAlign: "left",
         position: "relative", overflow: "hidden",
       }} aria-label={label} title={label}>
-      {/* Subtle invite pulse when not checked in */}
       {notHere && (
         <span style={{ position: "absolute", top: 8, right: 10, width: 7, height: 7, borderRadius: "50%", background: "#fff", opacity: 0.9, animation: "checkin-pulse 1.8s ease-in-out infinite" }} aria-hidden="true" />
       )}
+      {/* Logo + name row */}
       <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
         <span style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0,
           background: logo ? "#fff" : "rgba(255,255,255,0.22)",
@@ -36098,7 +36259,6 @@ function SolidThinCard({ icon, logo, label, sublabel, color, onClick, badge, che
           {logo
             ? <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
             : <i className={`ti ${icon}`} style={{ fontSize: 20, color: "#fff" }} aria-hidden="true" />}
-          {/* Status dot — green (ready) / amber (resting) */}
           {checkedIn && (
             <span style={{ position: "absolute", bottom: 0, right: 0,
               width: 11, height: 11, borderRadius: "50%",
@@ -36115,7 +36275,7 @@ function SolidThinCard({ icon, logo, label, sublabel, color, onClick, badge, che
           </span>
         </div>
       </div>
-      {/* Bottom status row */}
+      {/* Status / CTA row */}
       <div style={{ display: "flex", alignItems: "center", gap: 5,
         background: checkedIn ? "rgba(255,255,255,0.16)" : "transparent",
         borderRadius: 7, padding: checkedIn ? "3px 8px" : "0",
@@ -37216,6 +37376,9 @@ function CircuitView({ onBack, onNavigate }) {
   const [selected, setSelected] = React.useState(null);
   const [tracksOpen, setTracksOpen] = React.useState(false);
   const [trackFilter, setTrackFilter] = React.useState(null); // null | "cqok" | "people" | "clubs" | "events" | "games"
+  const [riverHintDismissed, setRiverHintDismissed] = React.useState(() => {
+    try { return localStorage.getItem("circuit_river_hint_dismissed") === "1"; } catch { return false; }
+  });
   const [dismissedBroadcast, setDismissedBroadcast] = React.useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("cqok_dismissed") || "[]")); } catch { return new Set(); }
   });
@@ -37232,6 +37395,23 @@ function CircuitView({ onBack, onNavigate }) {
     function onStorage() { setBroadcast(loadCQOKBroadcast()); }
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  // Auto-follow: any club the user is a member of (or has as home club) is
+  // silently added to following_clubs on mount. These clubs are also pinned —
+  // the user cannot unfollow them (membership IS the follow).
+  React.useEffect(() => {
+    try {
+      const me = JSON.parse(localStorage.getItem("playerProfile___me__") || "{}");
+      const myClubs = (me.clubs || []).filter(Boolean);
+      if (!myClubs.length) return;
+      const existing = JSON.parse(localStorage.getItem("following_clubs") || "[]");
+      const existingNames = new Set(existing.map(c => typeof c === "string" ? c : c.name));
+      const toAdd = myClubs.filter(n => !existingNames.has(n)).map(n => ({ name: n, followedAt: new Date().toISOString(), autoFollowed: true }));
+      if (!toAdd.length) return;
+      localStorage.setItem("following_clubs", JSON.stringify([...existing, ...toAdd]));
+      setTick(t => t + 1);
+    } catch {}
   }, []);
 
   const followingPlayers = React.useMemo(() => {
@@ -37588,8 +37768,10 @@ function CircuitView({ onBack, onNavigate }) {
           <div style={{ padding: "6px 14px 40px" }}>
 
             {/* ── Prompt card — shown before any track or node is selected ── */}
-            {!selected && !trackFilter && !isCQOKSelected && !isEmpty && (
-              <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, padding: "18px 16px", marginBottom: 10, animation: "circuit-fade-up 0.2s ease" }}>
+            {!selected && !trackFilter && !isCQOKSelected && !isEmpty && !riverHintDismissed && (
+              <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, padding: "18px 16px", marginBottom: 10, animation: "circuit-fade-up 0.2s ease", position: "relative" }}>
+                <button onClick={() => { setRiverHintDismissed(true); try { localStorage.setItem("circuit_river_hint_dismissed", "1"); } catch {} }}
+                  style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", cursor: "pointer", color: T.textFaint, fontSize: 16, lineHeight: 1, padding: "2px 4px" }} aria-label="Dismiss">×</button>
                 <p style={{ margin: "0 0 4px", fontSize: 13.5, fontWeight: 700, color: T.text }}>What do you want to catch up on?</p>
                 <p style={{ margin: 0, fontSize: 12, color: T.textMuted, lineHeight: 1.55 }}>
                   Tap a track above to filter by type — people, clubs, events — or tap a person or club directly to focus on just them.
@@ -37686,9 +37868,12 @@ function CircuitView({ onBack, onNavigate }) {
                         {nodeSignals.length > 0 && ` · ${nodeSignals.length} signal${nodeSignals.length !== 1 ? "s" : ""}`}
                       </p>
                     </div>
-                    {isFollowable && (
-                      <UnfollowButton node={selectedNode} onUnfollow={unfollowNode} />
-                    )}
+                    {isFollowable && (() => {
+                      const pinned = selectedNode.entity === "club" && (() => { try { return (JSON.parse(localStorage.getItem("playerProfile___me__") || "{}").clubs || []).includes(selectedNode.name); } catch { return false; } })();
+                      return pinned
+                        ? <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.04em", flexShrink: 0 }}>Member</span>
+                        : <UnfollowButton node={selectedNode} onUnfollow={unfollowNode} />;
+                    })()}
                     <button onClick={() => setSelected(null)}
                       style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 2px", flexShrink: 0 }} aria-label="Clear filter">×</button>
                   </div>
@@ -37869,9 +38054,14 @@ function CircuitView({ onBack, onNavigate }) {
   );
 }
 
-  // Unfollow — removes from the appropriate storage key and refreshes
+  // Unfollow — removes from the appropriate storage key and refreshes.
+  // Member clubs (autoFollowed or in profile.clubs) are pinned and cannot be removed.
   function unfollowNode(node) {
     try {
+      if (node.entity === "club") {
+        const myClubs = (() => { try { return JSON.parse(localStorage.getItem("playerProfile___me__") || "{}").clubs || []; } catch { return []; } })();
+        if (myClubs.includes(node.name)) return; // member club — pinned
+      }
       if (node.entity === "player") {
         const list = JSON.parse(localStorage.getItem("following_players") || "[]");
         const next = list.filter(p => {
@@ -38022,8 +38212,8 @@ function CircuitStripCard({ onClick }) {
         )}
       </span>
 
-      {/* Micro wave bar — 4 px clear of card bottom edge */}
-      <div style={{ position: "absolute", bottom: 8, left: 8, right: 8, height: 18, overflow: "hidden" }}>
+      {/* Micro wave bar */}
+      <div style={{ position: "absolute", bottom: 13, left: 8, right: 8, height: 18, overflow: "hidden" }}>
         <CircuitMicroBar intensities={trackIntensities} />
       </div>
     </button>
@@ -38116,14 +38306,18 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
   const clubBrand = React.useMemo(() => {
     if (!homeClub) return { name: null, logo: null, color: T.greenMid, registered: false };
     const name = typeof homeClub === "string" ? homeClub : (homeClub.name || "");
-    let logo = null, color = T.greenMid, registered = false;
+    let logo = null, color = T.greenMid, registered = false, bannerPhoto = null, bannerYtThumb = null, bannerPhotoPosition = null;
     try {
       const cp = loadClubProfile(getClubId(name));
       logo = cp.logo || null;
       color = cp.primaryColor || T.greenMid;
       registered = cp.registered === true;
+      bannerPhoto = (cp.photos || []).filter(Boolean)[0] || null;
+      const ytM = (cp.headerVideo || "").match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{11})/);
+      bannerYtThumb = ytM ? `https://img.youtube.com/vi/${ytM[1]}/hqdefault.jpg` : null;
+      bannerPhotoPosition = cp.photoPosition || null;
     } catch {}
-    return { name, logo, color, registered };
+    return { name, logo, color, registered, bannerPhoto, bannerYtThumb, bannerPhotoPosition };
   }, [homeClub]);
   const [checkedInRecently, setCheckedInRecently] = React.useState(() => {
     try {
@@ -38202,7 +38396,7 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
       me.myCheckIns = [{ timestamp: ts, club: clubName, reason, clubRegistered: !!clubBrand.registered }, ...(me.myCheckIns || [])].slice(0, 200);
       localStorage.setItem("playerProfile___me__", JSON.stringify(me));
     } catch {}
-    writePresence("here_ready");
+    writePresence("here_resting");
     setCheckedInRecently(true);
     setJustArrived(true);
     setTimeout(() => setJustArrived(false), 2600);
@@ -38288,6 +38482,8 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
     sublabel: clubBrand.name ? shortClubName(clubBrand.name) : "Sign in to your club",
     urgent: true, color: clubBrand.color, badge: "Tap",
     solidThin: true,
+    bannerMedia: clubBrand.bannerPhoto || null,
+    bannerPosition: clubBrand.bannerPhotoPosition || null,
     checkedIn: isHere,
     presence,
     statusIcon: presenceMeta ? presenceMeta.icon : "ti-circle-check",
@@ -38392,68 +38588,83 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
 
       {/* Presence status sheet — the single status control (when Here) */}
       {presenceSheet && ReactDOM.createPortal(
-        <div onClick={() => setPresenceSheet(false)}
-          style={{ position: "fixed", inset: 0, zIndex: 330, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "rolesheet-overlay 0.2s ease" }}>
-          <div onClick={e => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 460, background: T.pageBg, borderRadius: "18px 18px 0 0", paddingBottom: "max(20px, env(safe-area-inset-bottom))", animation: "rolesheet-up 0.28s cubic-bezier(0.22,1,0.36,1)" }}>
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: T.cardBorder, margin: "12px auto 0" }} />
-            {/* Header: club + current status */}
-            <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "14px 18px 12px" }}>
-              <span style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, background: clubBrand.logo ? "#fff" : clubBrand.color + "18", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                {clubBrand.logo ? <img src={clubBrand.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <i className="ti ti-map-pin-check" style={{ fontSize: 20, color: clubBrand.color }} aria-hidden="true" />}
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: T.text, fontFamily: "'Libre Baskerville', Georgia, serif" }}>{clubBrand.name || "Your club"}</p>
-                <p style={{ margin: "2px 0 0", fontSize: 11.5, color: T.textMuted, display: "flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: presenceMeta ? presenceMeta.dot : T.greenMid }} />
-                  Checked in · {presenceMeta ? presenceMeta.short : "Ready to play"}
-                </p>
-              </div>
-              <button onClick={() => setPresenceSheet(false)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textFaint, fontSize: 22, lineHeight: 1, padding: "2px 6px" }} aria-label="Close">×</button>
-            </div>
+        (() => {
+          const sheetAccent = presence === "here_resting" ? "#C49A0A" : clubBrand.color;
+          const sheetAccentDark = presence === "here_resting" ? "#9A7A00" : T.greenDark;
+          const STATUS_OPTS = [
+            { v: "here_ready",   label: "Ready to play", icon: "ti-player-play", color: clubBrand.color, colorDark: T.greenDark },
+            { v: "here_resting", label: "Resting · Tea",  icon: "ti-coffee",      color: "#C49A0A",       colorDark: "#9A7A00"   },
+          ];
+          return (
+            <div onClick={() => setPresenceSheet(false)}
+              style={{ position: "fixed", inset: 0, zIndex: 330, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "rolesheet-overlay 0.2s ease" }}>
+              <div onClick={e => e.stopPropagation()}
+                style={{ width: "100%", maxWidth: 460, borderRadius: "18px 18px 0 0", overflow: "hidden", animation: "rolesheet-up 0.28s cubic-bezier(0.22,1,0.36,1)", paddingBottom: "max(0px, env(safe-area-inset-bottom))" }}>
 
-            {/* Primary action: go to club live */}
-            {onGoToClub && clubBrand.name && (
-              <div style={{ padding: "0 16px 8px" }}>
-                <button onClick={() => { setPresenceSheet(false); onGoToClub(clubBrand.name); }}
-                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px", borderRadius: 12, border: "none", background: T.green, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(26,74,46,0.22)" }}>
-                  <i className="ti ti-building-pavilion" style={{ fontSize: 17 }} aria-hidden="true" />
-                  Go to {shortClubName(clubBrand.name)} live
-                  <i className="ti ti-arrow-right" style={{ fontSize: 14 }} aria-hidden="true" />
-                </button>
-              </div>
-            )}
+                {/* Colour-washed header */}
+                <div style={{ background: `linear-gradient(160deg, ${sheetAccent} 0%, ${sheetAccentDark} 100%)`, padding: "14px 16px 18px", position: "relative" }}>
+                  <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.35)", margin: "0 auto 14px" }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+                    <span style={{ width: 44, height: 44, borderRadius: 11, flexShrink: 0, background: clubBrand.logo ? "#fff" : "rgba(255,255,255,0.20)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
+                      {clubBrand.logo ? <img src={clubBrand.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <i className="ti ti-map-pin-check" style={{ fontSize: 22, color: "#fff" }} aria-hidden="true" />}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#fff", fontFamily: "'Libre Baskerville', Georgia, serif", textShadow: "0 1px 3px rgba(0,0,0,0.18)" }}>{clubBrand.name || "Your club"}</p>
+                      <p style={{ margin: "3px 0 0", fontSize: 11.5, color: "rgba(255,255,255,0.78)", display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "rgba(255,255,255,0.9)" }} />
+                        Checked in · {presenceMeta ? presenceMeta.short : "Ready to play"}
+                      </p>
+                    </div>
+                    <button onClick={() => setPresenceSheet(false)} style={{ background: "rgba(255,255,255,0.18)", border: "none", cursor: "pointer", color: "#fff", fontSize: 16, lineHeight: 1, padding: "5px 7px", borderRadius: 8 }} aria-label="Close">×</button>
+                  </div>
+                </div>
 
-            {/* Status toggle: Ready ⇄ Resting */}
-            <div style={{ padding: "8px 16px 4px" }}>
-              <p style={{ margin: "0 0 8px 2px", fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }}>My status</p>
-              <div style={{ display: "flex", gap: 8 }}>
-                {[
-                  { v: "here_ready",   label: "Ready to play", icon: "ti-player-play", color: T.greenMid },
-                  { v: "here_resting", label: "Resting · Tea",  icon: "ti-coffee",      color: "#C49A0A" },
-                ].map(o => {
-                  const sel = presence === o.v;
-                  return (
-                    <button key={o.v} onClick={() => writePresence(o.v)}
-                      style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "13px 8px", borderRadius: 12, border: `1.5px solid ${sel ? o.color : T.cardBorder}`, background: sel ? o.color + "14" : "transparent", cursor: "pointer", fontFamily: "inherit" }}>
-                      <i className={`ti ${o.icon}`} style={{ fontSize: 22, color: sel ? o.color : T.textMuted }} aria-hidden="true" />
-                      <span style={{ fontSize: 12.5, fontWeight: 700, color: sel ? o.color : T.textMuted }}>{o.label}</span>
+                {/* Body */}
+                <div style={{ background: T.pageBg, padding: "16px 16px 6px" }}>
+
+                  {/* Primary action: go to club live */}
+                  {onGoToClub && clubBrand.name && (
+                    <button onClick={() => { setPresenceSheet(false); onGoToClub(clubBrand.name); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px", borderRadius: 12, border: "none", background: T.green, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(26,74,46,0.22)", marginBottom: 14 }}>
+                      <i className="ti ti-building-pavilion" style={{ fontSize: 17 }} aria-hidden="true" />
+                      Go to {shortClubName(clubBrand.name)} live
+                      <i className="ti ti-arrow-right" style={{ fontSize: 14 }} aria-hidden="true" />
                     </button>
-                  );
-                })}
+                  )}
+
+                  {/* Status toggle: Ready ⇄ Resting */}
+                  <p style={{ margin: "0 0 8px 2px", fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }}>My status</p>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                    {STATUS_OPTS.map(o => {
+                      const sel = presence === o.v;
+                      return (
+                        <button key={o.v} onClick={() => writePresence(o.v)}
+                          style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "16px 8px 14px", borderRadius: 13,
+                            border: `2px solid ${sel ? o.color : T.cardBorder}`,
+                            background: sel ? `linear-gradient(160deg, ${o.color} 0%, ${o.colorDark} 100%)` : T.card,
+                            cursor: "pointer", fontFamily: "inherit",
+                            boxShadow: sel ? `0 4px 14px ${o.color}44` : "none",
+                            transition: "box-shadow 0.15s ease" }}>
+                          <i className={`ti ${o.icon}`} style={{ fontSize: 28, color: sel ? "#fff" : T.textMuted }} aria-hidden="true" />
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: sel ? "#fff" : T.textMuted, letterSpacing: "0.01em" }}>{o.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Check out */}
+                  <button onClick={checkOut}
+                    style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px", borderRadius: 11, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 }}>
+                    <i className="ti ti-logout" style={{ fontSize: 15 }} aria-hidden="true" />
+                    Check out · I'm heading off
+                  </button>
+                </div>
+                {/* Safe-area spacer inside body bg */}
+                <div style={{ background: T.pageBg, height: "max(10px, env(safe-area-inset-bottom))" }} />
               </div>
             </div>
-
-            {/* Check out */}
-            <div style={{ padding: "10px 16px 6px" }}>
-              <button onClick={checkOut}
-                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px", borderRadius: 11, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                <i className="ti ti-logout" style={{ fontSize: 15 }} aria-hidden="true" />
-                Check out · I'm heading off
-              </button>
-            </div>
-          </div>
-        </div>,
+          );
+        })(),
         document.body
       )}
 
@@ -48574,6 +48785,68 @@ function ScorersCard({ game, onUpdateGameMeta, sideWon }) {
   );
 }
 
+// ─── Styled QR generator ──────────────────────────────────────────────────────
+// Generates a croquet-branded QR code: coloured finder squares (blue / red /
+// gold) matching mallet ball colours, dark-green data modules, and an "OK!"
+// wordmark in the centre on a white disc. Uses error-correction level H so the
+// logo cutout (~15 % of area) still decodes reliably.
+async function makeStyledQRDataURL(text, targetSize = 240) {
+  const qr = QRCode.create(text, { errorCorrectionLevel: 'H' });
+  const n   = qr.modules.size;
+  const dat = qr.modules.data; // Uint8Array: non-zero = dark module
+
+  const QUIET = 2;
+  const mod   = Math.floor(targetSize / (n + QUIET * 2));
+  const px    = mod * (n + QUIET * 2);
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = px;
+  canvas.height = px;
+  const ctx = canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, px, px);
+
+  // Finder-pattern colour zones (each is a 7×7 block in the corner of the matrix)
+  const FINDER = { tl: '#1a3cb5', tr: '#b91c1c', bl: '#C49A0A' };
+  function zone(c, r) {
+    if (c < 7 && r < 7)           return 'tl'; // top-left  → blue
+    if (c >= n - 7 && r < 7)      return 'tr'; // top-right → red
+    if (c < 7 && r >= n - 7)      return 'bl'; // bot-left  → gold
+    return null;
+  }
+
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (!dat[r * n + c]) continue; // light module — skip
+      const z = zone(c, r);
+      ctx.fillStyle = z ? FINDER[z] : '#1A2E14';
+      ctx.fillRect((c + QUIET) * mod, (r + QUIET) * mod, mod, mod);
+    }
+  }
+
+  // Centre logo — white disc + "OK!" wordmark
+  const cx = px / 2, cy = px / 2;
+  const radius = mod * 3.6;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fill();
+  ctx.strokeStyle = '#1A4A2E';
+  ctx.lineWidth = mod * 0.55;
+  ctx.stroke();
+
+  const fs = Math.round(mod * 2.1);
+  ctx.fillStyle = '#1A4A2E';
+  ctx.font = `800 ${fs}px "Libre Baskerville", Georgia, serif`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('OK!', cx, cy);
+
+  return canvas.toDataURL('image/png');
+}
+
 // ─── ShareModal ───────────────────────────────────────────────────────────────
 function ShareModal({ game, onClose, shareUrl: shareUrlProp, label: labelProp, headerLabel, headerSub }) {
   const [copied, setCopied] = React.useState(false);
@@ -48589,10 +48862,7 @@ function ShareModal({ game, onClose, shareUrl: shareUrlProp, label: labelProp, h
   const gameLabel = labelProp || ([game?.playerAB, game?.playerRY].filter(Boolean).join(" vs ") || `Game ${(game?.id || "").slice(-4)}`);
 
   React.useEffect(() => {
-    QRCode.toDataURL(shareUrl, {
-      width: 240, margin: 2,
-      color: { dark: "#1A4A2E", light: "#FAFFF7" },
-    }).then(url => setQrDataUrl(url)).catch(() => {});
+    makeStyledQRDataURL(shareUrl, 240).then(url => setQrDataUrl(url)).catch(() => {});
   }, [shareUrl]);
 
   function copyUrl() {
