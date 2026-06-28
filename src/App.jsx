@@ -18319,28 +18319,38 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
         <div onClick={() => setAvailOpen(false)}
           style={{ position: "fixed", inset: 0, zIndex: 615, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "rolesheet-overlay 0.2s ease" }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 520, background: T.pageBg, borderRadius: "16px 16px 0 0", padding: "16px 16px 28px", maxHeight: "80vh", overflowY: "auto", animation: "rolesheet-up 0.28s cubic-bezier(0.22,1,0.36,1)" }}>
+            style={{ width: "100%", maxWidth: 520, background: T.pageBg, borderRadius: "16px 16px 0 0", padding: "16px 16px 28px", animation: "rolesheet-up 0.28s cubic-bezier(0.22,1,0.36,1)" }}>
             <div style={{ width: 36, height: 4, borderRadius: 2, background: T.cardBorder, margin: "0 auto 14px" }} />
-            <p style={{ margin: "0 0 3px", fontSize: 16, fontWeight: 800, color: T.text, fontFamily: "'Libre Baskerville', Georgia, serif" }}>How long are you here?</p>
+            <p style={{ margin: "0 0 3px", fontSize: 16, fontWeight: 800, color: T.text, fontFamily: "'Libre Baskerville', Georgia, serif" }}>My status</p>
             <p style={{ margin: "0 0 14px", fontSize: 12, color: T.textMuted }}>Lets the organiser know who to draw into games.</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {AVAILABILITY_STATUSES.map(s => {
-                const selected = availability[mePresent.id] === s.value;
-                return (
-                  <button key={s.value} onClick={() => setAvailabilityFor(mePresent.id, s.value)}
-                    style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${selected ? accent : T.cardBorder}`, background: selected ? accent + "10" : T.card, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 8, background: s.rests ? "#FFF4DA" : accent + "14", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <i className={`ti ${s.icon}`} style={{ fontSize: 17, color: s.rests ? "#9A7A00" : accent }} aria-hidden="true" />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: T.text }}>{s.label}</p>
-                      <p style={{ margin: "1px 0 0", fontSize: 11, color: T.textFaint }}>{s.rests ? "You'll sit out unless added to a game" : "You're in the pool for the next draw"}</p>
-                    </div>
-                    {selected && <i className="ti ti-check" style={{ fontSize: 16, color: accent, flexShrink: 0 }} aria-hidden="true" />}
-                  </button>
-                );
-              })}
-            </div>
+            {(() => {
+              const STATUS_OPTS = [
+                { v: "ready",   label: "Ready to play", icon: "ti-player-play", color: accent,     colorDark: T.greenDark },
+                { v: "resting", label: "Resting · Tea",  icon: "ti-coffee",      color: "#C49A0A", colorDark: "#9A7A00"   },
+              ];
+              const curResting = isResting(mePresent);
+              const sel = curResting ? "resting" : "ready";
+              return (
+                <div style={{ display: "flex", gap: 8 }}>
+                  {STATUS_OPTS.map(o => {
+                    const selected = sel === o.v;
+                    return (
+                      <button key={o.v} onClick={() => { persist({ restOverride: { ...restOverride, [mePresent.id]: o.v === "resting" } }); setAvailOpen(false); window.dispatchEvent(new CustomEvent("croquet:avail-changed")); }}
+                        className="no-tap-dim"
+                        style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "16px 8px 14px", borderRadius: 13,
+                          border: `2px solid ${selected ? o.color : T.cardBorder}`,
+                          background: selected ? `linear-gradient(160deg, ${o.color} 0%, ${o.colorDark} 100%)` : T.card,
+                          cursor: "pointer", fontFamily: "inherit",
+                          boxShadow: selected ? `0 4px 14px ${o.color}44` : "none",
+                          transition: "border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease" }}>
+                        <i className={`ti ${o.icon}`} style={{ fontSize: 28, color: selected ? "#fff" : T.textMuted }} aria-hidden="true" />
+                        <span style={{ fontSize: 12.5, fontWeight: 700, color: selected ? "#fff" : T.textMuted }}>{o.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>,
         document.body
@@ -19335,6 +19345,12 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
   const [ladderChallengeFor, setLadderChallengeFor] = useState(null); // challenger memberKey picking a target
   const [ladderTick, setLadderTick] = useState(0); // bump to re-read ladder after a mutation
   const [seedTick, setSeedTick] = useState(0);
+  const [availTick, setAvailTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setAvailTick(t => t + 1);
+    window.addEventListener("croquet:avail-changed", bump);
+    return () => window.removeEventListener("croquet:avail-changed", bump);
+  }, []);
   const [checkInLimit, setCheckInLimit] = useState(20);
   const [stubCheckedIn, setStubCheckedIn] = useState(false);
   const wideMode = useWideLayout();
@@ -22335,20 +22351,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                     </div>
                   )}
                 </div>
-                {isClubAdmin && (
-                  <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 11, borderTop: "1px solid rgba(255,255,255,0.2)" }}>
-                    <button onClick={seedTestDay}
-                      style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, color: "#fff", padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                      <i className="ti ti-flask" style={{ fontSize: 13 }} aria-hidden="true" />
-                      Seed test day
-                    </button>
-                    <button onClick={clearSeed}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: "transparent", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, color: "rgba(255,255,255,0.9)", padding: "7px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                      <i className="ti ti-eraser" style={{ fontSize: 13 }} aria-hidden="true" />
-                      Clear
-                    </button>
-                  </div>
-                )}
               </div>
 
               {!showLive ? (
@@ -22365,6 +22367,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 <>
                   {/* ── My availability + Organiser status ── */}
                   {showLive && (() => {
+                void availTick; // re-run when availability changes
                 // Read presence/availability from ClubLiveSession's session store directly.
                 const slug = clubKey.replace("clubProfile_", "");
                 const t = new Date();
@@ -22379,12 +22382,26 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                   { value: "leaving",   label: "Leaving soon",      icon: "ti-door-exit",     rests: false },
                   { value: "social",    label: "Just socialising",  icon: "ti-coffee",        rests: true  },
                 ];
+                const CHECKIN_REASONS = [
+                  { reason: "Playing",      label: "Here to play",       icon: "ti-ball-football",   color: T.greenMid },
+                  { reason: "Social",       label: "Social",              icon: "ti-coffee",          color: "#B05C3A"  },
+                  { reason: "Volunteering", label: "Volunteering",        icon: "ti-heart-handshake", color: "#C49A0A"  },
+                  { reason: "Committee",    label: "Committee / admin",   icon: "ti-clipboard-list",  color: "#5A6B8E"  },
+                ];
+                let myCheckInReason = null;
+                try {
+                  const last = JSON.parse(localStorage.getItem("lastCheckIn") || "null");
+                  if (last && last.club === (clubBrand.name || "") && last.timestamp && (Date.now() - new Date(last.timestamp).getTime()) < 12 * 60 * 60 * 1000) {
+                    myCheckInReason = CHECKIN_REASONS.find(r => r.reason === last.reason) || null;
+                  }
+                } catch {}
                 const curAvail = AVAIL.find(s => s.value === myAvail);
                 const restOverride = (sess.restOverride || {})[me.key];
                 const isRestingMe = restOverride === true;
                 const availLabel = curAvail ? curAvail.label : (isRestingMe ? "Just here to socialise" : "Ready to play");
-                const availIcon  = curAvail ? curAvail.icon  : (isRestingMe ? "ti-coffee" : "ti-player-play");
-                const availColor = isRestingMe || (curAvail && curAvail.rests) ? "#9A7A00" : T.greenMid;
+                const availIcon  = curAvail ? curAvail.icon  : (isRestingMe ? "ti-coffee" : (myCheckInReason ? myCheckInReason.icon : "ti-player-play"));
+                const reasonColor = myCheckInReason ? myCheckInReason.color : T.greenMid;
+                const availColor = isRestingMe || (curAvail && curAvail.rests) ? "#9A7A00" : reasonColor;
 
                 // isOrganiser logic mirrors ClubLiveSession: base role or manual manager
                 let isManMgr = false;
@@ -22405,15 +22422,16 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                   <div style={{ borderTop: `1px solid ${T.cardBorder}` }}>
                     {/* Availability row */}
                     {hasMeCheckedIn && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: iAmOrganiser ? `1px solid ${T.cardBorder}` : "none" }}>
-                        <div style={{ width: 30, height: 30, borderRadius: 8, background: availColor + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: iAmOrganiser ? `1px solid ${T.cardBorder}` : "none", background: availColor + "0C", borderRadius: iAmOrganiser ? 0 : "0 0 12px 12px" }}>
+                        <div style={{ width: 30, height: 30, borderRadius: 8, background: availColor + "20", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           <i className={`ti ${availIcon}`} style={{ fontSize: 16, color: availColor }} aria-hidden="true" />
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.06em" }}>My availability</p>
+                          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: availColor, textTransform: "uppercase", letterSpacing: "0.06em", opacity: 0.8 }}>My availability</p>
                           <p style={{ margin: "1px 0 0", fontSize: 13, fontWeight: 700, color: T.text }}>{availLabel}</p>
+                          {myCheckInReason && <p style={{ margin: "1px 0 0", fontSize: 10.5, color: availColor, fontWeight: 600 }}>{myCheckInReason.label}</p>}
                         </div>
-                        <span onClick={() => window.dispatchEvent(new CustomEvent("croquet:open-avail"))} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: accent, flexShrink: 0, cursor: "pointer" }}>Change <i className="ti ti-chevron-right" style={{ fontSize: 13 }} aria-hidden="true" /></span>
+                        <span onClick={() => window.dispatchEvent(new CustomEvent("croquet:open-avail"))} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: availColor, flexShrink: 0, cursor: "pointer" }}>Change <i className="ti ti-chevron-right" style={{ fontSize: 13 }} aria-hidden="true" /></span>
                       </div>
                     )}
                     {/* Organiser row */}
@@ -22450,6 +22468,24 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                   </div>
                 );
               })()}
+
+                  {/* ── Super-admin strip ── */}
+                  {isClubAdmin && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderTop: `1px solid ${T.cardBorder}`, background: "#16A34A08" }}>
+                      <i className="ti ti-shield-bolt" style={{ fontSize: 11, color: "#16A34A", flexShrink: 0 }} aria-hidden="true" />
+                      <span style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>Super Admin</span>
+                      <button onClick={seedTestDay}
+                        style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid #16A34A55", borderRadius: 6, color: "#16A34A", padding: "3px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                        <i className="ti ti-flask" style={{ fontSize: 10 }} aria-hidden="true" />
+                        Seed test day
+                      </button>
+                      <button onClick={clearSeed}
+                        style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid #16A34A55", borderRadius: 6, color: "#16A34A", padding: "3px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                        <i className="ti ti-eraser" style={{ fontSize: 10 }} aria-hidden="true" />
+                        Clear
+                      </button>
+                    </div>
+                  )}
 
                   {/* Today's play */}
                   <div style={{ padding: "9px 14px", display: "flex", alignItems: "center", gap: 7, borderBottom: `1px solid ${T.cardBorder}`, borderTop: `1px solid ${T.cardBorder}` }}>
@@ -39566,7 +39602,7 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
       me.myCheckIns = [{ timestamp: ts, club: clubName, reason, clubRegistered: !!clubBrand.registered }, ...(me.myCheckIns || [])].slice(0, 200);
       localStorage.setItem("playerProfile___me__", JSON.stringify(me));
     } catch {}
-    writePresence("here_ready");
+    writePresence(reason === "Playing" ? "here_ready" : "here_resting");
     setCheckedInRecently(true);
     setJustArrived(true);
     setTimeout(() => setJustArrived(false), 2600);
