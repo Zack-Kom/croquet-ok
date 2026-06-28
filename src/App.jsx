@@ -4386,7 +4386,6 @@ function App() {
         @media (hover: none) {
           button:hover { background: initial !important; }
           button:active { filter: brightness(0.82) !important; }
-          button:active * { color: inherit !important; }
         }
         .game-card { transition: box-shadow 0.15s, transform 0.1s; }
         .game-card:hover { box-shadow: 0 4px 14px rgba(26,74,46,0.14) !important; transform: translateY(-1px); }
@@ -19439,6 +19438,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
   });
   // The About tab hosts two sub-sections: the club's About info and History.
   const [aboutSub, setAboutSub] = useState("about");
+  const [committeeSub, setCommitteeSub] = useState("about");
 
   // Private events: dates the club is unavailable for public booking
   const peKey = "privateEvents_" + clubKey;
@@ -20097,7 +20097,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                   disabled={isMemberClub}
                   style={{ background: isFollowing ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.14)", border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 8, padding: "7px 9px", color: "#fff", cursor: isMemberClub ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
                   <i className={`ti ${isFollowing ? "ti-star-filled" : "ti-star"}`} style={{ fontSize: 16, color: isFollowing ? "#FFD700" : "#fff" }} aria-hidden="true" />
-                  {isMemberClub && <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.8)", letterSpacing: "0.04em" }}>Member</span>}
                 </button>
                 <button onClick={() => setShowPostCircuit(true)}
                   aria-label="Post to The Circuit"
@@ -20135,9 +20134,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                     <i className="ti ti-calendar-week" style={{ fontSize: 12, color: "rgba(255,255,255,0.75)" }} aria-hidden="true" />
                     Next play: {nextPlayDay || "—"}
                   </span>
-                  {isClubRegistered(clubName) && (
-                    <ClubOKBadge color="rgba(255,255,255,0.22)" size="sm" style={{ boxShadow: "none", border: "1px solid rgba(255,255,255,0.4)", marginLeft: 4 }} />
-                  )}
                 </div>
               );
             }
@@ -20160,12 +20156,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                   <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 1 }}>{f.label}</div>
                 </div>
               ))}
-              {isClubRegistered(clubName) && (
-                <div style={{ flex: 1, padding: "6px 4px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, borderLeft: "1px solid rgba(255,255,255,0.14)" }}>
-                  <ClubOKBadge color="rgba(255,255,255,0.22)" size="md" style={{ boxShadow: "none", border: "1px solid rgba(255,255,255,0.4)" }} />
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Registered</div>
-                </div>
-              )}
             </div>
             );
           })()}
@@ -20182,9 +20172,9 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 <button key={t.id} onClick={() => setTab(t.id)}
                   style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
                     flexShrink: 0, minWidth: 64, padding: "6px 6px", borderRadius: 9,
-                    background: active ? accent : "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                  <i className={`ti ${t.icon}`} style={{ fontSize: 19, color: active ? "#fff" : accent }} aria-hidden="true" />
-                  <span style={{ fontSize: 10, fontWeight: 600, color: active ? "#fff" : T.text, lineHeight: 1.15, whiteSpace: "nowrap" }}>{t.label}</span>
+                    background: active ? accent + "18" : "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                  <i className={`ti ${t.icon}`} style={{ fontSize: 19, color: accent }} aria-hidden="true" />
+                  <span style={{ fontSize: 10, fontWeight: active ? 700 : 600, color: active ? accent : T.text, lineHeight: 1.15, whiteSpace: "nowrap" }}>{t.label}</span>
                 </button>
               );
             })}
@@ -20243,6 +20233,33 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 ))}
               </div>
             )}
+
+            {/* ── Welcome to the club video ── */}
+            {(() => {
+              const embedUrl = youTubeEmbedUrl(profile.featuredVideo);
+              if (!embedUrl && !isClubSecretary) return null;
+              return (
+                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", marginBottom: 12, boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
+                  {sectionHead("ti-player-play", "Welcome to the club")}
+                  {embedUrl ? (
+                    <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden" }}>
+                      <iframe
+                        src={embedUrl}
+                        title="Club intro video"
+                        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: 0 }}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  ) : (
+                    <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+                      <i className="ti ti-player-play" style={{ fontSize: 20, color: T.textFaint, opacity: 0.4 }} aria-hidden="true" />
+                      <p style={{ margin: 0, fontSize: 12, color: T.textFaint }}>Add a club intro video in Event Hire → Media</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Welcome / description blurb */}
             {profile.notes && (
@@ -20378,33 +20395,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
               );
             })()}
 
-            {/* ── Club intro video ── */}
-            {(() => {
-              const embedUrl = youTubeEmbedUrl(profile.featuredVideo);
-              if (!embedUrl && !isClubSecretary) return null;
-              return (
-                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", marginBottom: 12, boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
-                  {sectionHead("ti-player-play", "Welcome to the club")}
-                  {embedUrl ? (
-                    <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden" }}>
-                      <iframe
-                        src={embedUrl}
-                        title="Club intro video"
-                        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: 0 }}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
-                  ) : (
-                    <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-                      <i className="ti ti-player-play" style={{ fontSize: 20, color: T.textFaint, opacity: 0.4 }} aria-hidden="true" />
-                      <p style={{ margin: 0, fontSize: 12, color: T.textFaint }}>Add a club intro video in Event Hire → Media</p>
-                    </div>
-                  )}
-
-                </div>
-              );
-            })()}
 
             {/* ── Private events video ── */}
             {(() => {
@@ -21181,64 +21171,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
 
         {tab === "members" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {/* ── Membership packages ── */}
-            {(() => {
-              const pkgs = profile.membershipPackages || [];
-              if (pkgs.length === 0 && !isClubSecretary) return null;
-              return (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {pkgs.length === 0 && isClubSecretary && (
-                    <div style={{ padding: "12px 14px", background: T.card, border: `1px dashed ${accent}44`, borderRadius: 12, display: "flex", alignItems: "center", gap: 10 }}>
-                      <i className="ti ti-info-circle" style={{ fontSize: 16, color: accent, flexShrink: 0 }} />
-                      <div>
-                        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: T.text }}>No membership packages set up</p>
-                        <p style={{ margin: "2px 0 0", fontSize: 11, color: T.textFaint }}>Add Full Membership and Intro packages in the Secretary → Members area.</p>
-                      </div>
-                    </div>
-                  )}
-                  {pkgs.map((pkg, pi) => (
-                    <div key={pi} style={{ background: T.card, border: `1px solid ${pi === 0 ? accent + "40" : T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: pi === 0 ? `0 2px 8px ${accent}18` : "none" }}>
-                      <div style={{ background: pi === 0 ? `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)` : T.greenPale, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <i className={`ti ${pkg.icon || (pi === 0 ? "ti-award" : "ti-seedling")}`} style={{ fontSize: 15, color: pi === 0 ? "#fff" : accent }} />
-                          <div>
-                            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: pi === 0 ? "#fff" : T.text, fontFamily: "'Libre Baskerville', Georgia, serif" }}>{pkg.name || (pi === 0 ? "Full Membership" : "Intro Package")}</p>
-                            {pkg.subtitle && <p style={{ margin: "1px 0 0", fontSize: 10, color: pi === 0 ? "rgba(255,255,255,0.8)" : T.textFaint }}>{pkg.subtitle}</p>}
-                          </div>
-                        </div>
-                        {pkg.fee && (
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
-                            <p style={{ margin: 0, fontSize: 17, fontWeight: 800, color: pi === 0 ? "#fff" : accent }}>${pkg.fee}</p>
-                            {pkg.period && <p style={{ margin: 0, fontSize: 9, color: pi === 0 ? "rgba(255,255,255,0.75)" : T.textFaint }}>{pkg.period}</p>}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-                        {pkg.description && <p style={{ margin: 0, fontSize: 12, color: T.textMuted, lineHeight: 1.6 }}>{pkg.description}</p>}
-                        {(pkg.includes || []).length > 0 && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                            {pkg.includes.map((item, ii) => (
-                              <div key={ii} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                                <i className="ti ti-check" style={{ fontSize: 12, color: accent, marginTop: 1, flexShrink: 0 }} />
-                                <span style={{ fontSize: 12, color: T.text, lineHeight: 1.4 }}>{item}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {pkg.note && (
-                          <p style={{ margin: 0, fontSize: 11, color: T.textFaint, fontStyle: "italic", borderTop: `1px solid ${T.cardBorder}`, paddingTop: 8 }}>{pkg.note}</p>
-                        )}
-                        {pkg.contactPrompt && (
-                          <div style={{ padding: "8px 10px", borderRadius: 8, background: accent + "0A", border: `1px solid ${accent}22`, fontSize: 11, color: accent, fontWeight: 600 }}>
-                            {pkg.contactPrompt}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
           {(() => {
           // Named members are visible only to people connected to this club.
           // Public / unregistered viewers see the count and a clear privacy notice — never the names.
@@ -21393,14 +21325,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
               <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>Members</span>
               <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{currentMembers.length}</span>
             </div>
-            {/* Members/admins can preview exactly what the public sees */}
-            {isClubMember && (
-              <button onClick={() => setPreviewPublic(v => !v)}
-                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "6px 14px", background: previewPublic ? accent + "14" : "transparent", border: "none", borderBottom: `1px solid ${T.cardBorder}`, color: previewPublic ? accent : T.textFaint, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.02em", cursor: "pointer" }}>
-                <i className={`ti ti-${previewPublic ? "eye-off" : "eye"}`} style={{ fontSize: 12 }} aria-hidden="true" />
-                {previewPublic ? "Previewing public view — tap to exit" : "Preview what the public sees"}
-              </button>
-            )}
             {!showNames ? (
               <div style={{ padding: "1.1rem 1.25rem", textAlign: "center" }}>
                 <div style={{ width: 40, height: 40, borderRadius: "50%", background: accent + "16", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}>
@@ -21431,50 +21355,13 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
           </div>
           );
         })()}
-          <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
-            <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
-              <i className="ti ti-map-pin" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>Check-Ins</span>
-              {allCheckIns.length > 0 && <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{allCheckIns.length} visit{allCheckIns.length !== 1 ? "s" : ""}</span>}
-            </div>
-            <div style={{ padding: "10px 14px" }}>
-              {!(isClubMember && !previewPublic) ? (
-                <div style={{ textAlign: "center", padding: "0.6rem 0.5rem" }}>
-                  <i className="ti ti-lock" style={{ fontSize: 18, color: accent }} aria-hidden="true" />
-                  <p style={{ margin: "6px auto 0", fontSize: 11.5, color: T.textFaint, lineHeight: 1.5, maxWidth: 280 }}>
-                    Who's been in is private to club members. Check-ins are never shown publicly.
-                  </p>
-                </div>
-              ) : allCheckIns.length === 0 ? (
-                <p style={{ margin: 0, fontSize: 12, color: T.textFaint, fontStyle: "italic", textAlign: "center", padding: "1rem 0" }}>No check-ins yet</p>
-              ) : (
-                <div>
-                  {allCheckIns.slice(0, checkInLimit).map((c, i, shown) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: i < shown.length - 1 ? `1px solid ${T.cardBorder}` : "none" }}>
-                      <i className="ti ti-map-pin" style={{ fontSize: 12, color: accent, flexShrink: 0 }} />
-                      <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "A member"}</span>
-                      {c.reason && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 20, background: accent + "18", color: accent, textTransform: "uppercase", letterSpacing: "0.03em", flexShrink: 0 }}>{c.reason}</span>}
-                      <span style={{ marginLeft: "auto", fontSize: 11, color: T.textFaint, flexShrink: 0, whiteSpace: "nowrap" }}>{fmtCheckDate(c.timestamp)} · {fmtCheckTime(c.timestamp)}</span>
-                    </div>
-                  ))}
-                  {allCheckIns.length > checkInLimit && (
-                    <button onClick={() => setCheckInLimit(n => n + 20)}
-                      style={{ width: "100%", marginTop: 8, padding: "7px", background: "transparent", border: `1px solid ${T.cardBorder}`, borderRadius: 8, color: accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>
-                      Show {Math.min(20, allCheckIns.length - checkInLimit)} more · {allCheckIns.length - checkInLimit} older
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-            {isClubMember && !previewPublic && (
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: "9px 14px", borderTop: `1px solid ${T.cardBorder}`, background: accent + "08" }}>
-                <i className="ti ti-lock" style={{ fontSize: 13, color: accent, flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
-                <p style={{ margin: 0, fontSize: 10.5, color: T.textFaint, lineHeight: 1.5 }}>
-                  Check-ins are only visible to club members and are never shown publicly. Visitors to the club page can't see who has been in.
-                </p>
-              </div>
-            )}
-          </div>
+          {/* Link to about tab for membership packages */}
+          <button onClick={() => setTab("about")}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 14px", background: "transparent", border: `1px solid ${T.cardBorder}`, borderRadius: 10, color: accent, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+            <i className="ti ti-rosette" style={{ fontSize: 13 }} aria-hidden="true" />
+            Learn about our membership packages
+            <i className="ti ti-arrow-right" style={{ fontSize: 12, marginLeft: 2 }} aria-hidden="true" />
+          </button>
           </div>
         )}
 
@@ -23170,11 +23057,37 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
           const committeeList = (profile.committeeMembers || []).filter(Boolean);
           const hasRoster = executive.length > 0 || committeeList.length > 0;
 
+          const COMM_TABS = [
+            { id: "about",    label: "About",    icon: "ti-users-group" },
+            { id: "meetings", label: "Meetings", icon: "ti-calendar-event" },
+            { id: "policies", label: "Policies", icon: "ti-file-text" },
+            { id: "assets",   label: "Assets",   icon: "ti-clipboard-check" },
+            { id: "contacts", label: "Contacts", icon: "ti-address-book" },
+          ];
+
           return (
             <div style={{ display: "flex", flexDirection: "column" }}>
 
-              {/* ── Club committee roster ── */}
-              {hasRoster && (
+              {/* ── Sub-tab bar ── */}
+              <div style={{ background: COMMITTEE_COLOR + "0D", border: `1px solid ${COMMITTEE_COLOR}1F`, borderRadius: 12, marginBottom: 14 }}>
+                <SwipeFade fadeColor={COMMITTEE_COLOR + "1A"} leftWidth={20} rightWidth={26} trackStyle={{ gap: 4, padding: "7px 8px", cursor: "grab" }}>
+                  {COMM_TABS.map(t => {
+                    const active = committeeSub === t.id;
+                    return (
+                      <button key={t.id} onClick={() => setCommitteeSub(t.id)}
+                        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+                          flexShrink: 0, minWidth: 64, padding: "6px 6px", borderRadius: 9,
+                          background: active ? COMMITTEE_COLOR + "18" : "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                        <i className={`ti ${t.icon}`} style={{ fontSize: 19, color: COMMITTEE_COLOR }} aria-hidden="true" />
+                        <span style={{ fontSize: 10, fontWeight: active ? 700 : 600, color: active ? COMMITTEE_COLOR : T.text, lineHeight: 1.15, whiteSpace: "nowrap" }}>{t.label}</span>
+                      </button>
+                    );
+                  })}
+                </SwipeFade>
+              </div>
+
+              {/* ── About: committee roster ── */}
+              {committeeSub === "about" && hasRoster && (
                 <div style={cardStyle}>
                   <div style={headStyle(COMMITTEE_COLOR)}>
                     <i className="ti ti-users-group" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
@@ -23205,8 +23118,8 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 </div>
               )}
 
-              {/* ── Next committee meeting ── */}
-              {(() => {
+              {/* ── Meetings: next meeting / AGM / notes ── */}
+              {committeeSub === "meetings" && (() => {
                 const agendaItems = (portal.nextMeetingAgenda || []).filter(Boolean);
                 const meetingDt = portal.nextMeeting ? (() => { try { return new Date(portal.nextMeeting); } catch { return null; } })() : null;
                 const dayNum    = meetingDt ? meetingDt.getDate() : null;
@@ -23286,7 +23199,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
               })()}
 
               {/* ── AGM ── */}
-              <div style={cardStyle}>
+              {committeeSub === "meetings" && <div style={cardStyle}>
                 <div style={headStyle("#1D4ED8")}>
                   <i className="ti ti-building-community" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
                   <span style={headText}>Annual General Meeting</span>
@@ -23315,10 +23228,10 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                     </p>
                   )}
                 </div>
-              </div>
+              </div>}
 
               {/* ── Meeting notes ── */}
-              <div style={cardStyle}>
+              {committeeSub === "meetings" && <div style={cardStyle}>
                 <div style={headStyle(COMMITTEE_COLOR)}>
                   <i className="ti ti-notes" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
                   <span style={headText}>Meeting notes</span>
@@ -23385,10 +23298,24 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                     </button>
                   </div>
                 )}
-              </div>
+              </div>}
 
-              {/* ── Asset register ── */}
-              {(() => {
+              {/* ── Policies placeholder ── */}
+              {committeeSub === "policies" && (
+                <div style={cardStyle}>
+                  <div style={headStyle(COMMITTEE_COLOR)}>
+                    <i className="ti ti-file-text" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+                    <span style={headText}>Policies</span>
+                  </div>
+                  <div style={{ padding: "18px 16px", textAlign: "center" }}>
+                    <i className="ti ti-file-text" style={{ fontSize: 24, color: T.textFaint, opacity: 0.35, display: "block", marginBottom: 6 }} aria-hidden="true" />
+                    <p style={{ margin: 0, fontSize: 13, color: T.textFaint }}>Club policies will appear here.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Assets ── */}
+              {committeeSub === "assets" && (() => {
                 const assets = portal.assets || [];
                 const saveAssets = (list) => saveCommitteeData({ assets: list });
                 const ASSET_CATS = ["Grounds", "Clubhouse", "Equipment", "IT & AV", "Finance", "Other"];
@@ -23517,8 +23444,8 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
                 );
               })()}
 
-              {/* ── Contacts register ── */}
-              {(() => {
+              {/* ── Contacts ── */}
+              {committeeSub === "contacts" && (() => {
                 const contacts = portal.contacts || [];
                 const saveContacts = (list) => saveCommitteeData({ contacts: list });
                 const CONTACT_CATS = [
@@ -39641,7 +39568,7 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
       me.myCheckIns = [{ timestamp: ts, club: clubName, reason, clubRegistered: !!clubBrand.registered }, ...(me.myCheckIns || [])].slice(0, 200);
       localStorage.setItem("playerProfile___me__", JSON.stringify(me));
     } catch {}
-    writePresence("here_resting");
+    writePresence("here_ready");
     setCheckedInRecently(true);
     setJustArrived(true);
     setTimeout(() => setJustArrived(false), 2600);
@@ -39649,7 +39576,11 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
 
   // Check in: open the arrival reason picker (lightweight — defaults to Playing on dismiss).
   function checkIn() { setArrivalSheet(true); }
-  function checkInAs(reason) { setArrivalSheet(false); recordCheckIn(reason); }
+  function checkInAs(reason) {
+    setArrivalSheet(false);
+    recordCheckIn(reason);
+    if (onGoToClub && clubBrand.name) onGoToClub(clubBrand.name);
+  }
   // Check out: mark gone. Button resets to "Check in" so they can return later.
   function checkOut() {
     writePresence("gone");
@@ -39761,24 +39692,9 @@ function LiveStrip({ games = [], events = [], onOpenGame, onStartGame, onStartPr
       onClick: c.nav && onNavigate ? () => onNavigate(c.nav) : () => {},
     }));
   } else {
-    const puzzle = { icon: "ti-bulb", label: "Today's puzzle", sublabel: "47 players answered", urgent: false, color: "#5A2D6B" };
     cards = [
       checkInCard,
       { _circuit: true }, // Circuit card — always present for player role
-      sessionCard,
-      liveGame ? {
-        icon: "ti-ball-football",
-        label: liveGameIsMine ? "Game in progress" : "Croquet",
-        sublabel: liveGame.playerAB && liveGame.playerRY
-          ? `${liveGame.playerAB} vs ${liveGame.playerRY}`
-          : (liveGameIsMine ? "Tap to continue" : "Tap to follow"),
-        urgent: true, color: T.green,
-        badge: liveGameIsMine ? "Live" : "Organising",
-        onClick: () => onOpenGame && onOpenGame(liveGame),
-      } : null,
-      { icon: "ti-calendar-check", label: "Play day — Thursday", sublabel: "Tap to confirm attendance", urgent: true, color: "#5A6B8E", badge: "10am", onClick: () => {} },
-      puzzle,
-      { icon: "ti-cloud-rain", label: "Lawns clear until 3pm", sublabel: "Dry conditions expected", urgent: false, color: T.greenMid, onClick: () => {} },
     ].filter(Boolean);
   }
 
