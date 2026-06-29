@@ -32610,6 +32610,14 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
   const [signalTick, setSignalTick] = React.useState(0);
   const [signalEditId, setSignalEditId] = React.useState(null); // null | "__new__" | item.id
   const [signalDraft, setSignalDraft] = React.useState({});
+  const [dirSearch, setDirSearch] = React.useState("");
+  const [dirEditItem, setDirEditItem] = React.useState(null);
+  const [dirTick, setDirTick] = React.useState(0);
+  const [dirSection, setDirSection] = React.useState("clubs");
+  const prevTabRef = React.useRef(null);
+  React.useEffect(function() {
+    if (prevTabRef.current !== tab) { setDirSearch(""); setDirEditItem(null); prevTabRef.current = tab; }
+  });
   function toggleFeature(key) {
     const next = { ...expFeatures, [key]: !expFeatures[key] };
     setExpFeatures(next);
@@ -32834,10 +32842,7 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
     { id: "content",      label: "Content",      icon: "ti-cards" },
     { id: "appearance",   label: "Appearance",   icon: "ti-palette" },
     { id: "feedback",     label: "Feedback",     icon: "ti-message-report" },
-    { id: "players",      label: "Players",      icon: "ti-users" },
-    { id: "coaches",      label: "Coaches",      icon: "ti-school" },
-    { id: "equipment",    label: "Equipment",    icon: "ti-shopping-bag" },
-    { id: "affiliations", label: "Affiliations", icon: "ti-world" },
+    { id: "directory",    label: "Directory",    icon: "ti-address-book" },
   ];
   var DEV_TABS = [
     { id: "storage",      label: "Storage",      icon: "ti-database" },
@@ -33636,10 +33641,59 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
           );
         })()}
 
-        {/* ── Players tab ── */}
-        {screen === "admin" && tab === "players" && (() => {
+        {/* ── Directory tab ── */}
+        {screen === "admin" && tab === "directory" && (() => {
           void dirTick;
-          const items = loadDirPlayers();
+          const DIR_SECTIONS = [
+            { id: "clubs",        label: "Clubs",        icon: "ti-building-community" },
+            { id: "players",      label: "Players",      icon: "ti-users" },
+            { id: "coaches",      label: "Coaches",      icon: "ti-school" },
+            { id: "equipment",    label: "Equipment",    icon: "ti-shopping-bag" },
+            { id: "affiliations", label: "Affiliations", icon: "ti-world" },
+          ];
+
+          // ── Clubs section (reuses existing club list logic) ──
+          if (dirSection === "clubs") {
+            const clubItems = AUSTRALIAN_CLUBS.map(function(name) { return { name }; });
+            const q = dirSearch.trim().toLowerCase();
+            const shown = clubItems.filter(function(c) { return !q || c.name.toLowerCase().includes(q); });
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+                  {DIR_SECTIONS.map(function(s) {
+                    var active = dirSection === s.id;
+                    return (<button key={s.id} onClick={function() { setDirSection(s.id); setDirSearch(""); setDirEditItem(null); }}
+                      style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 20, border: "1.5px solid " + (active ? T.green : T.cardBorder), background: active ? T.green : "transparent", color: active ? "#fff" : T.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
+                      <i className={"ti " + s.icon} style={{ fontSize: 13 }} />{s.label}
+                    </button>);
+                  })}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <p style={{ margin: 0, fontSize: 11, color: T.textMuted }}>{shown.length} club{shown.length !== 1 ? "s" : ""}</p>
+                </div>
+                <div style={{ position: "relative" }}>
+                  <i className="ti ti-search" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: T.textFaint }} />
+                  <input value={dirSearch} onChange={function(e) { setDirSearch(e.target.value); }} placeholder="Search clubs…"
+                    style={{ width: "100%", padding: "9px 32px 9px 32px", fontSize: 13, borderRadius: 9, border: "1px solid " + T.cardBorder, background: T.card, color: T.text, fontFamily: "inherit", outline: "none" }} />
+                  {dirSearch && <button onClick={function() { setDirSearch(""); }} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: T.textFaint, fontSize: 14, padding: 4 }}><i className="ti ti-x" /></button>}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {shown.map(function(c) {
+                    return (
+                      <div key={c.name} style={{ background: T.card, border: "1px solid " + T.cardBorder, borderRadius: 10, display: "flex", alignItems: "center", padding: "10px 14px", gap: 10 }}>
+                        <i className="ti ti-building-community" style={{ fontSize: 16, color: T.textFaint, flexShrink: 0 }} />
+                        <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          }
+
+          // ── Players section ──
+          if (dirSection === "players") {
+            const items = loadDirPlayers();
           const q = dirSearch.trim().toLowerCase();
           const shown = items.filter(function(p) { return !q || (p.name || "").toLowerCase().includes(q); });
           function deletePlayer(id) {
@@ -33649,11 +33703,17 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
           }
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+                {DIR_SECTIONS.map(function(s) {
+                  var active = dirSection === s.id;
+                  return (<button key={s.id} onClick={function() { setDirSection(s.id); setDirSearch(""); setDirEditItem(null); }}
+                    style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 20, border: "1.5px solid " + (active ? T.green : T.cardBorder), background: active ? T.green : "transparent", color: active ? "#fff" : T.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    <i className={"ti " + s.icon} style={{ fontSize: 13 }} />{s.label}
+                  </button>);
+                })}
+              </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: T.textFaint, letterSpacing: "0.08em", textTransform: "uppercase" }}>Player directory</p>
-                  <p style={{ margin: 0, fontSize: 11, color: T.textMuted }}>{items.length} admin-managed player{items.length !== 1 ? "s" : ""}</p>
-                </div>
+                <p style={{ margin: 0, fontSize: 11, color: T.textMuted }}>{items.length} admin-managed player{items.length !== 1 ? "s" : ""}</p>
                 <button onClick={function() { setDirEditItem({ __new: true }); }}
                   style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 8, border: "none", background: T.green, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                   <i className="ti ti-plus" style={{ fontSize: 13 }} /> Add player
@@ -33662,7 +33722,7 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
               <div style={{ position: "relative" }}>
                 <i className="ti ti-search" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: T.textFaint }} />
                 <input value={dirSearch} onChange={function(e) { setDirSearch(e.target.value); }} placeholder="Search players…"
-                  style={{ width: "100%", padding: "9px 32px 9px 32px", fontSize: 13, borderRadius: 9, border: `1px solid ${T.cardBorder}`, background: T.card, color: T.text, fontFamily: "inherit", outline: "none" }} />
+                  style={{ width: "100%", padding: "9px 32px 9px 32px", fontSize: 13, borderRadius: 9, border: "1px solid " + T.cardBorder, background: T.card, color: T.text, fontFamily: "inherit", outline: "none" }} />
                 {dirSearch && <button onClick={function() { setDirSearch(""); }} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: T.textFaint, fontSize: 14, padding: 4 }}><i className="ti ti-x" /></button>}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -33704,26 +33764,31 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
               )}
             </div>
           );
-        })()}
-
-        {/* ── Coaches tab ── */}
-        {screen === "admin" && tab === "coaches" && (() => {
-          void dirTick;
-          const items = getDirCoaches();
-          const q = dirSearch.trim().toLowerCase();
-          const shown = items.filter(function(c) { return !q || (c.name || "").toLowerCase().includes(q) || (c.club || "").toLowerCase().includes(q); });
-          function deleteCoach(key) {
-            if (!confirm("Delete this coach?")) return;
-            saveDirCoaches(items.filter(function(c) { return (c.id || c.name) !== key; }));
-            setDirTick(function(t) { return t + 1; });
           }
+
+          // ── Coaches section ──
+          if (dirSection === "coaches") {
+            const items = getDirCoaches();
+            const q = dirSearch.trim().toLowerCase();
+            const shown = items.filter(function(c) { return !q || (c.name || "").toLowerCase().includes(q) || (c.club || "").toLowerCase().includes(q); });
+            function deleteCoach(key) {
+              if (!confirm("Delete this coach?")) return;
+              saveDirCoaches(items.filter(function(c) { return (c.id || c.name) !== key; }));
+              setDirTick(function(t) { return t + 1; });
+            }
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+                {DIR_SECTIONS.map(function(s) {
+                  var active = dirSection === s.id;
+                  return (<button key={s.id} onClick={function() { setDirSection(s.id); setDirSearch(""); setDirEditItem(null); }}
+                    style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 20, border: "1.5px solid " + (active ? T.green : T.cardBorder), background: active ? T.green : "transparent", color: active ? "#fff" : T.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    <i className={"ti " + s.icon} style={{ fontSize: 13 }} />{s.label}
+                  </button>);
+                })}
+              </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: T.textFaint, letterSpacing: "0.08em", textTransform: "uppercase" }}>Coach directory</p>
-                  <p style={{ margin: 0, fontSize: 11, color: T.textMuted }}>{items.length} coach{items.length !== 1 ? "es" : ""}</p>
-                </div>
+                <p style={{ margin: 0, fontSize: 11, color: T.textMuted }}>{items.length} coach{items.length !== 1 ? "es" : ""}</p>
                 <button onClick={function() { setDirEditItem({ __new: true }); }}
                   style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 8, border: "none", background: T.green, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                   <i className="ti ti-plus" style={{ fontSize: 13 }} /> Add coach
@@ -33732,7 +33797,7 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
               <div style={{ position: "relative" }}>
                 <i className="ti ti-search" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: T.textFaint }} />
                 <input value={dirSearch} onChange={function(e) { setDirSearch(e.target.value); }} placeholder="Search coaches…"
-                  style={{ width: "100%", padding: "9px 32px 9px 32px", fontSize: 13, borderRadius: 9, border: `1px solid ${T.cardBorder}`, background: T.card, color: T.text, fontFamily: "inherit", outline: "none" }} />
+                  style={{ width: "100%", padding: "9px 32px 9px 32px", fontSize: 13, borderRadius: 9, border: "1px solid " + T.cardBorder, background: T.card, color: T.text, fontFamily: "inherit", outline: "none" }} />
                 {dirSearch && <button onClick={function() { setDirSearch(""); }} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: T.textFaint, fontSize: 14, padding: 4 }}><i className="ti ti-x" /></button>}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -33779,26 +33844,31 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
               )}
             </div>
           );
-        })()}
-
-        {/* ── Equipment tab ── */}
-        {screen === "admin" && tab === "equipment" && (() => {
-          void dirTick;
-          const items = getDirEquipment();
-          const q = dirSearch.trim().toLowerCase();
-          const shown = items.filter(function(p) { return !q || (p.name || "").toLowerCase().includes(q) || (p.country || "").toLowerCase().includes(q); });
-          function deleteEquipment(name) {
-            if (!confirm("Delete this provider?")) return;
-            saveDirEquipment(items.filter(function(p) { return p.name !== name; }));
-            setDirTick(function(t) { return t + 1; });
           }
+
+          // ── Equipment section ──
+          if (dirSection === "equipment") {
+            const items = getDirEquipment();
+            const q = dirSearch.trim().toLowerCase();
+            const shown = items.filter(function(p) { return !q || (p.name || "").toLowerCase().includes(q) || (p.country || "").toLowerCase().includes(q); });
+            function deleteEquipment(name) {
+              if (!confirm("Delete this provider?")) return;
+              saveDirEquipment(items.filter(function(p) { return p.name !== name; }));
+              setDirTick(function(t) { return t + 1; });
+            }
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+                {DIR_SECTIONS.map(function(s) {
+                  var active = dirSection === s.id;
+                  return (<button key={s.id} onClick={function() { setDirSection(s.id); setDirSearch(""); setDirEditItem(null); }}
+                    style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 20, border: "1.5px solid " + (active ? T.green : T.cardBorder), background: active ? T.green : "transparent", color: active ? "#fff" : T.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    <i className={"ti " + s.icon} style={{ fontSize: 13 }} />{s.label}
+                  </button>);
+                })}
+              </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: T.textFaint, letterSpacing: "0.08em", textTransform: "uppercase" }}>Equipment directory</p>
-                  <p style={{ margin: 0, fontSize: 11, color: T.textMuted }}>{items.length} provider{items.length !== 1 ? "s" : ""}</p>
-                </div>
+                <p style={{ margin: 0, fontSize: 11, color: T.textMuted }}>{items.length} provider{items.length !== 1 ? "s" : ""}</p>
                 <button onClick={function() { setDirEditItem({ __new: true }); }}
                   style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 8, border: "none", background: T.green, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                   <i className="ti ti-plus" style={{ fontSize: 13 }} /> Add provider
@@ -33807,7 +33877,7 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
               <div style={{ position: "relative" }}>
                 <i className="ti ti-search" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: T.textFaint }} />
                 <input value={dirSearch} onChange={function(e) { setDirSearch(e.target.value); }} placeholder="Search providers…"
-                  style={{ width: "100%", padding: "9px 32px 9px 32px", fontSize: 13, borderRadius: 9, border: `1px solid ${T.cardBorder}`, background: T.card, color: T.text, fontFamily: "inherit", outline: "none" }} />
+                  style={{ width: "100%", padding: "9px 32px 9px 32px", fontSize: 13, borderRadius: 9, border: "1px solid " + T.cardBorder, background: T.card, color: T.text, fontFamily: "inherit", outline: "none" }} />
                 {dirSearch && <button onClick={function() { setDirSearch(""); }} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: T.textFaint, fontSize: 14, padding: 4 }}><i className="ti ti-x" /></button>}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -33848,28 +33918,33 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
               )}
             </div>
           );
-        })()}
-
-        {/* ── Affiliations tab ── */}
-        {screen === "admin" && tab === "affiliations" && (() => {
-          void dirTick;
-          const items = getDirAffiliations();
-          const q = dirSearch.trim().toLowerCase();
-          const shown = items.filter(function(m) { return !q || (m.country || "").toLowerCase().includes(q) || (m.org || "").toLowerCase().includes(q); });
-          function deleteAffiliation(country) {
-            if (!confirm("Delete this affiliation?")) return;
-            saveDirAffiliations(items.filter(function(m) { return m.country !== country; }));
-            setDirTick(function(t) { return t + 1; });
           }
-          const CAT_COLORS = { Full: T.greenMid, Associate: "#2563EB", RCO: T.textMuted };
-          const CAT_BG     = { Full: T.greenPale, Associate: "#EAF1FB", RCO: T.pageBg };
+
+          // ── Affiliations section ──
+          if (dirSection === "affiliations") {
+            const items = getDirAffiliations();
+            const q = dirSearch.trim().toLowerCase();
+            const shown = items.filter(function(m) { return !q || (m.country || "").toLowerCase().includes(q) || (m.org || "").toLowerCase().includes(q); });
+            function deleteAffiliation(country) {
+              if (!confirm("Delete this affiliation?")) return;
+              saveDirAffiliations(items.filter(function(m) { return m.country !== country; }));
+              setDirTick(function(t) { return t + 1; });
+            }
+            const CAT_COLORS = { Full: T.greenMid, Associate: "#2563EB", RCO: T.textMuted };
+            const CAT_BG     = { Full: T.greenPale, Associate: "#EAF1FB", RCO: T.pageBg };
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+                {DIR_SECTIONS.map(function(s) {
+                  var active = dirSection === s.id;
+                  return (<button key={s.id} onClick={function() { setDirSection(s.id); setDirSearch(""); setDirEditItem(null); }}
+                    style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 20, border: "1.5px solid " + (active ? T.green : T.cardBorder), background: active ? T.green : "transparent", color: active ? "#fff" : T.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    <i className={"ti " + s.icon} style={{ fontSize: 13 }} />{s.label}
+                  </button>);
+                })}
+              </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: T.textFaint, letterSpacing: "0.08em", textTransform: "uppercase" }}>WCF affiliations</p>
-                  <p style={{ margin: 0, fontSize: 11, color: T.textMuted }}>{items.length} member{items.length !== 1 ? "s" : ""}</p>
-                </div>
+                <p style={{ margin: 0, fontSize: 11, color: T.textMuted }}>{items.length} member{items.length !== 1 ? "s" : ""}</p>
                 <button onClick={function() { setDirEditItem({ __new: true }); }}
                   style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 8, border: "none", background: T.green, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                   <i className="ti ti-plus" style={{ fontSize: 13 }} /> Add member
@@ -33878,7 +33953,7 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
               <div style={{ position: "relative" }}>
                 <i className="ti ti-search" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: T.textFaint }} />
                 <input value={dirSearch} onChange={function(e) { setDirSearch(e.target.value); }} placeholder="Search by country or org…"
-                  style={{ width: "100%", padding: "9px 32px 9px 32px", fontSize: 13, borderRadius: 9, border: `1px solid ${T.cardBorder}`, background: T.card, color: T.text, fontFamily: "inherit", outline: "none" }} />
+                  style={{ width: "100%", padding: "9px 32px 9px 32px", fontSize: 13, borderRadius: 9, border: "1px solid " + T.cardBorder, background: T.card, color: T.text, fontFamily: "inherit", outline: "none" }} />
                 {dirSearch && <button onClick={function() { setDirSearch(""); }} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: T.textFaint, fontSize: 14, padding: 4 }}><i className="ti ti-x" /></button>}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -33924,6 +33999,9 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
               )}
             </div>
           );
+          }
+
+          return null;
         })()}
 
         {/* ── Onboarding tab — club pipeline + member setup ── */}
