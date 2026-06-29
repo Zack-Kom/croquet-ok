@@ -56804,14 +56804,6 @@ function BallPositionRecorder({ game, onSave, onCancel, onRequestCancel, grassSt
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${T.cardBorder}`, flexShrink: 0 }}>
             {/* Unified display menu: View · Scale · Lawn · Physics · Help */}
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, position: "relative" }}>
-              {/* Fullscreen quick-preview — icon-only */}
-              <button onClick={e => { e.stopPropagation(); setShowFullPreview(true); setShowDisplayMenu(false); setShowLawnPanel(false); }}
-                title="Full-screen preview"
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26,
-                  borderRadius: 6, border: `1px solid ${T.cardBorder}`, background: T.card,
-                  color: T.textMuted, cursor: "pointer", flexShrink: 0 }}>
-                <i className="ti ti-arrows-maximize" style={{ fontSize: 13 }} aria-hidden="true" />
-              </button>
               {/* View — unified display settings menu */}
               {(() => {
                 const anyActive = isoView || trueScaleObjs || showPhysics;
@@ -56920,6 +56912,12 @@ function BallPositionRecorder({ game, onSave, onCancel, onRequestCancel, grassSt
                         border: "none", cursor: "pointer", textAlign: "left", background: T.card }}>
                       <i className="ti ti-help-circle" style={{ fontSize: 14, color: T.textMuted, flexShrink: 0 }} aria-hidden="true" />
                       <div style={{ fontSize: 12, fontWeight: 600, color: T.text }}>Help & shortcuts</div>
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); setShowFullPreview(true); setShowDisplayMenu(false); setShowLawnPanel(false); }}
+                      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 11px",
+                        border: "none", cursor: "pointer", textAlign: "left", background: T.card }}>
+                      <i className="ti ti-arrows-maximize" style={{ fontSize: 14, color: T.textMuted, flexShrink: 0 }} aria-hidden="true" />
+                      <div style={{ fontSize: 12, fontWeight: 600, color: T.text }}>Full-screen preview</div>
                     </button>
                   </div>
                 </>
@@ -57063,7 +57061,7 @@ function BallPositionRecorder({ game, onSave, onCancel, onRequestCancel, grassSt
               const hasSibNext = sibIdx >= 0 && sibIdx < levelSnaps.length - 1;
 
               return (
-                <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0, marginLeft: "auto" }}>
                   {/* Filmstrip — opens snapshot filmstrip/filmstrip view */}
                   <button onClick={e => { e.stopPropagation(); setShowTreeModal(true); }}
                     title="Filmstrip / snapshot filmstrip"
