@@ -1532,7 +1532,7 @@ const ROLE_DEFS = [
     id: "secretary", label: "Club Secretary", short: "Secretary", icon: "ti-id-badge-2",
     color: "#0F766E", free: false, tagline: "Run the club without the burnout",
     benefits: [
-      "Spot lapsing members early and send a gentle "we've missed you"",
+      "Spot lapsing members early and send a gentle 'we’ve missed you'",
       "Fill the tea and duty rota without the WhatsApp chasing",
       "Generate the AGM report and attendance trends in minutes, not an evening",
     ],
@@ -20184,7 +20184,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: T.text }}>{stubCheckedIn ? "Checked in" : "Were you here?"}</p>
                 <p style={{ margin: "2px 0 0", fontSize: 11.5, color: T.textMuted, lineHeight: 1.45 }}>
-                  {stubCheckedIn ? "Saved to your profile's "where I've played"." : "Record a visit for your own history, even though the club isn't on the app yet."}
+                  {stubCheckedIn ? "Saved to your profile's 'where I've played'." : "Record a visit for your own history, even though the club isn't on the app yet."}
                 </p>
               </div>
               {!stubCheckedIn && (
@@ -30026,7 +30026,7 @@ function MyProfileView({ events, games, onBack, onPractice, onSelectEvent, darkM
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "0 1rem 3rem" }}>
 
         {/* Avatar + name row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20, marginTop: 16 }}>
           <div style={{ position: "relative", flexShrink: 0, padding: "0 8px 8px 0" }}>
             <div style={{ width: 64, height: 64, borderRadius: "50%", background: T.green, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", boxShadow: "0 2px 10px rgba(26,74,46,0.22)" }}>
               {(editing ? draft.avatar : profile.avatar)
@@ -30522,7 +30522,7 @@ function MyProfileView({ events, games, onBack, onPractice, onSelectEvent, darkM
                 const fmtCI = ts => { try { return new Date(ts).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }); } catch { return ts; } };
                 const fmtCIt = ts => { try { return new Date(ts).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
                 const all = profile.myCheckIns || [];
-                const LIMIT = 10;
+                const LIMIT = 5;
                 const shown = all.slice(0, LIMIT);
                 const overflow = all.length - LIMIT;
                 const CheckInRow = ({ ci }) => (
@@ -30719,24 +30719,6 @@ function MyProfileView({ events, games, onBack, onPractice, onSelectEvent, darkM
             </div>
           );
         })()}
-
-        {/* Practice */}
-        <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", marginBottom: 16 }}>
-          <div style={{ background: T.greenMid, padding: "7px 14px" }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", letterSpacing: "0.07em", textTransform: "uppercase" }}>Practice</span>
-          </div>
-          <button onClick={onPractice}
-            style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", background: T.card, border: "none", cursor: "pointer", textAlign: "left", WebkitTapHighlightColor: "transparent" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: T.green, border: "1px solid #E6C87A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <i className="ti ti-target" style={{ fontSize: 20, color: "#7A4F00" }} aria-hidden="true" />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: T.text }}>Drills, notes and session logs</p>
-              <p style={{ margin: "2px 0 0", fontSize: 12, color: T.textMuted }}>Track your practice progress</p>
-            </div>
-            <i className="ti ti-chevron-right" style={{ fontSize: 16, color: T.textFaint, flexShrink: 0 }} aria-hidden="true" />
-          </button>
-        </div>
 
         {/* Following */}
         {(() => {
@@ -33108,7 +33090,7 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
               </div>
 
               {/* ── River cards ── */}
-              {contentSection === "river" && (
+              {contentSection === "river" && (<>
                 <Section title="River cards" subtitle={`${ALL_RIVER_CARDS.length} card definitions · ${ALL_RIVER_CARDS.filter(c => c.wired).length} live · ${ALL_RIVER_CARDS.filter(c => c.draft).length} draft`}>
                   {/* Type filter */}
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
@@ -33191,7 +33173,7 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
                     ))}
                   </div>
                 </div>
-              )}
+              </>)}
 
               {/* ── Banner cards ── */}
               {contentSection === "banners" && (
