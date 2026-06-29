@@ -1543,15 +1543,17 @@ const ROLE_DEFS = [
       { icon: "ti-heart-rate-monitor", label: "Attendance up 12%", sublabel: "Tuesdays strongest", urgent: false, color: "#0F766E" },
     ],
     menuItems: [
-      { label: "Dashboard", icon: "ti-layout-dashboard", nav: "sec-dashboard" },
-      { label: "Members",   icon: "ti-users",             nav: "sec-members" },
+      { label: "Dashboard",  icon: "ti-layout-dashboard", nav: "sec-dashboard" },
+      { label: "My Club",    icon: "ti-building",          nav: "homeclub", homeclub: true },
+      { label: "Members",    icon: "ti-users",             nav: "sec-members" },
+      { label: "Committee",  icon: "ti-clipboard-list",    nav: "sec-committee" },
       { label: "Event Hire", icon: "ti-calendar-star",     nav: "sec-events" },
-      { label: "Check-ins", icon: "ti-map-pin",           nav: "sec-checkins" },
-      { label: "Rota",      icon: "ti-list-check",        nav: "sec-rota" },
-      { label: "Announce",  icon: "ti-speakerphone",      nav: "announcements" },
-      { label: "Work Log",  icon: "ti-clipboard-list",    nav: "sec-worklog" },
-      { label: "Reports",   icon: "ti-report",            nav: "sec-reports" },
-      { label: "Club Admin", icon: "ti-settings",         nav: "sec-admin" },
+      { label: "Check-ins",  icon: "ti-map-pin",           nav: "sec-checkins" },
+      { label: "Rota",       icon: "ti-list-check",        nav: "sec-rota" },
+      { label: "Announce",   icon: "ti-speakerphone",      nav: "announcements" },
+      { label: "Work Log",   icon: "ti-clipboard-list",    nav: "sec-worklog" },
+      { label: "Reports",    icon: "ti-report",            nav: "sec-reports" },
+      { label: "Club Admin", icon: "ti-settings",          nav: "sec-admin" },
     ],
   },
   {
@@ -5475,7 +5477,12 @@ function App() {
         <SecPrivateEventsView onBack={() => setView("home")} />
       )}
       {view === "sec-checkins" && (
-        <SecCheckInsView onBack={() => setView("home")} />
+        <div style={{ background: T.pageBg, minHeight: "100vh" }}>
+          <SecPageHeader section="Check-ins" onBack={() => setView("home")} />
+          <div style={{ maxWidth: 600, margin: "0 auto", padding: "1rem 1rem 3rem" }}>
+            <SecCheckInsView inline onBack={() => setView("home")} />
+          </div>
+        </div>
       )}
       {view === "sec-rota" && (
         <SecRotaView onBack={() => setView("home")} onPostAnnouncement={postAnnouncement} announcements={announcements} />
@@ -5488,6 +5495,9 @@ function App() {
       )}
       {view === "sec-admin" && (
         <SecClubAdminView onBack={() => setView("home")} events={events} games={games} />
+      )}
+      {view === "sec-committee" && (
+        <SecCommitteeView onBack={() => setView("home")} events={events} games={games} />
       )}
 
       {view === "lawns-keeper" && (
@@ -18415,8 +18425,8 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
             const byName = new Map(lawns.map(l => [norm(l.name), l.id]));
             const lawnObjs = layout.objects.filter(o => o.type === "lawn");
             layout = { ...layout, objects: layout.objects.map(o => {
-              if (o.type !== "lawn" || o.lawnId) return o;
-              const id = byName.get(norm(o.label)) || (lawns[lawnObjs.indexOf(o)] && lawns[lawnObjs.indexOf(o)].id) || null;
+              if (o.type !== "lawn") return o;
+              const id = byName.get(norm(o.label)) || (lawns[lawnObjs.indexOf(o)] && lawns[lawnObjs.indexOf(o)].id) || o.lawnId || null;
               return id ? { ...o, lawnId: id } : o;
             }) };
           }
@@ -19456,6 +19466,70 @@ function LiveNoticeComposer({ clubName, onPost, onDelete, notices }) {
   );
 }
 
+// ─── ClubIntroVideoEditor ─────────────────────────────────────────────────────
+function ClubIntroVideoEditor({ clubName, profile, setProfile, accent }) {
+  const clubId = getClubId(clubName);
+  const cur = profile.featuredVideo || "";
+  const [url, setUrl] = React.useState(cur);
+  const [vs, setVs] = React.useState(false);
+  const thumb = youTubeThumbnail(url);
+  const vidId = extractYouTubeId(url);
+  function saveIntroVideo() {
+    const np = { ...profile, featuredVideo: url.trim() };
+    setProfile(np); saveClubProfile(clubId, np);
+    setVs(true); setTimeout(() => setVs(false), 2200);
+  }
+  return (
+    <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
+      <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
+        <i className="ti ti-player-play" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>Club intro video</span>
+      </div>
+      <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <p style={{ margin: 0, fontSize: 12, color: T.textMuted, lineHeight: 1.5 }}>
+          Shown at the top of the club's About tab. A 60–90 second welcome — lawns, people, vibe.
+        </p>
+        <input value={url} onChange={e => { setUrl(e.target.value); setVs(false); }}
+          placeholder="https://www.youtube.com/watch?v=..."
+          style={{ width: "100%", padding: "8px 10px", fontSize: 13, borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.pageBg, color: T.text, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+        {url.trim() && (
+          <div style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${T.cardBorder}` }}>
+            {thumb ? (
+              <div style={{ position: "relative" }}>
+                <img src={thumb} alt="Thumbnail" style={{ width: "100%", display: "block", aspectRatio: "16/9", objectFit: "cover" }} />
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <i className="ti ti-player-play-filled" style={{ fontSize: 18, color: "#fff" }} aria-hidden="true" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 7 }}>
+                <i className="ti ti-alert-circle" style={{ fontSize: 14, color: T.brown }} aria-hidden="true" />
+                <span style={{ fontSize: 11.5, color: T.brown }}>Not a valid YouTube URL</span>
+              </div>
+            )}
+            {vidId && (
+              <div style={{ padding: "5px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: T.textFaint, fontFamily: "monospace" }}>ID: {vidId}</span>
+                <a href={`https://youtube.com/watch?v=${vidId}`} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 10, color: accent, textDecoration: "none", display: "flex", alignItems: "center", gap: 3 }}>
+                  Open <i className="ti ti-external-link" style={{ fontSize: 10 }} aria-hidden="true" />
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+        <button onClick={saveIntroVideo}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px", borderRadius: 9, border: "none", background: vs ? T.green : accent, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s" }}>
+          <i className={`ti ${vs ? "ti-check" : "ti-device-floppy"}`} style={{ fontSize: 14 }} aria-hidden="true" />
+          {vs ? "Saved" : "Save video"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── ClubDetailView ───────────────────────────────────────────────────────────
 function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewEvent, onOpenGame, initialTab, lockTab }) {
   const clubKey = "clubProfile_" + clubName.toLowerCase().replace(/\s+/g, "_");
@@ -20037,7 +20111,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
     { id: "about",     label: "About",      icon: "ti-info-circle" },
     // Officer-only extras — hidden from plain player members
     ...(isClubSecretary ? [{ id: "bookings", label: "Event Hire", icon: "ti-calendar-star" }] : []),
-    ...(isClubSecretary ? [{ id: "checkins", label: "Check-Ins",  icon: "ti-map-pin" }] : []),
     ...((isClubPresident || isClubTreasurer) && !isClubSecretary ? [{ id: "sec-dashboard", label: "Dashboard", icon: "ti-layout-dashboard" }] : []),
     ...((isClubCaptain || isClubCommittee) && !isClubSecretary ? [{ id: "sec-members", label: "All Members", icon: "ti-users" }] : []),
     ...((isClubSecretary || isClubPresident || isClubTreasurer || isClubCaptain || isClubCommittee) ? [{ id: "committee", label: "Committee", icon: "ti-clipboard-list" }] : []),
@@ -24123,68 +24196,7 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
             {adminSub === "profile" && (<>
 
             {/* Club intro video — identity-level config, lives alongside club details */}
-            {(() => {
-              const clubId = getClubId(clubName);
-              const cur = (profile.featuredVideo || "");
-              const thumb = youTubeThumbnail(cur);
-              const vidId = extractYouTubeId(cur);
-              const [url, setUrl] = React.useState(cur);
-              const [vs, setVs] = React.useState(false);
-              function saveIntroVideo() {
-                const np = { ...profile, featuredVideo: url.trim() };
-                setProfile(np); saveClubProfile(clubId, np);
-                setVs(true); setTimeout(() => setVs(false), 2200);
-              }
-              return (
-                <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
-                  <div style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)`, padding: "9px 14px", display: "flex", alignItems: "center", gap: 7 }}>
-                    <i className="ti ti-player-play" style={{ fontSize: 13, color: "#fff" }} aria-hidden="true" />
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.04em" }}>Club intro video</span>
-                  </div>
-                  <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-                    <p style={{ margin: 0, fontSize: 12, color: T.textMuted, lineHeight: 1.5 }}>
-                      Shown at the top of the club's About tab. A 60–90 second welcome — lawns, people, vibe.
-                    </p>
-                    <input value={url} onChange={e => { setUrl(e.target.value); setVs(false); }}
-                      placeholder="https://www.youtube.com/watch?v=..."
-                      style={{ width: "100%", padding: "8px 10px", fontSize: 13, borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.pageBg, color: T.text, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
-                    {url.trim() && (
-                      <div style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${T.cardBorder}` }}>
-                        {thumb ? (
-                          <div style={{ position: "relative" }}>
-                            <img src={thumb} alt="Thumbnail" style={{ width: "100%", display: "block", aspectRatio: "16/9", objectFit: "cover" }} />
-                            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <i className="ti ti-player-play-filled" style={{ fontSize: 18, color: "#fff" }} aria-hidden="true" />
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 7 }}>
-                            <i className="ti ti-alert-circle" style={{ fontSize: 14, color: T.brown }} aria-hidden="true" />
-                            <span style={{ fontSize: 11.5, color: T.brown }}>Not a valid YouTube URL</span>
-                          </div>
-                        )}
-                        {vidId && (
-                          <div style={{ padding: "5px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontSize: 10, color: T.textFaint, fontFamily: "monospace" }}>ID: {vidId}</span>
-                            <a href={`https://youtube.com/watch?v=${vidId}`} target="_blank" rel="noopener noreferrer"
-                              style={{ fontSize: 10, color: accent, textDecoration: "none", display: "flex", alignItems: "center", gap: 3 }}>
-                              Open <i className="ti ti-external-link" style={{ fontSize: 10 }} aria-hidden="true" />
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <button onClick={saveIntroVideo}
-                      style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px", borderRadius: 9, border: "none", background: vs ? T.green : accent, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s" }}>
-                      <i className={`ti ${vs ? "ti-check" : "ti-device-floppy"}`} style={{ fontSize: 14 }} aria-hidden="true" />
-                      {vs ? "Saved" : "Save video"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
+            <ClubIntroVideoEditor clubName={clubName} profile={profile} setProfile={setProfile} accent={accent} />
 
             {/* ── Profile: Branding card ── */}
             <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(26,74,46,0.06)" }}>
@@ -29566,6 +29578,7 @@ function MyProfileView({ events, games, onBack, onPractice, onSelectEvent, darkM
     } catch { return 0; }
   })();
   const [rankingFetch, setRankingFetch] = React.useState({ status: null, result: null, error: null }); // status: null|loading|done|error
+  const [ciModalOpen, setCiModalOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (!profile.name && !profile.acHandicap && !profile.gcHandicap && !(profile.clubs || []).length) setEditing(true);
@@ -29642,7 +29655,7 @@ function MyProfileView({ events, games, onBack, onPractice, onSelectEvent, darkM
 
         {/* Avatar + name row */}
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-          <div style={{ position: "relative", flexShrink: 0 }}>
+          <div style={{ position: "relative", flexShrink: 0, padding: "0 8px 8px 0" }}>
             <div style={{ width: 64, height: 64, borderRadius: "50%", background: T.green, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", boxShadow: "0 2px 10px rgba(26,74,46,0.22)" }}>
               {(editing ? draft.avatar : profile.avatar)
                 ? <img src={editing ? draft.avatar : profile.avatar} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -30006,27 +30019,55 @@ function MyProfileView({ events, games, onBack, onPractice, onSelectEvent, darkM
               {(profile.myCheckIns || []).length > 0 && (() => {
                 const fmtCI = ts => { try { return new Date(ts).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }); } catch { return ts; } };
                 const fmtCIt = ts => { try { return new Date(ts).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
-                const shown = (profile.myCheckIns || []).slice(0, 12);
+                const all = profile.myCheckIns || [];
+                const LIMIT = 10;
+                const shown = all.slice(0, LIMIT);
+                const overflow = all.length - LIMIT;
+                const CheckInRow = ({ ci }) => (
+                  <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", background: T.pageBg, borderRadius: 8 }}>
+                    <i className="ti ti-map-pin" style={{ fontSize: 14, color: T.greenMid, flexShrink: 0 }} aria-hidden="true" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: T.text, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ci.club || "A club"}</span>
+                        {ci.clubRegistered === false && <span style={{ fontSize: 8.5, fontWeight: 700, padding: "1px 6px", borderRadius: 20, background: T.card, color: T.textMuted, border: `1px solid ${T.cardBorder}`, textTransform: "uppercase", letterSpacing: "0.03em" }}>Not on app</span>}
+                      </p>
+                      {ci.reason && <p style={{ margin: "1px 0 0", fontSize: 10.5, color: T.textFaint }}>{ci.reason}</p>}
+                    </div>
+                    <span style={{ fontSize: 10.5, color: T.textFaint, flexShrink: 0, whiteSpace: "nowrap", textAlign: "right" }}>{fmtCI(ci.timestamp)}<br />{fmtCIt(ci.timestamp)}</span>
+                  </div>
+                );
                 return (
                 <div>
                   <p style={{ margin: "0 0 8px", fontSize: 10, fontWeight: 700, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Where I've played</p>
                   <div style={{ display: "grid", gap: 6 }}>
-                    {shown.map((ci, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", background: T.pageBg, borderRadius: 8 }}>
-                        <i className="ti ti-map-pin" style={{ fontSize: 14, color: T.greenMid, flexShrink: 0 }} aria-hidden="true" />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: T.text, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ci.club || "A club"}</span>
-                            {ci.clubRegistered === false && <span style={{ fontSize: 8.5, fontWeight: 700, padding: "1px 6px", borderRadius: 20, background: T.card, color: T.textMuted, border: `1px solid ${T.cardBorder}`, textTransform: "uppercase", letterSpacing: "0.03em" }}>Not on app</span>}
-                          </p>
-                          {ci.reason && <p style={{ margin: "1px 0 0", fontSize: 10.5, color: T.textFaint }}>{ci.reason}</p>}
-                        </div>
-                        <span style={{ fontSize: 10.5, color: T.textFaint, flexShrink: 0, whiteSpace: "nowrap", textAlign: "right" }}>{fmtCI(ci.timestamp)}<br />{fmtCIt(ci.timestamp)}</span>
-                      </div>
-                    ))}
+                    {shown.map((ci, i) => <CheckInRow key={i} ci={ci} />)}
                   </div>
-                  {(profile.myCheckIns || []).length > shown.length && (
-                    <p style={{ margin: "6px 0 0", fontSize: 11, color: T.textFaint, textAlign: "center" }}>+ {(profile.myCheckIns || []).length - shown.length} more</p>
+                  {overflow > 0 && (
+                    <button onClick={() => setCiModalOpen(true)}
+                      style={{ marginTop: 8, width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px dashed ${T.cardBorder}`, background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>
+                      <i className="ti ti-map-pins" style={{ fontSize: 13 }} aria-hidden="true" />
+                      {overflow} more visit{overflow !== 1 ? "s" : ""} — tap to explore
+                    </button>
+                  )}
+                  {ciModalOpen && (
+                    <div onClick={() => setCiModalOpen(false)}
+                      style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(18,45,30,0.48)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+                      <div onClick={e => e.stopPropagation()}
+                        style={{ width: "100%", maxWidth: 480, background: T.card, borderRadius: "18px 18px 0 0", padding: "10px 0 max(20px, env(safe-area-inset-bottom))", boxShadow: "0 -8px 40px rgba(0,0,0,0.28)", maxHeight: "82vh", display: "flex", flexDirection: "column" }}>
+                        <div style={{ width: 36, height: 4, borderRadius: 2, background: T.cardBorder, margin: "3px auto 12px", flexShrink: 0 }} />
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 10px", flexShrink: 0 }}>
+                          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text, fontFamily: "'Libre Baskerville', Georgia, serif" }}>
+                            Where I've played <span style={{ fontSize: 12, fontWeight: 500, color: T.textMuted }}>({all.length})</span>
+                          </h2>
+                          <button onClick={() => setCiModalOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, padding: 4 }}>
+                            <i className="ti ti-x" style={{ fontSize: 16 }} aria-hidden="true" />
+                          </button>
+                        </div>
+                        <div style={{ overflowY: "auto", padding: "0 12px", display: "grid", gap: 6 }}>
+                          {all.map((ci, i) => <CheckInRow key={i} ci={ci} />)}
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
                 );
@@ -42014,6 +42055,19 @@ function SecClubAdminView({ onBack, events, games }) {
   );
   return <ClubDetailView clubName={club} onBack={onBack} events={events} games={games} lockTab="admin" onSelectEvent={() => {}} onNewEvent={() => {}} />;
 }
+function SecCommitteeView({ onBack, events, games }) {
+  const club = secClubName();
+  if (!club) return (
+    <div style={{ background: T.pageBg, minHeight: "100vh" }}>
+      <SecPageHeader section="Committee" onBack={onBack} />
+      <div style={{ maxWidth: 600, margin: "0 auto", padding: "2rem 1rem", textAlign: "center" }}>
+        <i className="ti ti-clipboard-list" style={{ fontSize: 30, color: T.textFaint, display: "block", marginBottom: 8 }} />
+        <p style={{ margin: 0, fontSize: 13, color: T.textFaint }}>No club is set for your secretary profile yet.</p>
+      </div>
+    </div>
+  );
+  return <ClubDetailView clubName={club} onBack={onBack} events={events} games={games} lockTab="committee" onSelectEvent={() => {}} onNewEvent={() => {}} />;
+}
 
 
 // ─── Member status + fee management helpers ───────────────────────────────────
@@ -45700,7 +45754,9 @@ function SecBookingsMediaTab({ club, accent }) {
 // Secretary-level check-in manager. Reads the same localStorage key as the
 // public club page check-ins tab (checkIns_<clubKey>) but with full admin
 // access — no member gate, manual entry, search, and CSV export.
-function SecCheckInsView({ onBack }) {
+// When `inline` is true, renders a compact preview card with latest 20 entries
+// and a "View all" modal instead of a full page.
+function SecCheckInsView({ onBack, inline = false }) {
   const club = secClubName();
   const accent = "#0F766E";
   const clubKey = club ? "clubProfile_" + club.toLowerCase().replace(/\s+/g, "_") : "";
@@ -45715,6 +45771,7 @@ function SecCheckInsView({ onBack }) {
   const [newReason, setNewReason] = React.useState("Visit");
   const [limit, setLimit] = React.useState(30);
   const [exportDone, setExportDone] = React.useState(false);
+  const [allModalOpen, setAllModalOpen] = React.useState(false);
 
   const REASONS = ["Visit", "Play day", "Practice", "Event", "Volunteer", "Committee", "Guest", "Other"];
 
@@ -45780,6 +45837,119 @@ function SecCheckInsView({ onBack }) {
   const topMembers = Object.entries(byMember).sort((a,b) => b[1]-a[1]).slice(0, 5);
 
   const inputStyle = { width: "100%", padding: "8px 10px", fontSize: 13, borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.card, color: T.text, fontFamily: "inherit", outline: "none" };
+
+  const CheckInRow = ({ c, i, removable }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 12px", borderBottom: `1px solid ${T.cardBorder}` }}>
+      <i className="ti ti-map-pin" style={{ fontSize: 12, color: accent, flexShrink: 0 }} />
+      <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "Unknown"}</span>
+      {c.reason && <span style={{ fontSize: 9, fontWeight: 700, color: accent, background: accent + "15", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>{c.reason}</span>}
+      <span style={{ fontSize: 10.5, color: T.textFaint, flexShrink: 0, whiteSpace: "nowrap" }}>{fmtDate(c.timestamp)}</span>
+      {removable && <button onClick={() => removeCheckIn(checkIns.indexOf(c))} aria-label="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: T.textFaint, padding: 3, flexShrink: 0, fontSize: 13 }}><i className="ti ti-x" /></button>}
+    </div>
+  );
+
+  // ── Inline preview mode ────────────────────────────────────────────────────
+  if (inline) {
+    const PREVIEW = 20;
+    const preview = checkIns.slice(0, PREVIEW);
+    const overflow = checkIns.length - PREVIEW;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* Stats row */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+          {[
+            ["ti-map-pin", checkIns.length, "Total"],
+            ["ti-users", Object.keys(byMember).length, "Unique"],
+            ["ti-calendar", checkIns.filter(c => { try { return new Date(c.timestamp).toDateString() === new Date().toDateString(); } catch { return false; } }).length, "Today"],
+          ].map(([icon, val, lbl]) => (
+            <div key={lbl} style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+              <i className={`ti ${icon}`} style={{ fontSize: 15, color: accent, display: "block", marginBottom: 3 }} />
+              <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: T.text, lineHeight: 1 }}>{val}</p>
+              <p style={{ margin: "2px 0 0", fontSize: 10, color: T.textFaint }}>{lbl}</p>
+            </div>
+          ))}
+        </div>
+        {/* Add + Export row */}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setShowAdd(v => !v)}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 12px", borderRadius: 8, border: "none", background: accent, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            <i className="ti ti-plus" style={{ fontSize: 13 }} /> Record check-in
+          </button>
+          <button onClick={exportCSV}
+            style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: exportDone ? accent : T.card, color: exportDone ? "#fff" : T.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            <i className={`ti ${exportDone ? "ti-check" : "ti-file-download"}`} style={{ fontSize: 13 }} />
+          </button>
+        </div>
+        {/* Manual add form */}
+        {showAdd && (
+          <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 10, padding: "11px 13px", display: "flex", flexDirection: "column", gap: 9 }}>
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Member or visitor name"
+              style={inputStyle} onKeyDown={e => e.key === "Enter" && addCheckIn()} autoFocus />
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {REASONS.map(r => (
+                <button key={r} type="button" onClick={() => setNewReason(r)}
+                  style={{ padding: "5px 11px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 600,
+                    border: `1.5px solid ${newReason === r ? accent : T.cardBorder}`,
+                    background: newReason === r ? accent + "0D" : "transparent",
+                    color: newReason === r ? accent : T.textMuted }}>{r}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setShowAdd(false)} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+              <button onClick={addCheckIn} style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: accent, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                <i className="ti ti-map-pin" style={{ fontSize: 13, marginRight: 5 }} />Record
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Preview list */}
+        {checkIns.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "1.5rem 1rem", background: T.card, borderRadius: 10, border: `1px solid ${T.cardBorder}` }}>
+            <i className="ti ti-map-pin-off" style={{ fontSize: 24, color: T.textFaint, display: "block", marginBottom: 6 }} />
+            <p style={{ margin: 0, fontSize: 12, color: T.textFaint }}>No check-ins recorded yet.</p>
+          </div>
+        ) : (
+          <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 10, overflow: "hidden" }}>
+            {preview.map((c, i) => <CheckInRow key={i} c={c} i={i} removable />)}
+            {overflow > 0 && (
+              <button onClick={() => setAllModalOpen(true)}
+                style={{ width: "100%", padding: "10px", background: "transparent", border: "none", borderTop: `1px solid ${T.cardBorder}`, color: accent, fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                <i className="ti ti-list" style={{ fontSize: 13 }} />
+                {overflow} more — view all {checkIns.length} check-ins
+              </button>
+            )}
+          </div>
+        )}
+        {/* View-all modal */}
+        {allModalOpen && (
+          <div onClick={() => setAllModalOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(18,45,30,0.48)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+            <div onClick={e => e.stopPropagation()}
+              style={{ width: "100%", maxWidth: 520, background: T.card, borderRadius: "18px 18px 0 0", maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 -8px 40px rgba(0,0,0,0.28)" }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: T.cardBorder, margin: "10px auto 0", flexShrink: 0 }} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px 8px", flexShrink: 0, borderBottom: `1px solid ${T.cardBorder}` }}>
+                <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text, fontFamily: "'Libre Baskerville', Georgia, serif" }}>
+                  All check-ins <span style={{ fontSize: 12, fontWeight: 500, color: T.textMuted }}>({checkIns.length})</span>
+                </h2>
+                <button onClick={() => setAllModalOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, padding: 4 }}>
+                  <i className="ti ti-x" style={{ fontSize: 16 }} />
+                </button>
+              </div>
+              <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+                {checkIns.map((c, i) => <CheckInRow key={i} c={c} i={i} removable />)}
+              </div>
+              <div style={{ padding: "10px 14px max(14px, env(safe-area-inset-bottom))", borderTop: `1px solid ${T.cardBorder}`, flexShrink: 0 }}>
+                <button onClick={exportCSV} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px", borderRadius: 9, border: `1px solid ${T.cardBorder}`, background: T.card, color: T.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  <i className={`ti ${exportDone ? "ti-check" : "ti-file-download"}`} style={{ fontSize: 13 }} />
+                  {exportDone ? "Exported!" : "Export CSV"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: T.pageBg, minHeight: "100vh" }}>
@@ -45881,20 +46051,7 @@ function SecCheckInsView({ onBack }) {
           </div>
         ) : (
           <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 10, overflow: "hidden" }}>
-            {shown.map((c, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 12px", borderBottom: i < shown.length - 1 ? `1px solid ${T.cardBorder}` : "none" }}>
-                <i className="ti ti-map-pin" style={{ fontSize: 12, color: accent, flexShrink: 0 }} />
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "Unknown"}</span>
-                {c.reason && (
-                  <span style={{ fontSize: 9, fontWeight: 700, color: accent, background: accent + "15", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>{c.reason}</span>
-                )}
-                <span style={{ fontSize: 10.5, color: T.textFaint, flexShrink: 0, whiteSpace: "nowrap" }}>{fmtDate(c.timestamp)}</span>
-                <button onClick={() => removeCheckIn(checkIns.indexOf(c))} aria-label="Remove check-in"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: T.textFaint, padding: 3, flexShrink: 0, fontSize: 13 }}>
-                  <i className="ti ti-x" />
-                </button>
-              </div>
-            ))}
+            {shown.map((c, i) => <CheckInRow key={i} c={c} i={i} removable />)}
             {filtered.length > limit && (
               <button onClick={() => setLimit(n => n + 30)}
                 style={{ width: "100%", padding: "9px", background: "transparent", border: "none", borderTop: `1px solid ${T.cardBorder}`, color: accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>
@@ -48210,6 +48367,19 @@ function HomeHeader({ onNewGame, onStrategy, onPractice, onNewEvent, onAbout, on
     try { localStorage.setItem("superAdmin", next ? "1" : "0"); } catch {}
   }
 
+  const [heldOverrides, setHeldOverrides] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem("roleHeldOverrides") || "{}"); } catch { return {}; }
+  });
+  function toggleRoleHeld(id) {
+    const current = heldOverrides[id] !== undefined ? heldOverrides[id] : (ROLE_DEFS.find(r => r.id === id)?.held ?? false);
+    const next = { ...heldOverrides, [id]: !current };
+    setHeldOverrides(next);
+    try { localStorage.setItem("roleHeldOverrides", JSON.stringify(next)); } catch {}
+  }
+  function isRoleHeld(role) {
+    return heldOverrides[role.id] !== undefined ? heldOverrides[role.id] : (role.held ?? false);
+  }
+
   const initials = React.useMemo(() => {
     try {
       const p = JSON.parse(localStorage.getItem("playerProfile___me__") || "{}");
@@ -48457,7 +48627,10 @@ function HomeHeader({ onNewGame, onStrategy, onPractice, onNewEvent, onAbout, on
 
             {/* Profile identity block */}
             <div style={{ padding: "0 14px 12px", borderBottom: `1px solid ${T.cardBorder}`, marginBottom: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div onClick={() => { setRoleSheetOpen(false); if (onProfile) onProfile(); }}
+                style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", borderRadius: 10, padding: "4px 2px", margin: "-4px -2px" }}
+                onMouseEnter={e => { e.currentTarget.style.background = T.greenPale; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
                 {/* Avatar */}
                 <div style={{ width: 48, height: 48, borderRadius: "50%", flexShrink: 0, overflow: "hidden", background: T.greenPale, border: `2px solid ${T.greenMid}44`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {initials.avatar
@@ -48476,11 +48649,27 @@ function HomeHeader({ onNewGame, onStrategy, onPractice, onNewEvent, onAbout, on
                   </p>
                 </div>
                 {/* Profile link */}
-                <button onClick={() => { setRoleSheetOpen(false); if (onProfile) onProfile(); }}
-                  style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 8, border: `1px solid ${T.cardBorder}`, background: T.card, color: T.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                  <i className="ti ti-user-circle" style={{ fontSize: 14 }} /> Profile
-                </button>
+                <i className="ti ti-chevron-right" style={{ fontSize: 16, color: T.textFaint, flexShrink: 0 }} aria-hidden="true" />
               </div>
+            </div>
+
+            {/* Super Admin toggle — dev shortcut, lives near the top for quick access */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 16px 10px", borderBottom: `1px solid ${T.cardBorder}`, marginBottom: 6 }}>
+              <i className="ti ti-shield-star" style={{ fontSize: 13, color: superAdmin ? "#16A34A" : T.textFaint, flexShrink: 0 }} aria-hidden="true" />
+              <span style={{ fontSize: 11, color: superAdmin ? T.text : T.textFaint, flex: 1 }}>Super Admin role</span>
+              <button onClick={toggleSuperAdmin} aria-label="Toggle Super Admin role" style={{
+                width: 36, height: 20, borderRadius: 10, border: "none", cursor: "pointer",
+                position: "relative", flexShrink: 0,
+                background: superAdmin ? "#16A34A" : T.cardBorder,
+                transition: "background 0.15s",
+              }}>
+                <span style={{
+                  position: "absolute", top: 2, left: superAdmin ? 18 : 2,
+                  width: 16, height: 16, borderRadius: "50%",
+                  background: "#fff", transition: "left 0.15s",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                }} />
+              </button>
             </div>
 
             <div style={{ padding: "0 18px 8px" }}>
@@ -48490,37 +48679,55 @@ function HomeHeader({ onNewGame, onStrategy, onPractice, onNewEvent, onAbout, on
             </div>
 
             <div style={{ padding: "0 10px" }}>
-              {ROLE_DEFS.filter(role => superAdmin || role.held).map(role => {
+              {ROLE_DEFS.filter(role => superAdmin || isRoleHeld(role)).map(role => {
                 const isActive = role.id === currentRole;
                 const isAdmin = role.id === "superadmin";
+                const held = isRoleHeld(role);
+                const isAlwaysHeld = role.held === true && heldOverrides[role.id] === undefined;
                 return (
-                  <button key={role.id}
-                    onClick={() => { setRoleSheetOpen(false); if (onSwitchRole) onSwitchRole(role.id); }}
-                    style={{
-                      width: "100%", display: "flex", alignItems: "center", gap: 11,
-                      padding: "8px 11px", marginBottom: 2,
-                      background: isActive ? (isAdmin ? "#0D1F14" : T.greenPale) : "transparent",
-                      border: isActive ? `1.5px solid ${isAdmin ? "#1a3a22" : T.greenMid + "55"}` : "1.5px solid transparent",
-                      borderRadius: 11, cursor: "pointer", textAlign: "left", fontFamily: "inherit",
-                    }}>
-                    <span style={{
-                      width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-                      background: isAdmin ? "#0D1F14" : role.color + "16",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      <i className={`ti ${role.icon}`} style={{ fontSize: 17, color: role.color }} aria-hidden="true" />
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 13.5, fontWeight: 700, color: isActive && isAdmin ? "#fff" : T.text }}>{role.label}</span>
-                        {isAdmin && <span style={{ fontSize: 9, fontWeight: 700, color: "#16A34A", background: "#DCFCE7", padding: "1px 5px", borderRadius: 20, textTransform: "uppercase", letterSpacing: "0.05em" }}>You</span>}
+                  <div key={role.id} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2, opacity: held ? 1 : 0.45 }}>
+                    <button
+                      onClick={() => { if (!held) return; setRoleSheetOpen(false); if (onSwitchRole) onSwitchRole(role.id); }}
+                      style={{
+                        flex: 1, display: "flex", alignItems: "center", gap: 11,
+                        padding: "8px 11px",
+                        background: isActive ? (isAdmin ? "#0D1F14" : T.greenPale) : "transparent",
+                        border: isActive ? `1.5px solid ${isAdmin ? "#1a3a22" : T.greenMid + "55"}` : "1.5px solid transparent",
+                        borderRadius: 11, cursor: held ? "pointer" : "default", textAlign: "left", fontFamily: "inherit",
+                      }}>
+                      <span style={{
+                        width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                        background: isAdmin ? "#0D1F14" : role.color + "16",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <i className={`ti ${role.icon}`} style={{ fontSize: 17, color: role.color }} aria-hidden="true" />
                       </span>
-                      <span style={{ display: "block", fontSize: 11.5, color: isActive && isAdmin ? "rgba(255,255,255,0.6)" : T.textMuted, marginTop: 0, lineHeight: 1.3 }}>{role.tagline}</span>
-                    </span>
-                    {isActive
-                      ? <i className="ti ti-circle-check-filled" style={{ fontSize: 19, color: isAdmin ? "#4ADE80" : T.greenMid, flexShrink: 0 }} aria-hidden="true" />
-                      : <i className="ti ti-chevron-right" style={{ fontSize: 15, color: T.textFaint, flexShrink: 0 }} aria-hidden="true" />}
-                  </button>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: isActive && isAdmin ? "#fff" : T.text }}>{role.label}</span>
+                          {isAdmin && <span style={{ fontSize: 9, fontWeight: 700, color: "#16A34A", background: "#DCFCE7", padding: "1px 5px", borderRadius: 20, textTransform: "uppercase", letterSpacing: "0.05em" }}>You</span>}
+                        </span>
+                        <span style={{ display: "block", fontSize: 11.5, color: isActive && isAdmin ? "rgba(255,255,255,0.6)" : T.textMuted, marginTop: 0, lineHeight: 1.3 }}>{role.tagline}</span>
+                      </span>
+                      {isActive
+                        ? <i className="ti ti-circle-check-filled" style={{ fontSize: 19, color: isAdmin ? "#4ADE80" : T.greenMid, flexShrink: 0 }} aria-hidden="true" />
+                        : held ? <i className="ti ti-chevron-right" style={{ fontSize: 15, color: T.textFaint, flexShrink: 0 }} aria-hidden="true" /> : null}
+                    </button>
+                    {/* Per-role held toggle — only visible in super admin mode */}
+                    {superAdmin && !isAdmin && (
+                      <button
+                        onClick={e => { e.stopPropagation(); toggleRoleHeld(role.id); }}
+                        title={held ? "Remove this role" : "Grant this role"}
+                        style={{
+                          flexShrink: 0, width: 32, height: 32, borderRadius: 8,
+                          border: `1px solid ${held ? role.color + "55" : T.cardBorder}`,
+                          background: held ? role.color + "12" : "transparent",
+                          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                        <i className={`ti ${held ? "ti-user-check" : "ti-user-plus"}`} style={{ fontSize: 14, color: held ? role.color : T.textFaint }} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -48544,25 +48751,6 @@ function HomeHeader({ onNewGame, onStrategy, onPractice, onNewEvent, onAbout, on
                 </span>
                 <i className="ti ti-arrow-right" style={{ fontSize: 15, color: T.textFaint, flexShrink: 0 }} aria-hidden="true" />
               </button>
-
-              {/* Super Admin unlock — gates whether the Admin role appears above */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 2px 0" }}>
-                <i className="ti ti-shield-star" style={{ fontSize: 13, color: superAdmin ? "#16A34A" : T.textFaint, flexShrink: 0 }} aria-hidden="true" />
-                <span style={{ fontSize: 11, color: superAdmin ? T.text : T.textFaint, flex: 1 }}>Super Admin role</span>
-                <button onClick={toggleSuperAdmin} aria-label="Toggle Super Admin role" style={{
-                  width: 36, height: 20, borderRadius: 10, border: "none", cursor: "pointer",
-                  position: "relative", flexShrink: 0,
-                  background: superAdmin ? "#16A34A" : T.cardBorder,
-                  transition: "background 0.15s",
-                }}>
-                  <span style={{
-                    position: "absolute", top: 2, left: superAdmin ? 18 : 2,
-                    width: 16, height: 16, borderRadius: "50%",
-                    background: "#fff", transition: "left 0.15s",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                  }} />
-                </button>
-              </div>
 
               {/* Feedback — tucked away at the bottom, low-key text link */}
               <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, marginTop: 8, borderTop: `1px solid ${T.cardBorder}` }}>
