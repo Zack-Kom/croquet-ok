@@ -4484,6 +4484,15 @@ function App() {
               const setQuietMode = setHomeQuietMode;
               const attendanceConfirmed = homeAttendanceConfirmed;
 
+              // River card data — stubs until each engine is wired up
+              const showHcpCard = false, lastHcpEntry = {}, prevHcpEntry = {};
+              const showPracticeNudge = false, daysSincePractice = 0, lastCompletedPractice = null;
+              const upcomingMatch = null;
+              const crossedMilestone = null, crossedPracticeMilestone = null;
+              const topRival = null, clubCrossedMilestone = null;
+              const newMember = null, closedLawns = [], yesterdayPlayDay = null;
+              const myUpcomingDraw = null, recentMatchResult = null, newStrategyCard = null;
+
               const riverCards = [
                 // ── Already wired (attendance is real) ──────────────────────
                 {
