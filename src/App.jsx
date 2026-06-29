@@ -34770,7 +34770,7 @@ function SuperAdminClubEditor({ clubName, onClose, onChanged }) {
             </div>
             <div style={{ flex: 1 }}>
               <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text }}>Registered with Croquet OK</p>
-              <p style={{ margin: "1px 0 0", fontSize: 11, color: T.textMuted }}>{reg ? "Shows the "OK!" seal across the app." : "Hidden from the app as an active club."}</p>
+              <p style={{ margin: "1px 0 0", fontSize: 11, color: T.textMuted }}>{reg ? "Shows the 'OK!' seal across the app." : "Hidden from the app as an active club."}</p>
             </div>
             <button onClick={toggleReg} aria-label="Toggle registration"
               style={{ width: 48, height: 28, borderRadius: 14, border: "none", cursor: "pointer", padding: 3, flexShrink: 0,
