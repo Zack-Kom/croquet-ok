@@ -18770,7 +18770,7 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
                   {/* Actions */}
                   <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8, paddingBottom: 8 }}>
                     {a.gameId ? (
-                      <button onClick={() => { setLawnFocusSheet(null); if (onOpenGame) onOpenGame(a.gameId); }}
+                      <button onClick={() => { setLawnFocusSheet(null); const g = (games || []).find(x => x.id === a.gameId); if (g && onOpenGame) onOpenGame(g); }}
                         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "12px", borderRadius: 11, border: "none", background: accent, color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                         <i className="ti ti-trending-up" style={{ fontSize: 16 }} aria-hidden="true" />
                         Open scorecard
@@ -18783,7 +18783,7 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
                       </button>
                     ) : null}
                     {isOrganiser && (
-                      <button onClick={() => { removeGame(a.id); setLawnFocusSheet(null); }}
+                      <button onClick={() => { if (confirm("Remove this game from the lawn? Players will return to the sidelines.")) { removeGame(a.id); setLawnFocusSheet(null); } }}
                         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "10px", borderRadius: 11, border: `1px solid ${T.cardBorder}`, background: "transparent", color: T.textMuted, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                         <i className="ti ti-trash" style={{ fontSize: 14 }} aria-hidden="true" />
                         Remove game
