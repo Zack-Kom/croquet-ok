@@ -49882,7 +49882,7 @@ function HomeHeader({ onNewGame, onStrategy, onPractice, onNewEvent, onAbout, on
               {ROLE_DEFS.filter(role => superAdmin || isRoleHeld(role)).map(role => {
                 const isActive = role.id === currentRole;
                 const isAdmin = role.id === "superadmin";
-                const held = isRoleHeld(role);
+                const held = isAdmin ? superAdmin : isRoleHeld(role);
                 const isAlwaysHeld = role.held === true && heldOverrides[role.id] === undefined;
                 return (
                   <div key={role.id} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2, opacity: held ? 1 : 0.45 }}>
