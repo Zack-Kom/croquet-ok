@@ -17548,6 +17548,7 @@ function MemberAvatar({ name, avatar, accent, titles = [], years = null, size = 
 
 function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHours = 4, meId, meName, baseOrganiser, canManageManagers, venue, games, onOpenGame, onStartStructured, onViewMember }) {
   const wide = useWideLayout();
+  const [showGroundsFullscreen, setShowGroundsFullscreen] = useState(false);
   // Panel collapse state — persisted so the board remembers between reloads
   const [collapsed, setCollapsed] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem("livePanel_collapsed") || "{}"); } catch { return {}; }
@@ -19575,7 +19576,6 @@ function ClubDetailView({ clubName, onBack, events, games, onSelectEvent, onNewE
   const [memberSheet, setMemberSheet] = useState(null); // null | member object — bottom sheet for Members tab
   const [gradeSheet, setGradeSheet] = useState(null);   // null | grade row obj — bottom sheet for Grade tab
   const [ladderSheet, setLadderSheet] = useState(null); // null | { key, rung, name } — bottom sheet for Ladder tab
-  const [showGroundsFullscreen, setShowGroundsFullscreen] = useState(false);
   const [rotaShowAll, setRotaShowAll] = useState(false);
   const [composeReport, setComposeReport] = useState(null);
   // When set to { key, name }, show the full rich player profile as a full-screen overlay.
