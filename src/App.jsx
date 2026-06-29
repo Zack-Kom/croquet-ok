@@ -32834,6 +32834,10 @@ function SuperAdminView({ onBack, games, events, theme, testHour, setTestHour, i
     { id: "content",      label: "Content",      icon: "ti-cards" },
     { id: "appearance",   label: "Appearance",   icon: "ti-palette" },
     { id: "feedback",     label: "Feedback",     icon: "ti-message-report" },
+    { id: "players",      label: "Players",      icon: "ti-users" },
+    { id: "coaches",      label: "Coaches",      icon: "ti-school" },
+    { id: "equipment",    label: "Equipment",    icon: "ti-shopping-bag" },
+    { id: "affiliations", label: "Affiliations", icon: "ti-world" },
   ];
   var DEV_TABS = [
     { id: "storage",      label: "Storage",      icon: "ti-database" },
