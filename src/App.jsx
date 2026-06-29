@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import QRCode from 'qrcode';
 import html2canvas from 'html2canvas';
@@ -34827,6 +34827,355 @@ function SuperAdminClubEditor({ clubName, onClose, onChanged }) {
 }
 
 
+//  Directory CRUD editors ────────────────────────────────────────────
+
+
+function DirSheetShell({ title, subtitle, onClose, children, onSave, saved, disabled }) {
+
+  var overlayStyle = { position: "fixed", inset: 0, background: "rgba(8,16,11,0.55)", zIndex: 9000, display: "flex", alignItems: "flex-end", justifyContent: "center" };
+
+  var sheetStyle = { background: T.pageBg, width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto", borderRadius: "16px 16px 0 0", boxShadow: "0 -4px 24px rgba(0,0,0,0.25)", animation: "rolesheet-up 0.24s cubic-bezier(0.16,1,0.3,1)" };
+
+  var headerStyle = { position: "sticky", top: 0, background: T.pageBg, padding: "10px 16px 12px", borderBottom: "1px solid " + T.cardBorder, zIndex: 1 };
+
+  var handleStyle = { width: 36, height: 4, borderRadius: 2, background: T.cardBorder, margin: "0 auto 12px" };
+
+  var saveStyle = { width: "100%", padding: "13px", borderRadius: 10, border: "none", background: saved ? "#16A34A" : T.green, color: "#fff", fontSize: 14, fontWeight: 700, cursor: disabled ? "default" : "pointer", fontFamily: "inherit", opacity: disabled ? 0.5 : 1 };
+
+  return (
+
+    <div onClick={onClose} style={overlayStyle}>
+
+      <div onClick={function(e){e.stopPropagation();}} style={sheetStyle}>
+
+        <div style={headerStyle}>
+
+          <div style={handleStyle} />
+
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+
+            <div style={{ flex:1, minWidth:0 }}>
+
+              <p style={{ margin:0, fontSize:10, fontWeight:700, color:T.textFaint, letterSpacing:"0.06em", textTransform:"uppercase" }}>{subtitle}</p>
+
+              <p style={{ margin:"1px 0 0", fontSize:16, fontWeight:700, color:T.text }}>{title}</p>
+
+            </div>
+
+            <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", color:T.textMuted, fontSize:20, padding:4, lineHeight:1 }}><i className="ti ti-x" /></button>
+
+          </div>
+
+        </div>
+
+        <div style={{ padding:"14px 16px 20px", display:"flex", flexDirection:"column", gap:14 }}>
+
+          {children}
+
+          <button onClick={onSave} disabled={!!disabled} style={saveStyle}>{saved ? "Saved" : "Save"}</button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  );
+
+}
+
+
+
+function DirPlayerEditor({ item, onClose, onChanged }) {
+
+  var isNew = !item;
+
+  var IS = { width:"100%", padding:"9px 11px", fontSize:13, borderRadius:8, border:"1px solid "+T.cardBorder, background:T.card, color:T.text, fontFamily:"inherit", outline:"none", boxSizing:"border-box" };
+
+  var LS = { display:"block", fontSize:10, fontWeight:700, color:T.textFaint, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 };
+
+  var [draft, setDraft] = React.useState(isNew ? { name:"", email:"", clubs:[], acHandicap:"", gcHandicap:"", bio:"" } : Object.assign({}, item, { clubs:item.clubs||[], acHandicap:item.acHandicap!=null?item.acHandicap:"", gcHandicap:item.gcHandicap!=null?item.gcHandicap:"" }));
+
+  var [saved, setSaved] = React.useState(false);
+
+  function set(k,v){ setDraft(function(d){ return Object.assign({},d,{[k]:v}); }); setSaved(false); }
+
+  function save(){
+
+    if(!draft.name.trim()){ alert("Name is required."); return; }
+
+    var existing=loadDirPlayers();
+
+    var next=Object.assign({},draft,{ name:draft.name.trim(), acHandicap:draft.acHandicap!==""?Number(draft.acHandicap):null, gcHandicap:draft.gcHandicap!==""?Number(draft.gcHandicap):null });
+
+    if(isNew){ next.id="player_"+Date.now(); saveDirPlayers(existing.concat([next])); }
+
+    else{ saveDirPlayers(existing.map(function(p){ return p.id===item.id?next:p; })); }
+
+    setSaved(true); if(onChanged)onChanged(); setTimeout(onClose,450);
+
+  }
+
+  return (
+
+    <DirSheetShell title={isNew?"New player":(item.name||"Edit player")} subtitle={isNew?"Add player":"Edit player"} onClose={onClose} onSave={save} saved={saved} disabled={!draft.name.trim()}>
+
+      <div><label style={LS}>Name</label><input style={IS} value={draft.name} onChange={function(e){set("name",e.target.value);}} placeholder="Full name" /></div>
+
+      <div><label style={LS}>Email</label><input style={IS} type="email" value={draft.email||""} onChange={function(e){set("email",e.target.value);}} placeholder="player@example.com" /></div>
+
+      <div><label style={LS}>Club (primary)</label>
+
+        <select style={IS} value={(draft.clubs||[])[0]||""} onChange={function(e){set("clubs",e.target.value?[e.target.value]:[]);}}>
+          <option value="">No club</option>
+
+          {AUSTRALIAN_CLUBS.map(function(c){return React.createElement("option",{key:c,value:c},c);})}
+
+        </select>
+
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+
+        <div><label style={LS}>AC Handicap</label><input style={IS} type="number" value={draft.acHandicap} onChange={function(e){set("acHandicap",e.target.value);}} placeholder="e.g. 4" /></div>
+
+        <div><label style={LS}>GC Handicap</label><input style={IS} type="number" value={draft.gcHandicap} onChange={function(e){set("gcHandicap",e.target.value);}} placeholder="e.g. 3" /></div>
+
+      </div>
+
+      <div><label style={LS}>Bio / notes</label><textarea style={Object.assign({},IS,{minHeight:72,resize:"vertical"})} value={draft.bio||""} onChange={function(e){set("bio",e.target.value);}} placeholder="Optional bio or notes" /></div>
+
+    </DirSheetShell>
+
+  );
+
+}
+
+
+
+function DirCoachEditor({ item, onClose, onChanged }) {
+
+  var isNew = !item;
+
+  var IS = { width:"100%", padding:"9px 11px", fontSize:13, borderRadius:8, border:"1px solid "+T.cardBorder, background:T.card, color:T.text, fontFamily:"inherit", outline:"none", boxSizing:"border-box" };
+
+  var LS = { display:"block", fontSize:10, fontWeight:700, color:T.textFaint, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 };
+
+  var [draft,setDraft] = React.useState(isNew?{name:"",level:"Level 1",codes:[],club:"",region:"",rate:"",years:"",bio:"",accepting:true}:Object.assign({},item,{codes:item.codes||[],years:item.years!=null?String(item.years):""}));
+
+  var [saved,setSaved] = React.useState(false);
+
+  function set(k,v){ setDraft(function(d){ return Object.assign({},d,{[k]:v}); }); setSaved(false); }
+
+  function toggleCode(code){ var codes=draft.codes.includes(code)?draft.codes.filter(function(c){return c!==code;}):draft.codes.concat([code]); set("codes",codes); }
+
+  function save(){
+
+    if(!draft.name.trim()){ alert("Name is required."); return; }
+
+    var existing=getDirCoaches();
+
+    var next=Object.assign({},draft,{name:draft.name.trim(),years:draft.years!==""?Number(draft.years):0});
+
+    if(isNew){ next.id="coach_"+Date.now(); saveDirCoaches(existing.concat([next])); }
+
+    else{ var key=item.id||item.name; saveDirCoaches(existing.map(function(c){return (c.id||c.name)===key?next:c;})); }
+
+    setSaved(true); if(onChanged)onChanged(); setTimeout(onClose,450);
+
+  }
+
+  return (
+
+    <DirSheetShell title={isNew?"New coach":(item.name||"Edit coach")} subtitle={isNew?"Add coach":"Edit coach"} onClose={onClose} onSave={save} saved={saved} disabled={!draft.name.trim()}>
+
+      <div><label style={LS}>Name</label><input style={IS} value={draft.name} onChange={function(e){set("name",e.target.value);}} placeholder="Full name" /></div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+
+        <div><label style={LS}>Level</label><select style={IS} value={draft.level||"Level 1"} onChange={function(e){set("level",e.target.value);}}>
+          {["Level 1","Level 2","Level 3"].map(function(l){return React.createElement("option",{key:l,value:l},l);})}</select></div>
+
+        <div><label style={LS}>Rate</label><input style={IS} value={draft.rate||""} onChange={function(e){set("rate",e.target.value);}} placeholder="$45/hr" /></div>
+
+      </div>
+
+      <div><label style={LS}>Codes</label>
+
+        <div style={{ display:"flex", gap:8 }}>
+
+          {["AC","GC","Ricochet"].map(function(code){ var on=draft.codes.includes(code); return React.createElement("button",{key:code,type:"button",onClick:function(){toggleCode(code);},style:{padding:"6px 14px",borderRadius:20,border:"1.5px solid "+(on?T.green:T.cardBorder),background:on?T.green:"transparent",color:on?"#fff":T.textMuted,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}},code); })}
+
+        </div>
+
+      </div>
+
+      <div><label style={LS}>Club</label><input style={IS} value={draft.club||""} onChange={function(e){set("club",e.target.value);}} placeholder="Club name" /></div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+
+        <div><label style={LS}>Region / State</label><input style={IS} value={draft.region||""} onChange={function(e){set("region",e.target.value);}} placeholder="e.g. VIC" /></div>
+
+        <div><label style={LS}>Years coaching</label><input style={IS} type="number" value={draft.years} onChange={function(e){set("years",e.target.value);}} placeholder="0" /></div>
+
+      </div>
+
+      <div><label style={LS}>Bio</label><textarea style={Object.assign({},IS,{minHeight:72,resize:"vertical"})} value={draft.bio||""} onChange={function(e){set("bio",e.target.value);}} placeholder="Brief bio" /></div>
+
+      <div style={{ display:"flex", alignItems:"center", gap:12, background:T.card, border:"1px solid "+T.cardBorder, borderRadius:10, padding:"10px 14px" }}>
+
+        <div style={{ flex:1 }}><p style={{ margin:0, fontSize:13, fontWeight:700, color:T.text }}>Accepting students</p><p style={{ margin:"1px 0 0", fontSize:11, color:T.textMuted }}>{draft.accepting?"Taking new students":"Full / not available"}</p></div>
+
+        <button type="button" onClick={function(){set("accepting",!draft.accepting);}} style={{ width:44, height:26, borderRadius:13, border:"none", cursor:"pointer", padding:3, flexShrink:0, background:draft.accepting?"#16A34A":T.cardBorder, display:"flex", alignItems:"center", justifyContent:draft.accepting?"flex-end":"flex-start", transition:"background 0.2s" }}><span style={{ width:20, height:20, borderRadius:"50%", background:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.25)" }} /></button>
+
+      </div>
+
+    </DirSheetShell>
+
+  );
+
+}
+
+
+
+function DirEquipmentEditor({ item, onClose, onChanged }) {
+
+  var isNew = !item;
+
+  var IS = { width:"100%", padding:"9px 11px", fontSize:13, borderRadius:8, border:"1px solid "+T.cardBorder, background:T.card, color:T.text, fontFamily:"inherit", outline:"none", boxSizing:"border-box" };
+
+  var LS = { display:"block", fontSize:10, fontWeight:700, color:T.textFaint, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 };
+
+  var ALL_TAGS=["mallets","balls","hoops","sets","accessories"];
+
+  var [draft,setDraft] = React.useState(isNew?{name:"",country:"Australia",region:"",tags:[],desc:"",website:"",phone:""}:Object.assign({},item,{tags:item.tags||[]}));
+
+  var [saved,setSaved] = React.useState(false);
+
+  function set(k,v){ setDraft(function(d){ return Object.assign({},d,{[k]:v}); }); setSaved(false); }
+
+  function toggleTag(tag){ var tags=draft.tags.includes(tag)?draft.tags.filter(function(t){return t!==tag;}):draft.tags.concat([tag]); set("tags",tags); }
+
+  function save(){
+
+    if(!draft.name.trim()){ alert("Name is required."); return; }
+
+    var existing=getDirEquipment();
+
+    var next=Object.assign({},draft,{name:draft.name.trim()});
+
+    if(isNew){ saveDirEquipment(existing.concat([next])); }
+
+    else{ saveDirEquipment(existing.map(function(p){return p.name===item.name?next:p;})); }
+
+    setSaved(true); if(onChanged)onChanged(); setTimeout(onClose,450);
+
+  }
+
+  return (
+
+    <DirSheetShell title={isNew?"New provider":(item.name||"Edit provider")} subtitle={isNew?"Add equipment provider":"Edit provider"} onClose={onClose} onSave={save} saved={saved} disabled={!draft.name.trim()}>
+
+      <div><label style={LS}>Provider name</label><input style={IS} value={draft.name} onChange={function(e){set("name",e.target.value);}} placeholder="e.g. Yardgames" /></div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+
+        <div><label style={LS}>Country</label><input style={IS} value={draft.country||""} onChange={function(e){set("country",e.target.value);}} placeholder="Australia" /></div>
+
+        <div><label style={LS}>Region / State</label><input style={IS} value={draft.region||""} onChange={function(e){set("region",e.target.value);}} placeholder="VIC" /></div>
+
+      </div>
+
+      <div><label style={LS}>Categories</label>
+
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+
+          {ALL_TAGS.map(function(tag){ var on=draft.tags.includes(tag); return React.createElement("button",{key:tag,type:"button",onClick:function(){toggleTag(tag);},style:{padding:"5px 12px",borderRadius:20,border:"1.5px solid "+(on?T.green:T.cardBorder),background:on?T.green:"transparent",color:on?"#fff":T.textMuted,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},tag); })}
+
+        </div>
+
+      </div>
+
+      <div><label style={LS}>Description</label><textarea style={Object.assign({},IS,{minHeight:72,resize:"vertical"})} value={draft.desc||""} onChange={function(e){set("desc",e.target.value);}} placeholder="Brief description" /></div>
+
+      <div><label style={LS}>Website</label><input style={IS} type="url" value={draft.website||""} onChange={function(e){set("website",e.target.value);}} placeholder="https://" /></div>
+
+      <div><label style={LS}>Phone</label><input style={IS} type="tel" value={draft.phone||""} onChange={function(e){set("phone",e.target.value);}} placeholder="+61" /></div>
+
+    </DirSheetShell>
+
+  );
+
+}
+
+
+
+function DirAffiliationEditor({ item, onClose, onChanged }) {
+
+  var isNew = !item;
+
+  var IS = { width:"100%", padding:"9px 11px", fontSize:13, borderRadius:8, border:"1px solid "+T.cardBorder, background:T.card, color:T.text, fontFamily:"inherit", outline:"none", boxSizing:"border-box" };
+
+  var LS = { display:"block", fontSize:10, fontWeight:700, color:T.textFaint, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 };
+
+  var [draft,setDraft] = React.useState(isNew?{country:"",org:"",flag:"",iso:"",category:"Full",affiliates:[]}:Object.assign({},item,{affiliates:item.affiliates||[]}));
+
+  var [affiliatesText,setAffiliatesText] = React.useState(((isNew?[]:item.affiliates)||[]).join("\n"));
+
+  var [saved,setSaved] = React.useState(false);
+
+  function set(k,v){ setDraft(function(d){ return Object.assign({},d,{[k]:v}); }); setSaved(false); }
+
+  function save(){
+
+    if(!draft.country.trim()){ alert("Country is required."); return; }
+
+    var existing=getDirAffiliations();
+
+    var affiliates=affiliatesText.split("\n").map(function(s){return s.trim();}).filter(Boolean);
+
+    var next=Object.assign({},draft,{country:draft.country.trim(),affiliates:affiliates});
+
+    if(isNew){ saveDirAffiliations(existing.concat([next])); }
+
+    else{ saveDirAffiliations(existing.map(function(m){return m.country===item.country?next:m;})); }
+
+    setSaved(true); if(onChanged)onChanged(); setTimeout(onClose,450);
+
+  }
+
+  return (
+
+    <DirSheetShell title={isNew?"New affiliation":(item.country||"Edit affiliation")} subtitle={isNew?"Add WCF member":"Edit affiliation"} onClose={onClose} onSave={save} saved={saved} disabled={!draft.country.trim()}>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+
+        <div><label style={LS}>Country</label><input style={IS} value={draft.country} onChange={function(e){set("country",e.target.value);}} placeholder="e.g. Australia" /></div>
+
+        <div><label style={LS}>Flag emoji</label><input style={IS} value={draft.flag||""} onChange={function(e){set("flag",e.target.value);}} placeholder="(flag)" /></div>
+
+      </div>
+
+      <div><label style={LS}>Organisation</label><input style={IS} value={draft.org||""} onChange={function(e){set("org",e.target.value);}} placeholder="e.g. Australian Croquet Association" /></div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+
+        <div><label style={LS}>ISO code</label><input style={IS} value={draft.iso||""} onChange={function(e){set("iso",e.target.value);}} placeholder="au" maxLength={6} /></div>
+
+        <div><label style={LS}>Category</label><select style={IS} value={draft.category||"Full"} onChange={function(e){set("category",e.target.value);}}>
+          {["Full","Associate","RCO"].map(function(c){return React.createElement("option",{key:c,value:c},c);})}</select></div>
+
+      </div>
+
+      <div><label style={LS}>Affiliates (one per line)</label><textarea style={Object.assign({},IS,{minHeight:80,resize:"vertical"})} value={affiliatesText} onChange={function(e){setAffiliatesText(e.target.value);setSaved(false);}} placeholder="Croquet NSW" /></div>
+
+    </DirSheetShell>
+
+  );
+
+}
+
+
 // ─── SuperAdminUserEditor ───────────────────────────────────────────────────
 // Modal sheet for super-admins to add a new user or edit an existing one:
 // core details, club, handicaps, admin flag, and role assignments. Mirrors the
@@ -35516,7 +35865,7 @@ const POLICY_CONTENT = {
       { h: "Using the app", b: "Croquet? OK! is provided to help you score games, run events, track practice and connect with clubs. You agree to use it lawfully and not to disrupt the service for others." },
       { h: "Your content", b: "You retain ownership of the games, events, profiles and other content you create. You grant us a licence to store and display it so the app can function." },
       { h: "Availability", b: "We aim to keep the app available but don't guarantee uninterrupted service. Features may change as the app develops." },
-      { h: "Liability", b: "The app is provided "as is". To the extent permitted by law, OK! Innovations is not liable for losses arising from use of the app." },
+      { h: "Liability", b: "The app is provided 'as is'. To the extent permitted by law, OK! Innovations is not liable for losses arising from use of the app." },
     ],
   },
   privacy: {
@@ -41443,7 +41792,7 @@ function secDefaultWelcomeFlow() {
   return [
     { id: "sw_1", icon: "ti-hand-love-you", title: "Welcome — you're the club's secretary here",
       body: "This is your control centre. Everything to run the club day-to-day lives behind the menu at the top: members, bookings, check-ins, the duty rota, announcements and reports. This quick tour shows where each one is — it takes about a minute.",
-      tip: "You can reopen this tour any time from the "Getting started" button on your dashboard.", tipKind: "tip", nav: "" },
+      tip: "You can reopen this tour any time from the 'Getting started' button on your dashboard.", tipKind: "tip", nav: "" },
     { id: "sw_2", icon: "ti-users", title: "Your members live in one place",
       body: "Add members directly or invite them by email, mark who's paid their fees, and spot anyone who's drifted away so you can check in. Trial members and full members are handled separately.",
       tip: "", tipKind: "tip", nav: "sec-members", navLabel: "" },
@@ -41458,7 +41807,7 @@ function secDefaultWelcomeFlow() {
       tip: "", tipKind: "tip", nav: "announcements", navLabel: "" },
     { id: "sw_6", icon: "ti-report", title: "Reports for your committee",
       body: "Active players, attendance trends, games and events — the figures a monthly meeting needs, ready to glance at or export. No spreadsheets required.",
-      tip: "Stuck on anything? The "How this works" card at the top of every page is a quick refresher.", tipKind: "tip", nav: "sec-reports", navLabel: "" },
+      tip: "Stuck on anything? The 'How this works' card at the top of every page is a quick refresher.", tipKind: "tip", nav: "sec-reports", navLabel: "" },
   ];
 }
 
@@ -42600,7 +42949,7 @@ function SecSegNav({ items, active, onChange, accent = "#0F766E", showIcons = tr
 }
 
 // ─── SecHowItWorks ────────────────────────────────────────────────────────────
-// A dismissible "How this works" card for the top of each secretary page, in the
+// A dismissible 'How this works' card for the top of each secretary page, in the
 // same gradient style as the rota explainer. Shown by default; collapses to a
 // small pill the secretary can tap to bring it back. The open/closed state is
 // remembered per page (localStorage) so once they know a page it stays out of
@@ -43054,7 +43403,7 @@ function SecMembersView({ onBack }) {
             { icon: "ti-confetti", t: "Welcome", d: "Lay out the welcome sequences new members and trial members see when they join — messages, club policies, and first steps." },
             { icon: "ti-user-plus", t: "Add", d: "Enter members directly, or send an invite to join the app." },
             { icon: "ti-coin", t: "Track fees", d: "Mark who's paid this season at a glance, chase what's outstanding." },
-            { icon: "ti-user-exclamation", t: "Spot lapsing", d: "See who hasn't played in 6+ weeks and send a gentle "we've missed you."" },
+            { icon: "ti-user-exclamation", t: "Spot lapsing", d: "See who hasn't played in 6+ weeks and send a gentle 'we've missed you'." },
           ]}
         />
 
@@ -47092,7 +47441,7 @@ function SecRotaView({ onBack, onPostAnnouncement, announcements }) {
                 {[
                   { n: 1, icon: "ti-user-plus", t: "Assign", d: "Pick who's on each duty for the week. Add or remove duties as you need them." },
                   { n: 2, icon: "ti-send", t: "Notify", d: "One tap sends each week's roster to every member's home feed." },
-                  { n: 3, icon: "ti-checks", t: "Track", d: "Members tap "I'll be there." You watch the confirmations land — no WhatsApp roll-call." },
+                  { n: 3, icon: "ti-checks", t: "Track", d: "Members tap 'I\'ll be there.' You watch the confirmations land — no WhatsApp roll-call." },
                 ].map(step => (
                   <div key={step.n} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                     <span style={{ width: 24, height: 24, borderRadius: "50%", background: accent + "18", color: accent, fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>{step.n}</span>
