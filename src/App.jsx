@@ -17684,14 +17684,8 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
     };
   }, []);
   const lawns = React.useMemo(() => {
-    let ls = [];
-    try { ls = loadLawns(clubKey) || []; } catch {}
-    if (ls.length === 0) {
-      const courts = (() => { try { return loadClubProfile(getClubId(clubName)).courts || 0; } catch { return 0; } })();
-      const n = Math.max(courts || 0, 2);
-      ls = Array.from({ length: n }, (_, i) => ({ id: "tmp_lawn_" + (i+1), name: `Lawn ${i+1}`, number: i+1, status: "open" }));
-    }
-    return ls;
+    const courts = (() => { try { return loadClubProfile(getClubId(clubName)).courts || 0; } catch { return 0; } })();
+    return getOrInitLawns(clubKey, courts);
   }, [clubKey, clubName, lawnsTick]);
 
   // Persist the full session. Pass only the slices you're changing.
@@ -18420,15 +18414,21 @@ function ClubLiveSession({ clubKey, clubName, accent, present, presenceTimeoutHo
         const groundsPanel = (() => {
           let layout = null;
           try { layout = JSON.parse(localStorage.getItem(clubKey + "_layout") || "null"); } catch {}
+          // Backfill lawnId on legacy layout objects that have no link yet.
+          // IDs are now stable (getOrInitLawns), so this is only needed for
+          // layouts saved before the ID-coupling system was in place.
           if (layout && Array.isArray(layout.objects) && lawns.length) {
-            const norm = s => (s || "").toString().trim().toLowerCase().replace(/\s+/g, " ");
-            const byName = new Map(lawns.map(l => [norm(l.name), l.id]));
-            const lawnObjs = layout.objects.filter(o => o.type === "lawn");
-            layout = { ...layout, objects: layout.objects.map(o => {
-              if (o.type !== "lawn") return o;
-              const id = byName.get(norm(o.label)) || (lawns[lawnObjs.indexOf(o)] && lawns[lawnObjs.indexOf(o)].id) || o.lawnId || null;
-              return id ? { ...o, lawnId: id } : o;
-            }) };
+            const needsBackfill = layout.objects.some(o => o.type === "lawn" && !o.lawnId);
+            if (needsBackfill) {
+              const norm = s => (s || "").toString().trim().toLowerCase().replace(/\s+/g, " ");
+              const byName = new Map(lawns.map(l => [norm(l.name), l.id]));
+              const lawnObjs = layout.objects.filter(o => o.type === "lawn");
+              layout = { ...layout, objects: layout.objects.map(o => {
+                if (o.type !== "lawn" || o.lawnId) return o;
+                const id = byName.get(norm(o.label)) || (lawns[lawnObjs.indexOf(o)] && lawns[lawnObjs.indexOf(o)].id) || null;
+                return id ? { ...o, lawnId: id } : o;
+              }) };
+            }
           }
           const liveGames = {};
           assignments.forEach(a => {
@@ -26380,6 +26380,23 @@ function loadLawnsByVenueKey(venueKey) {
   return loadLawns(clubId);
 }
 
+// Load persisted lawns, or seed-and-persist them on first use so every component
+// that touches lawns shares the same stable IDs from day one. Pass n = the number
+// of lawns to seed if none are stored yet. Lawn IDs are created ONCE here and
+// never regenerated, so assignments, layouts, and live sessions all stay in sync.
+function getOrInitLawns(clubKey, n) {
+  const stored = loadLawns(clubKey);
+  if (stored.length > 0) return stored;
+  const count = Math.max(n || 0, 2);
+  const seeded = Array.from({ length: count }, (_, i) => ({
+    id: makeLawnId(), clubKey, name: `Lawn ${i + 1}`, number: i + 1,
+    codes: ["GC", "AC"], status: "open", statusNote: "", statusUntil: "",
+    surface: "grass", dimensions: { length: 35, width: 28 }, preferenceOrder: i + 1,
+  }));
+  saveLawns(clubKey, seeded);
+  return seeded;
+}
+
 function makeLawnId() { return "lawn_" + Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
 
 // ── Lawns Keeper: condition log ───────────────────────────────────────────────
@@ -26435,16 +26452,7 @@ function makeContactId() { return "ct_" + Math.random().toString(36).slice(2,9) 
 
 
 function ClubLawnsTab({ clubKey, clubName, seedCount, events }) {
-  const [lawns, setLawns] = React.useState(() => {
-    const stored = loadLawns(clubKey);
-    if (stored.length > 0) return stored;
-    // Seed from courts count if no lawns exist yet
-    return Array.from({ length: seedCount }, (_, i) => ({
-      id: makeLawnId(), clubKey, name: `Lawn ${i + 1}`, number: i + 1,
-      codes: ["GC","AC"], status: "open", statusNote: "", statusUntil: "",
-      surface: "grass", dimensions: { length: 35, width: 28 }, preferenceOrder: i + 1,
-    }));
-  });
+  const [lawns, setLawns] = React.useState(() => getOrInitLawns(clubKey, seedCount));
 
   const [editingLawn, setEditingLawn] = React.useState(null); // null or lawn object
   const [isNew, setIsNew] = React.useState(false);
@@ -41191,16 +41199,8 @@ function LawnsKeeperView({ onBack }) {
 
   const [tab, setTab] = React.useState("lawns");
   const [lawns, setLawns] = React.useState(() => {
-    const stored = loadLawns(clubKey);
-    if (stored.length > 0) return stored;
-    // Seed a couple of lawns so the area is never empty on first open.
     const seed = (() => { try { return (loadClubProfile(clubKey) || {}).courts || 2; } catch { return 2; } })();
-    return Array.from({ length: seed }, (_, i) => ({
-      id: makeLawnId(), clubKey, name: `Lawn ${i + 1}`, number: i + 1,
-      codes: ["GC","AC"], status: "open", statusNote: "", statusUntil: "",
-      surface: "grass", dimensions: { length: 35, width: 28 }, preferenceOrder: i + 1,
-      condition: 0,
-    }));
+    return getOrInitLawns(clubKey, seed).map(l => ({ condition: 0, ...l }));
   });
   const [log, setLog] = React.useState(() => loadLawnLog(clubKey));
   const [logEntry, setLogEntry] = React.useState(null); // null | draft entry being added
@@ -54828,6 +54828,7 @@ function BallPositionRecorder({ game, onSave, onCancel, onRequestCancel, grassSt
   // "diagram" = long-standing schematic sizes; "true" = real 1:1 physical sizes.
   const [scaleMode, setScaleMode] = useState(initialScale || (units === "metres" ? "true" : "diagram"));
   const [showScaleMenu, setShowScaleMenu] = useState(false);
+  const [showDisplayMenu, setShowDisplayMenu] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [dragging, setDragging]         = useState(null);  // ball being drag-repositioned
   const [draggingAnn, setDraggingAnn] = useState(null);
@@ -56801,121 +56802,128 @@ function BallPositionRecorder({ game, onSave, onCancel, onRequestCancel, grassSt
       {(() => {
         return (
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${T.cardBorder}`, flexShrink: 0 }}>
-            {/* View + Scale switchers — live, on-canvas (replaces the config-page View) */}
+            {/* Unified display menu: View · Scale · Lawn · Physics · Help */}
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, position: "relative" }}>
-              {/* Fullscreen quick-preview — icon-only, sits beside the View button */}
-              <button onClick={e => { e.stopPropagation(); setShowFullPreview(true); setShowViewMenu(false); setShowScaleMenu(false); }}
+              {/* Fullscreen quick-preview — icon-only */}
+              <button onClick={e => { e.stopPropagation(); setShowFullPreview(true); setShowDisplayMenu(false); setShowLawnPanel(false); }}
                 title="Full-screen preview"
                 style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26,
                   borderRadius: 6, border: `1px solid ${T.cardBorder}`, background: T.card,
                   color: T.textMuted, cursor: "pointer", flexShrink: 0 }}>
                 <i className="ti ti-arrows-maximize" style={{ fontSize: 13 }} aria-hidden="true" />
               </button>
-              {/* View */}
-              <button onClick={e => { e.stopPropagation(); setShowViewMenu(v => !v); setShowScaleMenu(false); }}
-                title="Camera view"
-                style={{ position: "relative", display: "flex", alignItems: "center", gap: 4, height: 26, padding: "0 9px",
-                  borderRadius: 6, border: `1px solid ${isoView ? "#6B4FA0" : T.cardBorder}`,
-                  background: isoView ? "#F0EBFA" : T.card,
-                  color: isoView ? "#5A3F90" : T.textMuted, fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-                <i className={`ti ${isoView === "custom" ? "ti-3d-rotate" : isoView ? (ISO_VIEWS.find(v => v.key === isoView)?.icon || "ti-cube") : "ti-square"}`} style={{ fontSize: 13 }} aria-hidden="true" />
-                <span>{isoView === "custom" ? "Custom" : isoView ? (ISO_VIEWS.find(v => v.key === isoView)?.label || "Iso") : "Top-down"}</span>
-                <i className="ti ti-chevron-down" style={{ fontSize: 10, opacity: 0.7 }} aria-hidden="true" />
-              </button>
-              {showViewMenu && (
+              {/* View — unified display settings menu */}
+              {(() => {
+                const anyActive = isoView || trueScaleObjs || showPhysics;
+                const viewLabel = isoView === "custom" ? "Custom" : isoView ? (ISO_VIEWS.find(v => v.key === isoView)?.label || "Iso") : "View";
+                return (
+                  <button onClick={e => { e.stopPropagation(); setShowDisplayMenu(v => !v); setShowLawnPanel(false); }}
+                    title="Display settings"
+                    style={{ position: "relative", display: "flex", alignItems: "center", gap: 4, height: 26, padding: "0 9px",
+                      borderRadius: 6, border: `1px solid ${anyActive ? "#6B4FA0" : T.cardBorder}`,
+                      background: anyActive ? "#F0EBFA" : T.card,
+                      color: anyActive ? "#5A3F90" : T.textMuted, fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+                    <i className={`ti ${isoView === "custom" ? "ti-3d-rotate" : isoView ? (ISO_VIEWS.find(v => v.key === isoView)?.icon || "ti-cube") : "ti-eye"}`} style={{ fontSize: 13 }} aria-hidden="true" />
+                    <span>{viewLabel}</span>
+                    <i className="ti ti-chevron-down" style={{ fontSize: 10, opacity: 0.7 }} aria-hidden="true" />
+                  </button>
+                );
+              })()}
+              {showDisplayMenu && (
                 <>
-                  <div onClick={() => setShowViewMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                  <div onClick={() => setShowDisplayMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
                   <div style={{ position: "absolute", top: 30, left: 0, zIndex: 41, background: T.card, border: `1px solid ${T.cardBorder}`,
-                    borderRadius: 8, boxShadow: "0 6px 24px rgba(0,0,0,0.18)", overflow: "hidden", minWidth: 170 }}>
+                    borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", overflow: "hidden", minWidth: 220 }}>
+
+                    {/* ── Camera angle ── */}
+                    <div style={{ padding: "8px 11px 4px", fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", color: T.textMuted, textTransform: "uppercase" }}>Camera angle</div>
                     {[{ key: null, label: "Top-down", icon: "ti-square", desc: "Plan view (editable)" }, ...ISO_VIEWS].map(v => {
                       const on = isoView === v.key;
                       return (
-                        <button key={v.key || "top"} onClick={() => { setIsoView(v.key); setShowViewMenu(false); setShowAnglePanel(false); markDirty(); }}
-                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 11px",
-                            border: "none", borderBottom: `1px solid ${T.cardBorder}`, cursor: "pointer", textAlign: "left",
-                            background: on ? "#F0EBFA" : T.card }}>
-                          <i className={`ti ${v.icon}`} style={{ fontSize: 15, color: on ? "#5A3F90" : T.textMuted, flexShrink: 0 }} aria-hidden="true" />
-                          <div style={{ minWidth: 0 }}>
+                        <button key={v.key || "top"} onClick={() => { setIsoView(v.key); setShowDisplayMenu(false); setShowAnglePanel(false); markDirty(); }}
+                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 11px",
+                            border: "none", cursor: "pointer", textAlign: "left", background: on ? "#F0EBFA" : T.card }}>
+                          <i className={`ti ${v.icon}`} style={{ fontSize: 14, color: on ? "#5A3F90" : T.textMuted, flexShrink: 0 }} aria-hidden="true" />
+                          <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontSize: 12, fontWeight: 700, color: on ? "#5A3F90" : T.text }}>{v.label}</div>
-                            <div style={{ fontSize: 10, color: T.textMuted }}>{v.desc}</div>
                           </div>
-                          {on && <i className="ti ti-check" style={{ marginLeft: "auto", fontSize: 13, color: "#5A3F90" }} aria-hidden="true" />}
+                          {on && <i className="ti ti-check" style={{ fontSize: 13, color: "#5A3F90" }} aria-hidden="true" />}
                         </button>
                       );
                     })}
-                    {/* Custom angle */}
                     {(() => {
                       const on = isoView === "custom";
                       return (
                         <button onClick={() => {
-                            // Seed the custom angle from the current preset (if any) so it
-                            // starts where you were, then open the live control panel.
                             const seed = activeIsoView ? { kx: activeIsoView.kx, ky: activeIsoView.ky, rot: activeIsoView.rot || 0 } : customAngle;
-                            setCustomAngle(seed); setIsoView("custom"); setShowViewMenu(false); setShowAnglePanel(true); markDirty();
+                            setCustomAngle(seed); setIsoView("custom"); setShowDisplayMenu(false); setShowAnglePanel(true); markDirty();
                           }}
-                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 11px",
+                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 11px",
                             border: "none", cursor: "pointer", textAlign: "left", background: on ? "#F0EBFA" : T.card }}>
-                          <i className="ti ti-3d-rotate" style={{ fontSize: 15, color: on ? "#5A3F90" : T.textMuted, flexShrink: 0 }} aria-hidden="true" />
-                          <div style={{ minWidth: 0 }}>
+                          <i className="ti ti-3d-rotate" style={{ fontSize: 14, color: on ? "#5A3F90" : T.textMuted, flexShrink: 0 }} aria-hidden="true" />
+                          <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontSize: 12, fontWeight: 700, color: on ? "#5A3F90" : T.text }}>Set your own angle…</div>
-                            <div style={{ fontSize: 10, color: T.textMuted }}>Tilt, spin & skew the lawn freely</div>
+                            <div style={{ fontSize: 10, color: T.textMuted }}>Tilt, spin & skew freely</div>
                           </div>
-                          {on && <i className="ti ti-check" style={{ marginLeft: "auto", fontSize: 13, color: "#5A3F90" }} aria-hidden="true" />}
+                          {on && <i className="ti ti-check" style={{ fontSize: 13, color: "#5A3F90" }} aria-hidden="true" />}
                         </button>
                       );
                     })()}
-                  </div>
-                </>
-              )}
-              {/* Scale */}
-              <button onClick={e => { e.stopPropagation(); setShowScaleMenu(v => !v); setShowViewMenu(false); }}
-                title="Object scale"
-                style={{ position: "relative", display: "flex", alignItems: "center", gap: 4, height: 26, padding: "0 9px",
-                  borderRadius: 6, border: `1px solid ${trueScaleObjs ? T.green : T.cardBorder}`,
-                  background: trueScaleObjs ? T.greenLight : T.card,
-                  color: trueScaleObjs ? T.greenMid : T.textMuted, fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-                <i className={`ti ${trueScaleObjs ? "ti-ruler-2" : "ti-ruler"}`} style={{ fontSize: 13 }} aria-hidden="true" />
-                <span>{trueScaleObjs ? "1:1" : "Diagram"}</span>
-                <i className="ti ti-chevron-down" style={{ fontSize: 10, opacity: 0.7 }} aria-hidden="true" />
-              </button>
-              {showScaleMenu && (
-                <>
-                  <div onClick={() => setShowScaleMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
-                  <div style={{ position: "absolute", top: 30, left: 0, zIndex: 41, background: T.card, border: `1px solid ${T.cardBorder}`,
-                    borderRadius: 8, boxShadow: "0 6px 24px rgba(0,0,0,0.18)", overflow: "hidden", minWidth: 190 }}>
+
+                    {/* ── Object scale ── */}
+                    <div style={{ height: 1, background: T.cardBorder, margin: "4px 0" }} />
+                    <div style={{ padding: "6px 11px 4px", fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", color: T.textMuted, textTransform: "uppercase" }}>Object scale</div>
                     {[
                       { key: "diagram", label: "Diagram", icon: "ti-ruler", desc: "Easy-to-read schematic sizes" },
                       { key: "true", label: "True 1:1 scale", icon: "ti-ruler-2", desc: "Real physical sizes — zoom to inspect" },
                     ].map(s => {
                       const on = scaleMode === s.key;
                       return (
-                        <button key={s.key} onClick={() => { setScaleMode(s.key); setShowScaleMenu(false); markDirty(); }}
-                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 11px",
-                            border: "none", borderBottom: `1px solid ${T.cardBorder}`, cursor: "pointer", textAlign: "left",
-                            background: on ? T.greenLight : T.card }}>
-                          <i className={`ti ${s.icon}`} style={{ fontSize: 15, color: on ? T.greenMid : T.textMuted, flexShrink: 0 }} aria-hidden="true" />
-                          <div style={{ minWidth: 0 }}>
+                        <button key={s.key} onClick={() => { setScaleMode(s.key); markDirty(); }}
+                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 11px",
+                            border: "none", cursor: "pointer", textAlign: "left", background: on ? T.greenLight : T.card }}>
+                          <i className={`ti ${s.icon}`} style={{ fontSize: 14, color: on ? T.greenMid : T.textMuted, flexShrink: 0 }} aria-hidden="true" />
+                          <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontSize: 12, fontWeight: 700, color: on ? T.greenMid : T.text }}>{s.label}</div>
                             <div style={{ fontSize: 10, color: T.textMuted }}>{s.desc}</div>
                           </div>
-                          {on && <i className="ti ti-check" style={{ marginLeft: "auto", fontSize: 13, color: T.greenMid }} aria-hidden="true" />}
+                          {on && <i className="ti ti-check" style={{ fontSize: 13, color: T.greenMid }} aria-hidden="true" />}
                         </button>
                       );
                     })}
+
+                    {/* ── Lawn / Physics / Help ── */}
+                    <div style={{ height: 1, background: T.cardBorder, margin: "4px 0" }} />
+                    <button onClick={() => { setShowDisplayMenu(false); setShowLawnPanel(true); }}
+                      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 11px",
+                        border: "none", cursor: "pointer", textAlign: "left", background: T.card }}>
+                      <i className="ti ti-plant-2" style={{ fontSize: 14, color: T.textMuted, flexShrink: 0 }} aria-hidden="true" />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>Lawn appearance…</div>
+                        <div style={{ fontSize: 10, color: T.textMuted }}>Grass, water, scene</div>
+                      </div>
+                      <i className="ti ti-chevron-right" style={{ fontSize: 12, color: T.textMuted }} aria-hidden="true" />
+                    </button>
+                    <button onClick={() => { setShowPhysics(v => !v); }}
+                      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 11px",
+                        border: "none", cursor: "pointer", textAlign: "left", background: showPhysics ? "#E8F0FF" : T.card }}>
+                      <i className="ti ti-atom" style={{ fontSize: 14, color: showPhysics ? "#3A7ABB" : T.textMuted, flexShrink: 0 }} aria-hidden="true" />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: showPhysics ? "#3A7ABB" : T.text }}>Physics overlays</div>
+                        <div style={{ fontSize: 10, color: T.textMuted }}>Distances, angles, force</div>
+                      </div>
+                      {showPhysics && <i className="ti ti-check" style={{ fontSize: 13, color: "#3A7ABB" }} aria-hidden="true" />}
+                    </button>
+                    <div style={{ height: 1, background: T.cardBorder, margin: "4px 0" }} />
+                    <button onClick={() => { setShowDisplayMenu(false); setShowHelpModal(true); }}
+                      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 11px",
+                        border: "none", cursor: "pointer", textAlign: "left", background: T.card }}>
+                      <i className="ti ti-help-circle" style={{ fontSize: 14, color: T.textMuted, flexShrink: 0 }} aria-hidden="true" />
+                      <div style={{ fontSize: 12, fontWeight: 600, color: T.text }}>Help & shortcuts</div>
+                    </button>
                   </div>
                 </>
               )}
-              {/* Lawn appearance */}
-              <button onClick={e => { e.stopPropagation(); setShowLawnPanel(v => !v); setShowViewMenu(false); setShowScaleMenu(false); }}
-                title="Lawn appearance"
-                style={{ position: "relative", display: "flex", alignItems: "center", gap: 4, height: 26, padding: "0 9px",
-                  borderRadius: 6, border: `1px solid ${showLawnPanel ? T.greenMid : T.cardBorder}`,
-                  background: showLawnPanel ? T.greenLight : T.card,
-                  color: showLawnPanel ? T.greenMid : T.textMuted, fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-                <i className="ti ti-plant-2" style={{ fontSize: 13 }} aria-hidden="true" />
-                <span>Lawn</span>
-                <i className="ti ti-chevron-down" style={{ fontSize: 10, opacity: 0.7 }} aria-hidden="true" />
-              </button>
               {showLawnPanel && (() => {
                 const COLOUR_LABELS = { green: "Standard", championship: "Championship", darkgreen: "Dark", lightgreen: "Light", autumn: "Autumn", dusk: "Dusk", white: "No grass", clay: "Clay", slate: "Slate", night: "Night" };
                 const swatchRow = (title, children) => (
@@ -61288,14 +61296,6 @@ if(by<0)return null;
             Note
             {note && !showNotesModal && <span style={{ position: "absolute", top: 3, right: 3, width: 5, height: 5, borderRadius: "50%", background: T.greenMid }} />}
           </button>
-          <button onClick={() => setShowPhysics(v => !v)}
-            style={{ display: "flex", alignItems: "center", gap: 4, height: 26, padding: "0 10px",
-              borderRadius: 6, border: `1px solid ${showPhysics ? "#5B9BD5" : T.cardBorder}`,
-              background: showPhysics ? "#E8F0FF" : T.card,
-              color: showPhysics ? "#3A7ABB" : T.textMuted, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-            <i className="ti ti-atom" style={{ fontSize: 13 }} aria-hidden="true" />
-            Physics
-          </button>
           <button onClick={() => { setShowMeasure(v => { const nv = !v; if (!nv) setMeasureLine(null); return nv; }); }}
             style={{ display: "flex", alignItems: "center", gap: 4, height: 26, padding: "0 10px",
               borderRadius: 6, border: `1px solid ${showMeasure ? "#C9852B" : T.cardBorder}`,
@@ -61329,12 +61329,6 @@ if(by<0)return null;
                 style={{ width: 60, accentColor: "#C9852B", cursor: "pointer" }} />
             </div>
           )}
-          <button onClick={e => { e.stopPropagation(); setShowHelpModal(true); }}
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26,
-              borderRadius: 6, border: `1px solid ${T.cardBorder}`, background: T.card,
-              color: T.textMuted, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-            ?
-          </button>
         </div>
         {/* Centre col: empty — navigator moved to top row */}
         <div />
