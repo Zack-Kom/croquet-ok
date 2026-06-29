@@ -4386,7 +4386,7 @@ function App() {
         button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
         /* Mobile active state — darken any button when tapped so text stays readable */
         @media (hover: none) {
-          button:hover { background: initial !important; }
+          button:not(.keep-bg):hover { background: initial; }
           button:not(.no-tap-dim):active { filter: brightness(0.82) !important; }
         }
         .game-card { transition: box-shadow 0.15s, transform 0.1s; }
