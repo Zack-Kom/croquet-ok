@@ -18,22 +18,22 @@ export function authedSupabase(clerkToken) {
   })
 }
 
-// Uploads a file to the committee-docs bucket and returns the storage path.
+// Uploads a file to the given bucket (defaults to committee-docs) and returns the storage path.
 // Call with an authenticated client from authedSupabase().
-export async function uploadCommitteeDoc(client, clubId, category, file) {
+export async function uploadCommitteeDoc(client, clubId, category, file, bucket = 'committee-docs') {
   const ext = file.name.split('.').pop()
   const path = `${clubId}/${category}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
   const { error } = await client.storage
-    .from('committee-docs')
+    .from(bucket)
     .upload(path, file, { contentType: file.type, upsert: false })
   if (error) throw error
   return path
 }
 
 // Returns a short-lived signed URL for a stored file (1 hour).
-export async function signedUrl(client, storagePath) {
+export async function signedUrl(client, storagePath, bucket = 'committee-docs') {
   const { data, error } = await client.storage
-    .from('committee-docs')
+    .from(bucket)
     .createSignedUrl(storagePath, 3600)
   if (error) throw error
   return data.signedUrl

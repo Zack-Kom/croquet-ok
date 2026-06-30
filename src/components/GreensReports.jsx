@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 import { authedSupabase, uploadCommitteeDoc, signedUrl } from '../lib/supabase.js'
 
-// Stores greens/turf contractor reports in the existing committee_documents table
-// using category prefixes "greens_*" so no extra migration or bucket is needed.
+// Stores greens/turf contractor reports in their own greens_reports table and
+// greens-reports storage bucket (supabase/migrations/002_greens_reports.sql).
+
+const BUCKET = 'greens-reports'
 
 const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg'
 const MAX_MB = 30
@@ -65,10 +67,9 @@ export default function GreensReports({ clubId, T }) {
       setLoading(true); setError(null)
       const client = await getClient()
       const { data, error: err } = await client
-        .from('committee_documents')
+        .from('greens_reports')
         .select('*')
         .eq('club_id', clubId)
-        .like('category', 'greens_%')
         .order('created_at', { ascending: false })
       if (err) throw err
       setReports(data || [])
@@ -88,17 +89,17 @@ export default function GreensReports({ clubId, T }) {
     try {
       setUploading(true); setError(null)
       const client = await getClient()
-      const path = await uploadCommitteeDoc(client, clubId, form.category, selectedFile)
-      const displayName = form.preparedBy
-        ? `${selectedFile.name} — ${form.preparedBy}${form.reportDate ? ' (' + fmtDate(form.reportDate) + ')' : ''}`
-        : selectedFile.name
-      await client.from('committee_documents').insert({
+      const path = await uploadCommitteeDoc(client, clubId, form.category, selectedFile, BUCKET)
+      await client.from('greens_reports').insert({
         club_id: clubId,
         category: form.category,
-        display_name: displayName,
+        display_name: selectedFile.name,
         storage_path: path,
         content_type: selectedFile.type,
         size_bytes: selectedFile.size,
+        report_date: form.reportDate || null,
+        prepared_by: form.preparedBy || null,
+        notes: form.notes || null,
         uploaded_by: userId,
       })
       setShowForm(false)
@@ -117,7 +118,7 @@ export default function GreensReports({ clubId, T }) {
     try {
       setOpeningId(report.id)
       const client = await getClient()
-      const url = await signedUrl(client, report.storage_path)
+      const url = await signedUrl(client, report.storage_path, BUCKET)
       window.open(url, '_blank', 'noopener')
     } catch (e) {
       setError('Could not open report.')
@@ -130,8 +131,8 @@ export default function GreensReports({ clubId, T }) {
     if (!window.confirm(`Delete "${report.display_name}"?`)) return
     try {
       const client = await getClient()
-      await client.storage.from('committee-docs').remove([report.storage_path])
-      await client.from('committee_documents').delete().eq('id', report.id)
+      await client.storage.from(BUCKET).remove([report.storage_path])
+      await client.from('greens_reports').delete().eq('id', report.id)
       setReports(r => r.filter(x => x.id !== report.id))
     } catch (e) {
       setError('Could not delete report.')
