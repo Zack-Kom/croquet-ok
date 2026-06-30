@@ -30,6 +30,6 @@ Vercel auto-deploys `master` to Production (served at `croquetok.com`) and every
 
 Migrations are applied in order and tracked per-project, so `db push` only applies what's new to whichever project is currently linked.
 
-## Before onboarding real clubs beyond Merthyr test data
+## RLS
 
-- Tighten RLS policies on `committee_documents`, `greens_reports`, and `broadcast_contributions` (currently open to any authenticated user) before real club data lives in the production project.
+`committee_documents` and `greens_reports` are scoped to the requester's own club (matched via `user_roles.club`, normalized through `club_slug()`) or `is_admin`. `broadcast_contributions` allows anonymous inserts (the QR-join contributor flow is sign-in-free by design) but restricts reading the queue and approving/rejecting to the `broadcaster` role or admins. Matching `storage.objects` policies exist for the `committee-docs`, `greens-reports`, and `broadcast-media` buckets. See `supabase/migrations/004_tighten_rls.sql`.
