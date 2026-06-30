@@ -8,7 +8,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
     "@capacitor/browser": "^8.0.3",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
     "@capacitor/local-notifications": "^8.2.0",
     "@clerk/clerk-react": "^5.61.8",
     "html2canvas": "^1.4.1",
