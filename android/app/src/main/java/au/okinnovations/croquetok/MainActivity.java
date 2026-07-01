@@ -1,4 +1,4 @@
-package com.zachkom.croquetok;
+package au.okinnovations.croquetok;
 
 import com.getcapacitor.BridgeActivity;
 
