@@ -556,3 +556,52 @@ export async function deleteLawnHoopEntry(client, entryId) {
   if (error) throw error
 }
 
+// ─── Club profile (core fields — see migration 016) ──────────────────────────
+// Ladder/ranking, work-log ("register"), policies, and video cards are deliberately
+// NOT covered here — each stays localStorage-only for now, same reasoning as deferring
+// fixtures/games out of the events migration.
+
+const CLUB_PROFILE_FIELD_MAP = {
+  registered: 'registered', onboardingStage: 'onboarding_stage', obStageTs: 'ob_stage_ts',
+  obChecklist: 'ob_checklist', obChecklistTs: 'ob_checklist_ts',
+  onboardingFlowSentAt: 'onboarding_flow_sent_at', obNotes: 'ob_notes',
+  logo: 'logo', primaryColor: 'primary_color', photos: 'photos', photoPosition: 'photo_position',
+  notes: 'notes', headerVideo: 'header_video', featuredVideo: 'featured_video',
+  privateEventsVideo: 'private_events_video',
+  address: 'address', phone: 'phone', email: 'email', website: 'website', mapEmbed: 'map_embed',
+  secretaryName: 'secretary_name', presidentName: 'president_name', treasurerName: 'treasurer_name',
+  captainName: 'captain_name', committeeMembers: 'committee_members',
+  codes: 'codes', presenceTimeoutHours: 'presence_timeout_hours', dayStartHour: 'day_start_hour',
+  affiliation: 'affiliation', bookingsPageEnabled: 'bookings_page_enabled',
+}
+
+// Fetches the core club profile row by slug (creating a stub clubs row if needed via
+// getOrCreateClub), mapped back to the camelCase shape the app already uses.
+export async function fetchClubProfileCore(client, clubNameOrSlug) {
+  const club = await getOrCreateClub(client, clubNameOrSlug)
+  const out = { _clubId: club.slug, _id: club.id }
+  for (const [camel, snake] of Object.entries(CLUB_PROFILE_FIELD_MAP)) out[camel] = club[snake]
+  out.obContact = { name: club.ob_contact_name, email: club.ob_contact_email, phone: club.ob_contact_phone }
+  return out
+}
+
+// Writes only the known core fields present in `profile`; anything else (register,
+// policies, ladder, videoCards, highlightClips, committeePortal, clubGrade, legacy
+// courts/variant) is silently ignored here — the caller keeps those in localStorage.
+export async function updateClubProfileCore(client, clubNameOrSlug, profile) {
+  const club = await getOrCreateClub(client, clubNameOrSlug)
+  const patch = {}
+  for (const [camel, snake] of Object.entries(CLUB_PROFILE_FIELD_MAP)) {
+    if (profile[camel] !== undefined) patch[snake] = profile[camel]
+  }
+  if (profile.obContact) {
+    if (profile.obContact.name !== undefined) patch.ob_contact_name = profile.obContact.name
+    if (profile.obContact.email !== undefined) patch.ob_contact_email = profile.obContact.email
+    if (profile.obContact.phone !== undefined) patch.ob_contact_phone = profile.obContact.phone
+  }
+  if (Object.keys(patch).length === 0) return club
+  const { data, error } = await client.from('clubs').update(patch).eq('id', club.id).select().single()
+  if (error) throw error
+  return data
+}
+
