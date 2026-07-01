@@ -3,6 +3,8 @@
   "appName": "Croquet OK",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "url": "https://croquetok.com",
+    "cleartext": false
   }
 }
