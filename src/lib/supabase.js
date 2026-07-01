@@ -650,3 +650,50 @@ export async function uncancelPlayDaySlotDate(client, slotId, dateStr) {
   if (error) throw error
 }
 
+// ─── Duty rota ─────────────────────────────────────────────────────────────
+
+export async function fetchRotaWeeks(client, clubId, { archived = false } = {}) {
+  const { data, error } = await client.from('club_rota_weeks')
+    .select('*, slots:club_rota_slots(*)').eq('club_id', clubId).eq('archived', archived)
+    .order('start_date', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createRotaWeek(client, clubId, { legacyId, label, startDate }) {
+  const { data, error } = await client.from('club_rota_weeks')
+    .insert({ club_id: clubId, legacy_id: legacyId || null, label: label || null, start_date: startDate })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateRotaWeek(client, weekId, patch) {
+  const { error } = await client.from('club_rota_weeks').update(patch).eq('id', weekId)
+  if (error) throw error
+}
+
+export async function archiveRotaWeek(client, weekId, { reason, auto } = {}) {
+  const { error } = await client.from('club_rota_weeks')
+    .update({ archived: true, archived_at: new Date().toISOString(), archived_reason: reason || 'completed', auto_archived: auto ?? false })
+    .eq('id', weekId)
+  if (error) throw error
+}
+
+export async function addRotaSlot(client, weekId, { duty, assignee }) {
+  const { data, error } = await client.from('club_rota_slots')
+    .insert({ week_id: weekId, duty, assignee: assignee || null }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateRotaSlot(client, slotId, patch) {
+  const { error } = await client.from('club_rota_slots').update(patch).eq('id', slotId)
+  if (error) throw error
+}
+
+export async function deleteRotaSlot(client, slotId) {
+  const { error } = await client.from('club_rota_slots').delete().eq('id', slotId)
+  if (error) throw error
+}
+
