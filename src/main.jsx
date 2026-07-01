@@ -73,17 +73,20 @@ function LandingScreen() {
       style: {
         position: 'relative',
         zIndex: 1,
-        background: '#fff',
-        borderRadius: 12,
-        padding: '1.5rem',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
         width: '100%',
-        maxWidth: 400,
-        boxSizing: 'border-box',
+        maxWidth: 440,
         flexShrink: 0,
       }
     },
-      React.createElement(SignIn, { routing: 'hash' })
+      React.createElement(SignIn, {
+        routing: 'hash',
+        appearance: {
+          elements: {
+            rootBox: { width: '100%' },
+            cardBox: { width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.35)' },
+          },
+        },
+      })
     )
   );
 }
