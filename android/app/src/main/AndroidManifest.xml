@@ -18,6 +18,17 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Deep link for Clerk OAuth callback: the system browser redirects to
+                 au.okinnovations.croquetok://sso-callback after Google sign-in, which
+                 routes back into MainActivity (singleTask) and fires Capacitor's
+                 appUrlOpen so the web layer can complete the Clerk session. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="au.okinnovations.croquetok" android:host="sso-callback" />
+            </intent-filter>
         </activity>
 
         <provider

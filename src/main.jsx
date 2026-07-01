@@ -1,11 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { ClerkProvider, SignedIn, SignedOut, SignIn } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut, SignIn, useSignIn } from '@clerk/clerk-react';
 import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n/index.js';
 import App from './App.jsx';
 import { CroquetOkLogo } from './components/OKBadge.jsx';
 import { LawnBackground, LAWN_BASE } from './components/LawnBackground.jsx';
+import { isNativePlatform, signInWithGoogleNative } from './lib/nativeAuth.js';
 import './index.css';
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -35,6 +36,55 @@ function useLandingLogoScale() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
   return scale;
+}
+
+// Native (Capacitor) sign-in: Clerk's prebuilt <SignIn> uses an in-WebView redirect
+// for "Continue with Google", which Google blocks inside embedded WebViews. So on the
+// native app we render our own button that runs the OAuth handshake in the system
+// browser (see src/lib/nativeAuth.js). Web is unaffected — it keeps using <SignIn>.
+function NativeGoogleSignIn() {
+  const { isLoaded, signIn, setActive } = useSignIn();
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+
+  async function handleGoogle() {
+    if (!isLoaded || busy) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      await signInWithGoogleNative(signIn, setActive);
+      // On success, <SignedIn> takes over and renders <App>; keep the button disabled
+      // through the transition rather than flipping back to the idle state.
+    } catch (e) {
+      setErr((e && e.message) ? e.message : 'Google sign-in failed. Please try again.');
+      setBusy(false);
+    }
+  }
+
+  return React.createElement('div', {
+    style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%' },
+  },
+    React.createElement('button', {
+      onClick: handleGoogle,
+      disabled: !isLoaded || busy,
+      style: {
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+        width: '100%', maxWidth: 340, padding: '14px 18px', borderRadius: 12,
+        border: 'none', background: '#fff', color: '#1f2937', fontSize: 16, fontWeight: 600,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.35)', cursor: (!isLoaded || busy) ? 'default' : 'pointer',
+        opacity: (!isLoaded || busy) ? 0.7 : 1,
+      },
+    },
+      React.createElement('img', {
+        src: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+        alt: '', width: 20, height: 20, style: { display: 'block' },
+      }),
+      busy ? 'Signing in…' : 'Continue with Google'
+    ),
+    err && React.createElement('p', {
+      style: { margin: 0, color: '#fecaca', fontSize: 13, textAlign: 'center', maxWidth: 340 },
+    }, err)
+  );
 }
 
 function LandingScreen() {
@@ -78,15 +128,17 @@ function LandingScreen() {
         flexShrink: 0,
       }
     },
-      React.createElement(SignIn, {
-        routing: 'hash',
-        appearance: {
-          elements: {
-            rootBox: { width: '100%' },
-            cardBox: { width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.35)' },
-          },
-        },
-      })
+      isNativePlatform()
+        ? React.createElement(NativeGoogleSignIn)
+        : React.createElement(SignIn, {
+            routing: 'hash',
+            appearance: {
+              elements: {
+                rootBox: { width: '100%' },
+                cardBox: { width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.35)' },
+              },
+            },
+          })
     )
   );
 }
