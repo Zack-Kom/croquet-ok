@@ -299,13 +299,28 @@ export async function updateRegistrationStatus(client, registrationId, status) {
 }
 
 // Marks a player present for an event occurrence (finds-or-creates the player).
-export async function markAttendance(client, eventId, clubId, occurrenceId, playerName) {
+// occurrenceId is a plain string (matches the localStorage-generated occurrence id) —
+// occurrences themselves aren't Supabase-backed yet, but attendance rows can still be
+// scoped to one via this text column.
+export async function markAttendance(client, eventId, clubId, occurrenceId, playerName, { rsvp, confirmed, rsvpNote } = {}) {
   const player = await findOrCreatePlayer(client, clubId, playerName)
   const { data, error } = await client.from('attendance')
-    .upsert({ event_id: eventId, occurrence_id: occurrenceId || null, player_id: player.id }, { onConflict: 'event_id,occurrence_id,player_id' })
+    .upsert({
+      event_id: eventId, occurrence_id: occurrenceId || null, player_id: player.id,
+      rsvp: rsvp ?? null, confirmed: confirmed ?? false, rsvp_note: rsvpNote ?? null,
+    }, { onConflict: 'event_id,occurrence_id,player_id' })
     .select('*, player:players(*)').single()
   if (error) throw error
   return data
+}
+
+export async function updateAttendanceFields(client, attendanceId, { rsvp, confirmed, rsvpNote }) {
+  const patch = {}
+  if (rsvp !== undefined) patch.rsvp = rsvp
+  if (confirmed !== undefined) patch.confirmed = confirmed
+  if (rsvpNote !== undefined) patch.rsvp_note = rsvpNote
+  const { error } = await client.from('attendance').update(patch).eq('id', attendanceId)
+  if (error) throw error
 }
 
 export async function fetchAttendance(client, eventId, occurrenceId) {
@@ -352,11 +367,24 @@ export async function fetchEventTeams(client, eventId) {
   return data
 }
 
-export async function createEventTeam(client, eventId, clubId, name) {
+export async function createEventTeam(client, eventId, name) {
   const { data, error } = await client.from('event_teams')
-    .insert({ event_id: eventId, club_id: clubId || null, name }).select().single()
+    .insert({ event_id: eventId, name }).select().single()
   if (error) throw error
   return data
+}
+
+export async function updateEventTeam(client, teamId, { name, clubName }) {
+  const patch = {}
+  if (name !== undefined) patch.name = name
+  if (clubName !== undefined) patch.club_name = clubName
+  const { error } = await client.from('event_teams').update(patch).eq('id', teamId)
+  if (error) throw error
+}
+
+export async function deleteEventTeam(client, teamId) {
+  const { error } = await client.from('event_teams').delete().eq('id', teamId)
+  if (error) throw error
 }
 
 export async function addTeamPlayer(client, teamId, clubId, playerName) {
