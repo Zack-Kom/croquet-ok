@@ -129,7 +129,26 @@ function LandingScreen() {
       }
     },
       isNativePlatform()
-        ? React.createElement(NativeGoogleSignIn)
+        ? React.createElement(React.Fragment, null,
+            // Native: our own Google button (system-browser flow) on top, then the
+            // full Clerk <SignIn> for email/other methods — with Clerk's own social
+            // buttons hidden so there's no broken in-WebView "Continue with Google".
+            React.createElement(NativeGoogleSignIn),
+            React.createElement('div', { style: { height: 10 } }),
+            React.createElement(SignIn, {
+              routing: 'hash',
+              appearance: {
+                elements: {
+                  rootBox: { width: '100%' },
+                  cardBox: { width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.35)' },
+                  socialButtons: { display: 'none' },
+                  socialButtonsBlockButton: { display: 'none' },
+                  socialButtonsIconButton: { display: 'none' },
+                  dividerRow: { display: 'none' },
+                },
+              },
+            })
+          )
         : React.createElement(SignIn, {
             routing: 'hash',
             appearance: {
