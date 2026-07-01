@@ -440,17 +440,29 @@ export async function deleteLawn(client, lawnId) {
   if (error) throw error
 }
 
-export async function fetchLawnLog(client, lawnId) {
-  const { data, error } = await client.from('lawn_log').select('*').eq('lawn_id', lawnId).order('logged_at', { ascending: false })
+// All four of these are club-scoped (not just lawn-scoped) since the UI supports an
+// "applies to all lawns" option — lawnId null/undefined means club-wide.
+
+export async function fetchLawnLog(client, clubId) {
+  const { data, error } = await client.from('lawn_log').select('*').eq('club_id', clubId).order('task_date', { ascending: false })
   if (error) throw error
   return data
 }
 
-export async function addLawnLogEntry(client, lawnId, { entryType, detail, loggedBy }) {
+export async function upsertLawnLogEntry(client, clubId, { id, lawnId, taskType, taskDate, byId, note, product, quantity, unit, supplier }) {
   const { data, error } = await client.from('lawn_log')
-    .insert({ lawn_id: lawnId, entry_type: entryType, detail, logged_by: loggedBy }).select().single()
+    .upsert({
+      id: id || undefined, club_id: clubId, lawn_id: lawnId || null,
+      task_type: taskType, task_date: taskDate, by_id: byId || null, note: note || null,
+      product: product || null, quantity: quantity || null, unit: unit || null, supplier: supplier || null,
+    }).select().single()
   if (error) throw error
   return data
+}
+
+export async function deleteLawnLogEntry(client, entryId) {
+  const { error } = await client.from('lawn_log').delete().eq('id', entryId)
+  if (error) throw error
 }
 
 export async function fetchLawnContacts(client, clubId) {
@@ -459,9 +471,13 @@ export async function fetchLawnContacts(client, clubId) {
   return data
 }
 
-export async function upsertLawnContact(client, clubId, contact) {
+export async function upsertLawnContact(client, clubId, { id, kind, memberId, name, role, org, phone, email, note, appAccess }) {
   const { data, error } = await client.from('lawn_contacts')
-    .upsert({ club_id: clubId, ...contact }).select().single()
+    .upsert({
+      id: id || undefined, club_id: clubId, kind: kind || 'contractor', member_id: memberId || null,
+      name, role: role || null, org: org || null, phone: phone || null, email: email || null,
+      note: note || null, app_access: appAccess ?? false,
+    }).select().single()
   if (error) throw error
   return data
 }
@@ -471,37 +487,44 @@ export async function deleteLawnContact(client, contactId) {
   if (error) throw error
 }
 
-export async function fetchLawnProblems(client, lawnId) {
-  const { data, error } = await client.from('lawn_problems').select('*').eq('lawn_id', lawnId).order('created_at', { ascending: false })
+export async function fetchLawnProblems(client, clubId) {
+  const { data, error } = await client.from('lawn_problems').select('*').eq('club_id', clubId).order('first_noted', { ascending: false })
   if (error) throw error
   return data
 }
 
-export async function reportLawnProblem(client, lawnId, { description, severity, reportedBy }) {
+export async function upsertLawnProblem(client, clubId, { id, lawnId, problemType, status, title, notes, firstNoted, marks, reportedBy }) {
   const { data, error } = await client.from('lawn_problems')
-    .insert({ lawn_id: lawnId, description, severity, reported_by: reportedBy }).select().single()
+    .upsert({
+      id: id || undefined, club_id: clubId, lawn_id: lawnId && lawnId !== 'all' ? lawnId : null,
+      problem_type: problemType, status: status || 'active', title: title || null, notes: notes || null,
+      first_noted: firstNoted || null, marks: marks || [], reported_by: reportedBy || null,
+    }).select().single()
   if (error) throw error
   return data
 }
 
-export async function updateLawnProblemStatus(client, problemId, status) {
-  const patch = { status }
-  if (status === 'resolved') patch.resolved_at = new Date().toISOString()
-  const { error } = await client.from('lawn_problems').update(patch).eq('id', problemId)
+export async function deleteLawnProblem(client, problemId) {
+  const { error } = await client.from('lawn_problems').delete().eq('id', problemId)
   if (error) throw error
 }
 
-export async function fetchLawnHoops(client, lawnId) {
-  const { data, error } = await client.from('lawn_hoops').select('*').eq('lawn_id', lawnId).order('hoop_number', { ascending: true })
+export async function fetchLawnHoops(client, clubId) {
+  const { data, error } = await client.from('lawn_hoops').select('*').eq('club_id', clubId).order('log_date', { ascending: false })
   if (error) throw error
   return data
 }
 
-export async function rotateLawnHoop(client, lawnId, { hoopNumber, positionX, positionY, rotatedBy }) {
+export async function addLawnHoopEntry(client, clubId, { lawnId, logDate, notes, rotatedBy }) {
   const { data, error } = await client.from('lawn_hoops')
-    .insert({ lawn_id: lawnId, hoop_number: hoopNumber, position_x: positionX, position_y: positionY, rotated_by: rotatedBy })
+    .insert({ club_id: clubId, lawn_id: lawnId || null, log_date: logDate, notes: notes || null, rotated_by: rotatedBy || null })
     .select().single()
   if (error) throw error
   return data
+}
+
+export async function deleteLawnHoopEntry(client, entryId) {
+  const { error } = await client.from('lawn_hoops').delete().eq('id', entryId)
+  if (error) throw error
 }
 
