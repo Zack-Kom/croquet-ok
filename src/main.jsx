@@ -5,7 +5,7 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n/index.js';
 import App from './App.jsx';
 import { CroquetOkLogo } from './components/OKBadge.jsx';
-import { LawnBackground } from './components/LawnBackground.jsx';
+import { LawnBackground, LAWN_BASE } from './components/LawnBackground.jsx';
 import './index.css';
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -41,16 +41,17 @@ function LandingScreen() {
   const logoScale = useLandingLogoScale();
   return React.createElement('div', {
     style: {
-      position: 'relative',
+      position: 'fixed',
+      inset: 0,
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
       alignItems: 'center',
-      minHeight: '100vh',
-      background: '#0F3D22',
-      padding: '3.5rem 1.5rem',
-      gap: '3.5rem',
-      overflow: 'hidden',
+      background: LAWN_BASE,
+      padding: '2rem 1.25rem',
+      gap: '2rem',
+      overflowY: 'auto',
+      WebkitOverflowScrolling: 'touch',
     }
   },
     React.createElement(LawnBackground),
@@ -63,6 +64,7 @@ function LandingScreen() {
         width: '100%',
         maxWidth: 440,
         padding: '0 0.5rem',
+        flexShrink: 0,
       }
     },
       React.createElement(CroquetOkLogo, { scale: logoScale })
@@ -75,6 +77,10 @@ function LandingScreen() {
         borderRadius: 12,
         padding: '1.5rem',
         boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+        width: '100%',
+        maxWidth: 400,
+        boxSizing: 'border-box',
+        flexShrink: 0,
       }
     },
       React.createElement(SignIn, { routing: 'hash' })
