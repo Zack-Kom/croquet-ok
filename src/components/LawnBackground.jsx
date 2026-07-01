@@ -3,9 +3,9 @@ import React from 'react';
 // ── LawnBackground — full-bleed mown-lawn backdrop for the pre-login screen ──
 // Picks a random mowing pattern each load and overlays a fine "short grass"
 // blade texture, echoing the lawn-diagram styling used elsewhere in the app.
-const LAWN_BASE = '#0F3D22';
-const LAWN_ALT = '#12452A';
-const BLADE_COLOR = '#0A2A17';
+export const LAWN_BASE = '#1B5E3A';
+const LAWN_ALT = '#20693F';
+const BLADE_COLOR = '#123D26';
 
 const PATTERNS = ['stripe_h', 'stripe_v', 'stripe_d45', 'stripe_d135', 'checker', 'diamond'];
 
