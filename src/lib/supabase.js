@@ -605,3 +605,48 @@ export async function updateClubProfileCore(client, clubNameOrSlug, profile) {
   return data
 }
 
+// ─── Play-day scheduling ──────────────────────────────────────────────────────
+
+export async function fetchPlayDaySlots(client, clubId) {
+  const { data, error } = await client.from('play_day_slots').select('*').eq('club_id', clubId)
+  if (error) throw error
+  return data
+}
+
+export async function createPlayDaySlot(client, clubId, { dayOfWeek, start, end, approxEnd, codes, notes, label }) {
+  const { data, error } = await client.from('play_day_slots')
+    .insert({
+      club_id: clubId, day_of_week: dayOfWeek, start_time: start, end_time: end || null,
+      approx_end: approxEnd ?? false, codes: codes || [], notes: notes || null, label: label || null,
+    }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updatePlayDaySlot(client, slotId, patch) {
+  const { data, error } = await client.from('play_day_slots').update(patch).eq('id', slotId).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deletePlayDaySlot(client, slotId) {
+  const { error } = await client.from('play_day_slots').delete().eq('id', slotId)
+  if (error) throw error
+}
+
+export async function cancelPlayDaySlotDate(client, slotId, dateStr) {
+  const { data: row, error: selErr } = await client.from('play_day_slots').select('cancelled_dates').eq('id', slotId).single()
+  if (selErr) throw selErr
+  const next = Array.from(new Set([...(row.cancelled_dates || []), dateStr]))
+  const { error } = await client.from('play_day_slots').update({ cancelled_dates: next }).eq('id', slotId)
+  if (error) throw error
+}
+
+export async function uncancelPlayDaySlotDate(client, slotId, dateStr) {
+  const { data: row, error: selErr } = await client.from('play_day_slots').select('cancelled_dates').eq('id', slotId).single()
+  if (selErr) throw selErr
+  const next = (row.cancelled_dates || []).filter(d => d !== dateStr)
+  const { error } = await client.from('play_day_slots').update({ cancelled_dates: next }).eq('id', slotId)
+  if (error) throw error
+}
+
