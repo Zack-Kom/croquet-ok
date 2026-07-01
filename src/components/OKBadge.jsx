@@ -134,6 +134,9 @@ export function CroquetOkLogo({ scale = 1, color = "#fff" }) {
     <span style={{
       display: "inline-flex",
       alignItems: "center",
+      justifyContent: "center",
+      flexWrap: "wrap",
+      textAlign: "center",
       gap: 8 * scale,
       fontSize: 19 * scale,
       fontWeight: 700,
@@ -141,7 +144,6 @@ export function CroquetOkLogo({ scale = 1, color = "#fff" }) {
       color,
       fontFamily: "'Libre Baskerville', Georgia, serif",
       textShadow: "0 1px 6px rgba(0,0,0,0.4)",
-      whiteSpace: "nowrap",
     }}>
       Croquet?
       <OKBadge scale={scale} />
