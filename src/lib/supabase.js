@@ -39,6 +39,29 @@ export async function signedUrl(client, storagePath, bucket = 'committee-docs') 
   return data.signedUrl
 }
 
+// ─── Club media (logo / banner photos — migration 027) ──────────────────────────
+
+// Uploads a club branding image to the public 'club-media' bucket and returns the
+// storage path. clubId is the "club:slug" form (getClubId()), matching the first
+// path segment the storage RLS policy checks. kind is 'logo' or 'photo'.
+export async function uploadClubMedia(client, clubId, kind, file) {
+  const ext = (file.type && file.type.split('/')[1]) || 'png'
+  const path = `${clubId}/${kind}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await client.storage
+    .from('club-media')
+    .upload(path, file, { contentType: file.type, upsert: false })
+  if (error) throw error
+  return path
+}
+
+// Resolves a club-media storage path to a stable public URL (bucket is public, so
+// no auth or expiry). Returns null for empty input. Safe to call with the plain
+// unauthenticated client since downloads bypass RLS on a public bucket.
+export function clubMediaUrl(path) {
+  if (!path) return null
+  return supabase.storage.from('club-media').getPublicUrl(path).data.publicUrl
+}
+
 // ─── Broadcast contributions ──────────────────────────────────────────────────
 
 // Uploads a media file to the broadcast-media bucket and inserts a contribution row.
@@ -166,6 +189,77 @@ export async function findOrCreatePlayer(client, clubId, name) {
 export async function claimPlayer(client, playerId, clerkUserId) {
   const { error } = await client.from('players').update({ clerk_user_id: clerkUserId }).eq('id', playerId)
   if (error) throw error
+}
+
+// ─── Player profiles ─────────────────────────────────────────────────────────
+// The rich profile data that used to live only in localStorage under
+// playerProfile___me__ / playerProfile___<id>__ / playerProfile_<slug>. Lives on the
+// same `players` row created above (migration 027) — a player row IS a profile once
+// it's filled in, whether or not it's ever claimed by a signed-in Clerk user.
+
+const PLAYER_PROFILE_FIELD_MAP = {
+  avatar: 'avatar', bio: 'bio', phone: 'phone', email: 'email', address: 'address',
+  website: 'website', photos: 'photos', photoPosition: 'photo_position',
+  clubs: 'clubs', clubMemberships: 'club_memberships',
+  acHandicap: 'ac_handicap', gcHandicap: 'gc_handicap',
+  acIndexPoints: 'ac_index_points', gcIndexPoints: 'gc_index_points',
+  dGradeAC: 'd_grade_ac', dGradeGC: 'd_grade_gc', playsAC: 'plays_ac', playsGC: 'plays_gc',
+  clubGrade: 'club_grade', notes: 'notes', coach: 'coach', toolbelt: 'toolbelt',
+  roles: 'roles', isAdmin: 'is_admin', memberStatus: 'member_status', joinedAt: 'joined_at',
+  myCheckIns: 'my_checkins', badges: 'badges', hcpHistory: 'hcp_history',
+  upcomingEvents: 'upcoming_events', highlights: 'highlights', selfId: 'self_id',
+  name: 'name',
+}
+
+function playerRowToProfile(row) {
+  if (!row) return null
+  const out = { id: row.id, _playerId: row.id }
+  for (const [camel, snake] of Object.entries(PLAYER_PROFILE_FIELD_MAP)) out[camel] = row[snake]
+  return out
+}
+
+// Finds the signed-in user's own player row by clerk_user_id (no create — the row is
+// created lazily on first write via getOrCreateSelfPlayer).
+export async function fetchPlayerProfileByClerkId(client, clerkUserId) {
+  if (!clerkUserId) return null
+  const { data, error } = await client.from('players').select('*').eq('clerk_user_id', clerkUserId).maybeSingle()
+  if (error) throw error
+  return playerRowToProfile(data)
+}
+
+// Get-or-create the signed-in user's own player row: prefer an existing clerk-linked
+// row; otherwise claim an unclaimed row matching their name, or create a fresh one.
+export async function getOrCreateSelfPlayer(client, clerkUserId, name) {
+  const { data: existing, error: selErr } = await client.from('players').select('*').eq('clerk_user_id', clerkUserId).maybeSingle()
+  if (selErr) throw selErr
+  if (existing) return existing
+  const player = await findOrCreatePlayer(client, null, name || 'Me')
+  if (!player.clerk_user_id) await claimPlayer(client, player.id, clerkUserId)
+  const { data: claimed, error: reselErr } = await client.from('players').select('*').eq('id', player.id).single()
+  if (reselErr) throw reselErr
+  return claimed
+}
+
+// Writes only the fields present in PLAYER_PROFILE_FIELD_MAP; anything else (derived
+// display-only fields) is silently ignored — the caller keeps those in localStorage.
+export async function updatePlayerProfileFields(client, playerId, profile) {
+  const patch = {}
+  for (const [camel, snake] of Object.entries(PLAYER_PROFILE_FIELD_MAP)) {
+    if (profile[camel] !== undefined) patch[snake] = profile[camel]
+  }
+  if (Object.keys(patch).length === 0) return null
+  const { data, error } = await client.from('players').update(patch).eq('id', playerId).select().single()
+  if (error) throw error
+  return playerRowToProfile(data)
+}
+
+// Bulk-fetches every player with any profile content, for the mount-time pull that
+// mirrors the whole directory into localStorage's playerProfile_<slug> keys (matches
+// the app_directory pattern — global content pulled for every signed-in user).
+export async function fetchAllPlayerProfiles(client) {
+  const { data, error } = await client.from('players').select('*')
+  if (error) throw error
+  return (data || []).map(playerRowToProfile)
 }
 
 // ─── Events / fixtures / registrations / attendance ─────────────────────────
@@ -341,6 +435,16 @@ export async function removeAttendance(client, attendanceId) {
 export async function fetchEventOccurrences(client, eventId) {
   const { data, error } = await client.from('event_occurrences')
     .select('*').eq('event_id', eventId).order('date', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+// Bulk variant for views (week-ahead, event lists, live session) that need
+// occurrences across every event in a club at once rather than one at a time.
+export async function fetchOccurrencesForEvents(client, eventIds) {
+  if (!eventIds || eventIds.length === 0) return []
+  const { data, error } = await client.from('event_occurrences')
+    .select('*').in('event_id', eventIds).order('date', { ascending: true })
   if (error) throw error
   return data
 }
@@ -556,16 +660,20 @@ export async function deleteLawnHoopEntry(client, entryId) {
   if (error) throw error
 }
 
-// ─── Club profile (core fields — see migration 016) ──────────────────────────
-// Ladder/ranking, work-log ("register"), policies, and video cards are deliberately
-// NOT covered here — each stays localStorage-only for now, same reasoning as deferring
-// fixtures/games out of the events migration.
+// ─── Club profile (core fields — migration 016; sub-features — 019/020/021) ──────
+// Every remaining club-profile piece is now Supabase-backed jsonb: work-log
+// ("register"), policies, video cards, and the committee portal (migration 019),
+// private-event config (migration 020), and club grade / ladder (migration 021).
 
 const CLUB_PROFILE_FIELD_MAP = {
   registered: 'registered', onboardingStage: 'onboarding_stage', obStageTs: 'ob_stage_ts',
   obChecklist: 'ob_checklist', obChecklistTs: 'ob_checklist_ts',
   onboardingFlowSentAt: 'onboarding_flow_sent_at', obNotes: 'ob_notes',
-  logo: 'logo', primaryColor: 'primary_color', photos: 'photos', photoPosition: 'photo_position',
+  // NB: logo/photos (base64 columns, migration 016) are handled explicitly in
+  // fetch/update below, not through this blind map — they now derive from the
+  // logo_path/photo_paths storage columns (migration 027). photoPosition still maps.
+  primaryColor: 'primary_color', photoPosition: 'photo_position',
+  logoPath: 'logo_path', photoPaths: 'photo_paths',
   notes: 'notes', headerVideo: 'header_video', featuredVideo: 'featured_video',
   privateEventsVideo: 'private_events_video',
   address: 'address', phone: 'phone', email: 'email', website: 'website', mapEmbed: 'map_embed',
@@ -573,6 +681,12 @@ const CLUB_PROFILE_FIELD_MAP = {
   captainName: 'captain_name', committeeMembers: 'committee_members',
   codes: 'codes', presenceTimeoutHours: 'presence_timeout_hours', dayStartHour: 'day_start_hour',
   affiliation: 'affiliation', bookingsPageEnabled: 'bookings_page_enabled',
+  register: 'register', policies: 'policies', videoCards: 'video_cards',
+  committeePortal: 'committee_portal', peConfig: 'pe_config',
+  clubGrade: 'club_grade', ladder: 'ladder',
+  lawnLayout: 'lawn_layout', dutyTypes: 'duty_types',
+  treasurerSubs: 'treasurer_subs', treasurerLedger: 'treasurer_ledger',
+  memberFees: 'member_fees',
 }
 
 // Fetches the core club profile row by slug (creating a stub clubs row if needed via
@@ -582,12 +696,18 @@ export async function fetchClubProfileCore(client, clubNameOrSlug) {
   const out = { _clubId: club.slug, _id: club.id }
   for (const [camel, snake] of Object.entries(CLUB_PROFILE_FIELD_MAP)) out[camel] = club[snake]
   out.obContact = { name: club.ob_contact_name, email: club.ob_contact_email, phone: club.ob_contact_phone }
+  // logo/photos: prefer the storage-backed paths (migration 027), falling back to the
+  // legacy base64 columns (migration 016) for rows not yet backfilled. The app keeps
+  // consuming `logo`/`photos` as display srcs — now short public URLs, not data URLs.
+  out.logo = club.logo_path ? clubMediaUrl(club.logo_path) : (club.logo || null)
+  out.photos = (club.photo_paths && club.photo_paths.length)
+    ? club.photo_paths.map(clubMediaUrl)
+    : (club.photos || [])
   return out
 }
 
-// Writes only the known core fields present in `profile`; anything else (register,
-// policies, ladder, videoCards, highlightClips, committeePortal, clubGrade, legacy
-// courts/variant) is silently ignored here — the caller keeps those in localStorage.
+// Writes only the fields present in CLUB_PROFILE_FIELD_MAP; anything else (highlightClips,
+// legacy courts/variant) is silently ignored here — the caller keeps those in localStorage.
 export async function updateClubProfileCore(client, clubNameOrSlug, profile) {
   const club = await getOrCreateClub(client, clubNameOrSlug)
   const patch = {}
@@ -599,6 +719,11 @@ export async function updateClubProfileCore(client, clubNameOrSlug, profile) {
     if (profile.obContact.email !== undefined) patch.ob_contact_email = profile.obContact.email
     if (profile.obContact.phone !== undefined) patch.ob_contact_phone = profile.obContact.phone
   }
+  // Whenever a storage path is written (including a null on removal), clear the legacy
+  // base64 column so fetch's fallback can't resurrect a stale data URL. Also guards
+  // against ever re-persisting a megabyte data URL into these columns.
+  if (profile.logoPath !== undefined) patch.logo = null
+  if (profile.photoPaths !== undefined) patch.photos = null
   if (Object.keys(patch).length === 0) return club
   const { data, error } = await client.from('clubs').update(patch).eq('id', club.id).select().single()
   if (error) throw error
@@ -695,5 +820,230 @@ export async function updateRotaSlot(client, slotId, patch) {
 export async function deleteRotaSlot(client, slotId) {
   const { error } = await client.from('club_rota_slots').delete().eq('id', slotId)
   if (error) throw error
+}
+
+export async function deleteRotaWeek(client, weekId) {
+  const { error } = await client.from('club_rota_weeks').delete().eq('id', weekId)
+  if (error) throw error
+}
+
+// ─── Private event enquiries (migration 020) ─────────────────────────────────
+
+export async function fetchPeEnquiries(client, clubId) {
+  const { data, error } = await client.from('private_event_enquiries')
+    .select('*').eq('club_id', clubId).order('created_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createPeEnquiry(client, clubId, fields) {
+  const { data, error } = await client.from('private_event_enquiries')
+    .insert({ club_id: clubId, ...fields }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updatePeEnquiry(client, enquiryId, patch) {
+  const { data, error } = await client.from('private_event_enquiries')
+    .update(patch).eq('id', enquiryId).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deletePeEnquiry(client, enquiryId) {
+  const { error } = await client.from('private_event_enquiries').delete().eq('id', enquiryId)
+  if (error) throw error
+}
+
+// ─── Private events — confirmed-bookings clash-detection list (migration 020) ──
+
+export async function fetchPrivateEvents(client, clubId) {
+  const { data, error } = await client.from('private_events')
+    .select('*').eq('club_id', clubId).order('date', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createPrivateEvent(client, clubId, fields) {
+  const { data, error } = await client.from('private_events')
+    .insert({ club_id: clubId, ...fields }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updatePrivateEvent(client, id, patch) {
+  const { data, error } = await client.from('private_events')
+    .update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deletePrivateEvent(client, id) {
+  const { error } = await client.from('private_events').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ─── Games — live-play/scoring engine (migration 022) ────────────────────────
+// Structured columns for identity/status/players/links; everything else (turn-by-turn
+// progress/pegged/currentTurn/eventLog/history/gc*/bisques/ballPositions) lives in one
+// `state` jsonb column — that data has no independent per-row lifecycle, it only ever
+// makes sense read/written as a whole snapshot of "the game right now".
+const GAME_FIELD_MAP = {
+  playerAB: 'player_ab', playerRY: 'player_ry', gameType: 'game_type', variant: 'variant',
+  venue: 'venue', visibility: 'visibility', lawn: 'lawn', title: 'title',
+  maxHoops: 'max_hoops', winner: 'winner', turnCount: 'turn_count',
+  isDraw: 'is_draw', endedByTime: 'ended_by_time', sidesConfirmed: 'sides_confirmed',
+  advancedFlow: 'advanced_flow', timeLimit: 'time_limit',
+  playerIds: 'player_ids', partners: 'partners',
+}
+const GAME_STATE_FIELDS = [
+  'progress', 'pegged', 'currentTurn', 'eventLog', 'history', 'gcCurrentHoop',
+  'gcBallOrder', 'gcHoopsThisTurn', 'bisques', 'halfBisqueUsed', 'ballPositions',
+]
+
+// Maps the app's in-memory game object to a games-table row. clubId may be null (no
+// resolvable club yet, e.g. a practice game with no venue). game.eventId, when present,
+// is already a real Supabase event uuid (events are fully Supabase-backed), so it's
+// usable as event_id directly — no legacy-id mapping needed there.
+export function gameToRow(game, clubId) {
+  const row = { legacy_id: String(game.id), club_id: clubId || null, event_id: game.eventId || null }
+  for (const [camel, snake] of Object.entries(GAME_FIELD_MAP)) {
+    if (game[camel] !== undefined) row[snake] = game[camel]
+  }
+  const state = {}
+  GAME_STATE_FIELDS.forEach(k => { if (game[k] !== undefined) state[k] = game[k] })
+  row.state = state
+  return row
+}
+
+// Upserts by legacy_id so every persist() call (i.e. every turn mutation) updates the
+// same row instead of inserting a new one each time.
+export async function upsertGame(client, row) {
+  const { data, error } = await client.from('games')
+    .upsert(row, { onConflict: 'legacy_id' })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function fetchGameByLegacyId(client, legacyId) {
+  const { data, error } = await client.from('games').select('*').eq('legacy_id', String(legacyId)).maybeSingle()
+  if (error) throw error
+  return data
+}
+
+// Live-updates for a single game row — not wired to any UI yet (no spectator view
+// exists in the app), but ready for one: same postgres_changes pattern as
+// subscribeToBroadcastQueue. Returns an unsubscribe function.
+export function subscribeToGame(gameRowId, onChange) {
+  const channel = supabase
+    .channel('game-' + gameRowId)
+    .on('postgres_changes', {
+      event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameRowId}`,
+    }, payload => onChange(payload.new))
+    .subscribe()
+  return () => supabase.removeChannel(channel)
+}
+
+// ─── User prefs — starred games, follows, notification prefs (migration 023) ─────
+// One row per Clerk user; none of this is club-scoped so clerk_user_id is the natural
+// key rather than resolving a players.id.
+
+export async function fetchUserPrefs(client, clerkUserId) {
+  const { data, error } = await client.from('user_prefs').select('*').eq('clerk_user_id', clerkUserId).maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function upsertUserPrefs(client, clerkUserId, patch) {
+  const { data, error } = await client.from('user_prefs')
+    .upsert({ clerk_user_id: clerkUserId, ...patch }, { onConflict: 'clerk_user_id' })
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+// ─── Feedback (migration 023) ─────────────────────────────────────────────────
+// Submitted by any authenticated user; admins review/reply across devices — the whole
+// reason this needed to leave localStorage.
+
+export async function fetchFeedback(client) {
+  const { data, error } = await client.from('feedback').select('*').order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createFeedback(client, { id, clerkUserId, type, body, createdAt }) {
+  const row = { clerk_user_id: clerkUserId, type, body }
+  if (id) row.id = id
+  if (createdAt) row.created_at = createdAt
+  const { data, error } = await client.from('feedback').insert(row).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateFeedback(client, id, patch) {
+  const { data, error } = await client.from('feedback').update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+// ─── App directory — players/coaches/equipment/affiliations (migration 023) ──────
+// Admin-curated singleton row, globally readable. getOrCreateAppDirectory mirrors
+// getOrCreateClub's create-if-missing shape since there's no natural "id" callers
+// already have for this one.
+
+export async function getOrCreateAppDirectory(client) {
+  const { data: existing, error: selErr } = await client.from('app_directory').select('*').limit(1).maybeSingle()
+  if (selErr) throw selErr
+  if (existing) return existing
+  const { data, error } = await client.from('app_directory').insert({}).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateAppDirectory(client, id, patch) {
+  const { data, error } = await client.from('app_directory').update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+// ─── Club check-ins (migration 023) ────────────────────────────────────────────
+// A lighter "I'm at the club today" record, distinct from the event-specific
+// `attendance` table.
+
+export async function fetchClubCheckins(client, clubId) {
+  const { data, error } = await client.from('club_checkins')
+    .select('*').eq('club_id', clubId).order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createCheckin(client, clubId, { clerkUserId, name, reason }) {
+  const { data, error } = await client.from('club_checkins')
+    .insert({ club_id: clubId, clerk_user_id: clerkUserId, name, reason }).select().single()
+  if (error) throw error
+  return data
+}
+
+// ─── Live sessions (migration 024) ─────────────────────────────────────────────
+// One row per (club, date) — the live-scoring board's fast-changing internals
+// (assignments/availability/managers/activity/overrides), same `state` jsonb shape
+// as `games`. Genuinely 2-writer (organiser board + the presence/check-in bridge),
+// so this is a real table upserted by (club_id, session_date), not a dual-write shim.
+
+export async function fetchLiveSession(client, clubId, sessionDate) {
+  const { data, error } = await client.from('live_sessions')
+    .select('*').eq('club_id', clubId).eq('session_date', sessionDate).maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function upsertLiveSession(client, clubId, sessionDate, state) {
+  const { data, error } = await client.from('live_sessions')
+    .upsert({ club_id: clubId, session_date: sessionDate, state }, { onConflict: 'club_id,session_date' })
+    .select().single()
+  if (error) throw error
+  return data
 }
 
