@@ -1,12 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { ClerkProvider, SignedIn, SignedOut, SignIn, useSignIn } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut, SignIn, useClerk } from '@clerk/clerk-react';
 import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n/index.js';
 import App from './App.jsx';
 import { CroquetOkLogo } from './components/OKBadge.jsx';
 import { LawnBackground, LAWN_BASE } from './components/LawnBackground.jsx';
-import { isNativePlatform, signInWithGoogleNative, SSO_REDIRECT_URL, isNativeGoogleBridge } from './lib/nativeAuth.js';
+import { isNativePlatform, signInWithGoogleNative } from './lib/nativeAuth.js';
 import './index.css';
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -38,21 +38,24 @@ function useLandingLogoScale() {
   return scale;
 }
 
-// Native (Capacitor) sign-in: Clerk's prebuilt <SignIn> uses an in-WebView redirect
-// for "Continue with Google", which Google blocks inside embedded WebViews. So on the
-// native app we render our own button that runs the OAuth handshake in the system
-// browser (see src/lib/nativeAuth.js). Web is unaffected — it keeps using <SignIn>.
+// Native (Capacitor) sign-in: Clerk's prebuilt <SignIn> "Continue with Google" relies
+// on a browser-redirect flow that doesn't work inside an embedded WebView (or, we
+// found, when bridged through the system browser either — Clerk's web SDK only ever
+// implements the single-continuous-tab redirect flow). So on native we render our own
+// button that runs Android's real native Google Sign-In (no browser at all) and hands
+// the resulting token straight to Clerk (see src/lib/nativeAuth.js). Web is
+// unaffected — it keeps using <SignIn>'s normal Google button.
 function NativeGoogleSignIn() {
-  const { isLoaded, signIn, setActive } = useSignIn();
+  const clerk = useClerk();
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState(null);
 
   async function handleGoogle() {
-    if (!isLoaded || busy) return;
+    if (busy) return;
     setErr(null);
     setBusy(true);
     try {
-      await signInWithGoogleNative(signIn, setActive);
+      await signInWithGoogleNative(clerk);
       // On success, <SignedIn> takes over and renders <App>; keep the button disabled
       // through the transition rather than flipping back to the idle state.
     } catch (e) {
@@ -66,13 +69,13 @@ function NativeGoogleSignIn() {
   },
     React.createElement('button', {
       onClick: handleGoogle,
-      disabled: !isLoaded || busy,
+      disabled: busy,
       style: {
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
         width: '100%', maxWidth: 340, padding: '14px 18px', borderRadius: 12,
         border: 'none', background: '#fff', color: '#1f2937', fontSize: 16, fontWeight: 600,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.35)', cursor: (!isLoaded || busy) ? 'default' : 'pointer',
-        opacity: (!isLoaded || busy) ? 0.7 : 1,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.35)', cursor: busy ? 'default' : 'pointer',
+        opacity: busy ? 0.7 : 1,
       },
     },
       React.createElement('img', {
@@ -85,71 +88,6 @@ function NativeGoogleSignIn() {
       style: { margin: 0, color: '#fecaca', fontSize: 13, textAlign: 'center', maxWidth: 340 },
     }, err)
   );
-}
-
-// Bridge page for native Google sign-in: the app opens this URL directly in the
-// SYSTEM BROWSER (not the WebView) via Browser.open() in nativeAuth.js. Running
-// signIn.create() here — inside the same continuous Chrome tab that will also
-// receive Google's redirect back to Clerk — keeps Clerk's __client cookie valid
-// through the whole handshake. (The earlier approach called signIn.create() from
-// the WebView, whose cookie jar Chrome/Custom Tabs never share, so Clerk rejected
-// the callback with "authorization_invalid".) Once Clerk's own oauth_callback
-// completes, it redirects this same tab straight to our custom URL scheme with a
-// rotating_token_nonce — Android intercepts that and hands it back to the app via
-// the deep link, where nativeAuth.js finishes with signIn.reload()/setActive().
-function NativeGoogleBridge() {
-  const { isLoaded, signIn } = useSignIn();
-  const [error, setError] = React.useState(null);
-  const started = React.useRef(false);
-
-  React.useEffect(() => {
-    if (!isLoaded || !signIn || started.current) return;
-    started.current = true;
-    (async () => {
-      try {
-        await signIn.create({ strategy: 'oauth_google', redirectUrl: SSO_REDIRECT_URL });
-        const url = signIn.firstFactorVerification?.externalVerificationRedirectURL;
-        if (!url) throw new Error('Clerk did not return a Google sign-in URL.');
-        window.location.href = url.toString();
-      } catch (e) {
-        setError((e && e.errors && e.errors[0] && e.errors[0].message) || 'Could not start Google sign-in.');
-      }
-    })();
-  }, [isLoaded, signIn]);
-
-  return React.createElement('div', {
-    style: {
-      position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', gap: 12, background: LAWN_BASE,
-      color: '#fff', fontFamily: 'inherit', padding: '2rem', textAlign: 'center',
-    },
-  },
-    React.createElement('p', { style: { margin: 0, fontSize: 15 } }, error || 'Connecting to Google…')
-  );
-}
-
-// Fallback rendered only if Android's App Link interception (see AndroidManifest.xml
-// + public/.well-known/assetlinks.json) doesn't fire before this page loads — e.g.
-// the OS hasn't finished domain verification yet. Shouldn't normally be seen; the
-// deep link (appUrlOpen) is what actually completes the sign-in.
-function NativeOAuthCompleteFallback() {
-  return React.createElement('div', {
-    style: {
-      position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', gap: 12, background: LAWN_BASE,
-      color: '#fff', fontFamily: 'inherit', padding: '2rem', textAlign: 'center',
-    },
-  },
-    React.createElement('p', { style: { margin: 0, fontSize: 15 } }, 'Signed in — you can return to the Croquet OK app now.')
-  );
-}
-
-function isNativeOAuthCompletePath() {
-  try {
-    return window.location.pathname === '/native-oauth-complete';
-  } catch {
-    return false;
-  }
 }
 
 function LandingScreen() {
@@ -230,11 +168,7 @@ function LandingScreen() {
 ReactDOM.createRoot(document.getElementById('root')).render(
   React.createElement(I18nextProvider, { i18n },
   React.createElement(ClerkProvider, { publishableKey: PUBLISHABLE_KEY, afterSignInUrl: '/', afterSignUpUrl: '/' },
-    isNativeGoogleBridge()
-    ? React.createElement(NativeGoogleBridge)
-    : isNativeOAuthCompletePath()
-    ? React.createElement(NativeOAuthCompleteFallback)
-    : React.createElement(React.Fragment, null,
+    React.createElement(React.Fragment, null,
       React.createElement(SignedOut, null,
         React.createElement(LandingScreen)
       ),

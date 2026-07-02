@@ -1,64 +1,43 @@
-// Native (Capacitor) Google OAuth for the Android app.
+// Native (Capacitor) Google sign-in for the Android app.
 //
-// Why this exists: the app runs as a Capacitor WebView that loads the live site
-// (server.url = https://croquetok.com). Google deliberately blocks OAuth inside
-// embedded WebViews, so the normal Clerk <SignIn> "Continue with Google" button
-// fails there with `authorization_invalid`. Running the OAuth handshake in the
-// system browser (Chrome Custom Tab) fixes the WebView-block problem, but a first
-// attempt still failed: calling signIn.create() from the WebView sets Clerk's
-// `__client` cookie in the WebView's OWN cookie jar, which Chrome/Custom Tabs never
-// share (separate storage, same as any two unrelated browsers) — so when Google's
-// redirect lands back at clerk.croquetok.com/v1/oauth_callback inside the Custom
-// Tab, Clerk has no cookie to correlate it against and rejects with
-// `authorization_invalid`. On a normal desktop/mobile BROWSER this never comes up
-// because the whole flow — create → Google → callback — happens in one continuous
-// tab/cookie-jar the whole way.
+// Why this exists: the app runs as a Capacitor WebView loading the live site
+// (server.url = https://croquetok.com). Clerk's normal "Continue with Google" button
+// relies on a browser REDIRECT flow (Clerk -> Google -> Clerk), which only works
+// inside one continuous browser tab/cookie-jar. Google blocks that flow inside
+// embedded WebViews outright, and three different attempts at bridging it through
+// the system browser (Chrome Custom Tab) all hit the same wall from different
+// angles: Clerk's web SDK (signIn.create(), used by <SignIn>) only implements the
+// single-browser-tab redirect flow. Its "Native applications" nonce-handoff
+// mechanism belongs to Clerk's separate Native API (used by @clerk/clerk-expo etc.),
+// which clerk-react never calls no matter how the browser context is split.
 //
-// Fix: run signIn.create() itself inside the system browser too, on a dedicated
-// "bridge" page (see NativeGoogleBridge in main.jsx) that the app opens directly via
-// Browser.open(). That keeps the __client cookie valid all the way through Clerk's
-// callback, exactly like a normal browser sign-in.
+// Real fix: skip Clerk's OAuth redirect flow entirely. Use Android's own native
+// Google Sign-In (a system account-picker dialog, not a browser at all —
+// @capawesome/capacitor-google-sign-in, backed by Android's Credential Manager API)
+// to get a Google ID token directly, then hand that token straight to Clerk via
+// clerk.authenticateWithGoogleOneTap({ token }) — a plain API call that runs
+// entirely inside the WebView's own JS context. No browser redirect, no separate
+// cookie jar, no cross-context handoff of any kind.
 //
-// Second attempt at this used a custom URL scheme (au.okinnovations.croquetok://...)
-// as the redirectUrl, on the theory that only the FINAL hop needed to cross back into
-// the app. That failed too, with an explicit Clerk error: "Invalid URL scheme —
-// Please provide a URL with one of the following schemes: http, https". Clerk's web
-// SDK (signIn.create(), used here) simply doesn't accept a custom scheme as
-// redirect_url, full stop — that's not what it's for. (The "Native applications"
-// redirect-URL allowlist that DOES accept custom schemes belongs to Clerk's separate
-// Native API, used by their official native SDKs like @clerk/clerk-expo — clerk-react
-// never touches it.)
-//
-// Real fix: use an https:// redirect_url — Android App Links, not a custom scheme.
-// SSO_REDIRECT_URL now points at a real path on our own domain
-// (https://croquetok.com/native-oauth-complete). The Android manifest registers that
-// exact path as a verified App Link (autoVerify, backed by
-// public/.well-known/assetlinks.json declaring this app's signing fingerprints), so
-// when Clerk's callback redirects the Chrome tab there, Android intercepts the
-// navigation and routes it into the app instead of loading it in Chrome — same
-// end result as a custom scheme, but via a mechanism Clerk's redirect_url validation
-// actually accepts.
-//
-// Flow:
-//   1. Open the bridge URL (croquetok.com?native_google_bridge=1) in the system
-//      browser via @capacitor/browser. That page's own JS calls signIn.create() and
-//      navigates itself to Google — all within that one Chrome tab.
-//   2. Google → Clerk redirects that same tab to
-//      https://croquetok.com/native-oauth-complete?...nonce. Android's verified App
-//      Link intercepts that navigation and routes it back into MainActivity instead
-//      of Chrome; @capacitor/app fires 'appUrlOpen' with that URL.
-//   3. signIn.reload({ rotatingTokenNonce }) (in the WebView's Clerk client) pulls
-//      the now-completed sign-in by nonce — this is the one cross-context handoff
-//      the mechanism is actually designed for; then setActive({ session:
-//      createdSessionId }) activates it and <SignedIn> renders.
+// Setup this depends on: GoogleSignIn.initialize() takes the WEB OAuth client ID
+// (not an Android-specific one) — this must be the exact client ID configured on
+// Clerk's Google SSO connection (Clerk dashboard -> User & authentication -> SSO
+// connections -> Google -> Client ID), so the token's audience matches what Clerk
+// validates against. Additionally, Google Cloud Console needs a registered Android
+// OAuth client (in the SAME project as that web client) for this app's package name
+// + signing certificate SHA-1 — one for the debug keystore, one for the release
+// keystore — before the native picker will authorize this app at all.
 //
 // Everything here is gated by isNativePlatform() at the call site, so the web build
 // keeps using Clerk's prebuilt <SignIn> and never touches this path.
 
 import { Capacitor } from '@capacitor/core';
 
-export const SSO_REDIRECT_URL = 'https://croquetok.com/native-oauth-complete';
-const BRIDGE_URL = 'https://croquetok.com/?native_google_bridge=1';
+// Clerk's configured Google SSO connection client ID (dashboard -> SSO connections ->
+// Google -> Client ID). Must stay in sync with that value.
+const GOOGLE_WEB_CLIENT_ID = '470748927930-422dcv0oonnhoi2prdhq0sgok6eht997.apps.googleusercontent.com';
+
+let initialized = false;
 
 export function isNativePlatform() {
   try {
@@ -70,64 +49,24 @@ export function isNativePlatform() {
   }
 }
 
-// True when this page load IS the native-Google bridge tab itself (opened by
-// signInWithGoogleNative below, running in the system browser, not the WebView).
-export function isNativeGoogleBridge() {
-  try {
-    return new URLSearchParams(window.location.search).get('native_google_bridge') === '1';
-  } catch {
-    return false;
+// Runs the native Google sign-in + Clerk token exchange. `clerk` is the Clerk
+// instance from useClerk(). Resolves once the session is active; rejects with a
+// descriptive Error otherwise (including a plain cancel, so the caller can decide
+// whether to surface it).
+export async function signInWithGoogleNative(clerk) {
+  const { GoogleSignIn } = await import('@capawesome/capacitor-google-sign-in');
+
+  if (!initialized) {
+    await GoogleSignIn.initialize({ clientId: GOOGLE_WEB_CLIENT_ID });
+    initialized = true;
   }
-}
 
-// Runs the full external-browser Google OAuth handshake by opening the bridge page
-// (see module comment above). `signIn` and `setActive` come from the WebView's own
-// Clerk useSignIn() — used only for the final reload()/setActive() handoff, never to
-// create the sign-in itself. Resolves once the session is active; rejects with a
-// descriptive Error otherwise. The caller shows any error to the user.
-export async function signInWithGoogleNative(signIn, setActive) {
-  const { Browser } = await import('@capacitor/browser');
-  const { App } = await import('@capacitor/app');
+  const { idToken } = await GoogleSignIn.signIn();
+  if (!idToken) throw new Error('Google did not return an ID token.');
 
-  return new Promise((resolve, reject) => {
-    let listener;
-    let settled = false;
-
-    const finish = async (err, value) => {
-      if (settled) return;
-      settled = true;
-      try { if (listener) await listener.remove(); } catch { /* ignore */ }
-      try { await Browser.close(); } catch { /* ignore — tab may already be gone */ }
-      if (err) reject(err); else resolve(value);
-    };
-
-    App.addListener('appUrlOpen', async ({ url }) => {
-      console.log('[nativeAuth] appUrlOpen url =', url);
-      if (!url || url.indexOf(SSO_REDIRECT_URL) !== 0) return; // not our callback
-      try {
-        const nonce = new URL(url).searchParams.get('rotating_token_nonce');
-        console.log('[nativeAuth] rotating_token_nonce =', nonce);
-        if (!nonce) {
-          await finish(new Error('Callback URL had no rotating_token_nonce.'));
-          return;
-        }
-        const res = await signIn.reload({ rotatingTokenNonce: nonce });
-        console.log('[nativeAuth] reload status =', res.status, 'createdSessionId =', res.createdSessionId);
-        if (res.status === 'complete' && res.createdSessionId) {
-          await setActive({ session: res.createdSessionId });
-          await finish(null, 'complete');
-        } else {
-          await finish(new Error('Google sign-in did not complete (status: ' + res.status + ').'));
-        }
-      } catch (e) {
-        console.error('[nativeAuth] reload/setActive failed', e && e.errors ? JSON.stringify(e.errors) : String(e));
-        await finish(e instanceof Error ? e : new Error(String(e)));
-      }
-    }).then((h) => { listener = h; })
-      .catch((e) => finish(e instanceof Error ? e : new Error(String(e))));
-
-    Browser.open({ url: BRIDGE_URL }).catch((e) => {
-      finish(e instanceof Error ? e : new Error(String(e)));
-    });
+  const res = await clerk.authenticateWithGoogleOneTap({ token: idToken });
+  await clerk.handleGoogleOneTapCallback(res, {
+    signInFallbackRedirectUrl: '/',
+    signUpFallbackRedirectUrl: '/',
   });
 }
