@@ -62,17 +62,23 @@ export function clubMediaUrl(path) {
   return supabase.storage.from('club-media').getPublicUrl(path).data.publicUrl
 }
 
-// Bulk logo lookup for club-listing screens (directory, venue search) that render
-// many clubs at once and can't afford a fetchClubProfileCore() round-trip per card.
-// Returns { [slug]: logoUrl | null }, applying the same logo_path-over-legacy-base64
-// precedence as fetchClubProfileCore. Safe with the unauthenticated client — clubs
-// are publicly readable.
-export async function fetchAllClubLogos(client) {
-  const { data, error } = await client.from('clubs').select('slug, logo, logo_path')
+// Bulk logo+banner lookup for club-listing screens (directory, venue search) that
+// render many clubs at once and can't afford a fetchClubProfileCore() round-trip per
+// card. Returns { [slug]: { logo: url|null, banner: url|null } }, applying the same
+// logo_path/photo_paths-over-legacy-base64 precedence as fetchClubProfileCore. Safe
+// with the unauthenticated client — clubs are publicly readable. Callers should
+// re-call this periodically (not just once at mount) since clubs update their own
+// branding at any time and there's no realtime push for it.
+export async function fetchAllClubMedia(client) {
+  const { data, error } = await client.from('clubs').select('slug, logo, logo_path, photos, photo_paths')
   if (error) throw error
   const map = {}
   for (const row of data || []) {
-    map[row.slug] = row.logo_path ? clubMediaUrl(row.logo_path) : (row.logo || null)
+    const logo = row.logo_path ? clubMediaUrl(row.logo_path) : (row.logo || null)
+    const banner = (row.photo_paths && row.photo_paths.length)
+      ? clubMediaUrl(row.photo_paths[0])
+      : ((row.photos || []).filter(Boolean)[0] || null)
+    map[row.slug] = { logo, banner }
   }
   return map
 }
