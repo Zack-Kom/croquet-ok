@@ -29,6 +29,20 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="au.okinnovations.croquetok" android:host="sso-callback" />
             </intent-filter>
+
+            <!-- App Link (verified via public/.well-known/assetlinks.json) for the Clerk
+                 OAuth callback. Clerk's web SDK only accepts http(s) redirect URLs, so
+                 the custom-scheme intent-filter above can't be used as the OAuth
+                 redirect target — this https path is. autoVerify lets Android intercept
+                 navigation to this exact URL and route it into the app instead of
+                 loading it in Chrome, once domain ownership is verified via
+                 assetlinks.json (checked against this app's signing certificate). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="croquetok.com" android:path="/native-oauth-complete" />
+            </intent-filter>
         </activity>
 
         <provider

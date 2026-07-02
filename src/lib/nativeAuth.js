@@ -17,19 +17,36 @@
 // Fix: run signIn.create() itself inside the system browser too, on a dedicated
 // "bridge" page (see NativeGoogleBridge in main.jsx) that the app opens directly via
 // Browser.open(). That keeps the __client cookie valid all the way through Clerk's
-// callback, exactly like a normal browser sign-in. Only the very last hop crosses
-// back into the WebView: Clerk's callback redirects the SAME Chrome tab straight to
-// our custom URL scheme with a one-time `rotating_token_nonce`, Android's deep-link
-// intent-filter routes that back into MainActivity, and this file's `appUrlOpen`
-// listener finishes the handoff into the WebView's own Clerk client.
+// callback, exactly like a normal browser sign-in.
+//
+// Second attempt at this used a custom URL scheme (au.okinnovations.croquetok://...)
+// as the redirectUrl, on the theory that only the FINAL hop needed to cross back into
+// the app. That failed too, with an explicit Clerk error: "Invalid URL scheme —
+// Please provide a URL with one of the following schemes: http, https". Clerk's web
+// SDK (signIn.create(), used here) simply doesn't accept a custom scheme as
+// redirect_url, full stop — that's not what it's for. (The "Native applications"
+// redirect-URL allowlist that DOES accept custom schemes belongs to Clerk's separate
+// Native API, used by their official native SDKs like @clerk/clerk-expo — clerk-react
+// never touches it.)
+//
+// Real fix: use an https:// redirect_url — Android App Links, not a custom scheme.
+// SSO_REDIRECT_URL now points at a real path on our own domain
+// (https://croquetok.com/native-oauth-complete). The Android manifest registers that
+// exact path as a verified App Link (autoVerify, backed by
+// public/.well-known/assetlinks.json declaring this app's signing fingerprints), so
+// when Clerk's callback redirects the Chrome tab there, Android intercepts the
+// navigation and routes it into the app instead of loading it in Chrome — same
+// end result as a custom scheme, but via a mechanism Clerk's redirect_url validation
+// actually accepts.
 //
 // Flow:
 //   1. Open the bridge URL (croquetok.com?native_google_bridge=1) in the system
 //      browser via @capacitor/browser. That page's own JS calls signIn.create() and
 //      navigates itself to Google — all within that one Chrome tab.
 //   2. Google → Clerk redirects that same tab to
-//      au.okinnovations.croquetok://sso-callback?...nonce. Android routes the custom
-//      scheme back into MainActivity; @capacitor/app fires 'appUrlOpen'.
+//      https://croquetok.com/native-oauth-complete?...nonce. Android's verified App
+//      Link intercepts that navigation and routes it back into MainActivity instead
+//      of Chrome; @capacitor/app fires 'appUrlOpen' with that URL.
 //   3. signIn.reload({ rotatingTokenNonce }) (in the WebView's Clerk client) pulls
 //      the now-completed sign-in by nonce — this is the one cross-context handoff
 //      the mechanism is actually designed for; then setActive({ session:
@@ -40,7 +57,7 @@
 
 import { Capacitor } from '@capacitor/core';
 
-export const SSO_REDIRECT_URL = 'au.okinnovations.croquetok://sso-callback';
+export const SSO_REDIRECT_URL = 'https://croquetok.com/native-oauth-complete';
 const BRIDGE_URL = 'https://croquetok.com/?native_google_bridge=1';
 
 export function isNativePlatform() {

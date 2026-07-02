@@ -128,6 +128,30 @@ function NativeGoogleBridge() {
   );
 }
 
+// Fallback rendered only if Android's App Link interception (see AndroidManifest.xml
+// + public/.well-known/assetlinks.json) doesn't fire before this page loads — e.g.
+// the OS hasn't finished domain verification yet. Shouldn't normally be seen; the
+// deep link (appUrlOpen) is what actually completes the sign-in.
+function NativeOAuthCompleteFallback() {
+  return React.createElement('div', {
+    style: {
+      position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 12, background: LAWN_BASE,
+      color: '#fff', fontFamily: 'inherit', padding: '2rem', textAlign: 'center',
+    },
+  },
+    React.createElement('p', { style: { margin: 0, fontSize: 15 } }, 'Signed in — you can return to the Croquet OK app now.')
+  );
+}
+
+function isNativeOAuthCompletePath() {
+  try {
+    return window.location.pathname === '/native-oauth-complete';
+  } catch {
+    return false;
+  }
+}
+
 function LandingScreen() {
   const logoScale = useLandingLogoScale();
   return React.createElement('div', {
@@ -208,6 +232,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   React.createElement(ClerkProvider, { publishableKey: PUBLISHABLE_KEY, afterSignInUrl: '/', afterSignUpUrl: '/' },
     isNativeGoogleBridge()
     ? React.createElement(NativeGoogleBridge)
+    : isNativeOAuthCompletePath()
+    ? React.createElement(NativeOAuthCompleteFallback)
     : React.createElement(React.Fragment, null,
       React.createElement(SignedOut, null,
         React.createElement(LandingScreen)

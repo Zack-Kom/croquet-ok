@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "au.okinnovations.croquetok",
+      "sha256_cert_fingerprints": [
+        "ED:32:FD:B0:D8:24:BF:F1:9F:06:B5:A0:61:7B:91:27:C2:23:3D:DB:E6:84:E8:8A:65:06:3D:DD:BE:A3:A4:B3",
+        "2F:28:14:42:44:41:20:72:68:51:E9:2C:4C:42:6A:7A:BD:12:65:10:0C:A3:ED:9F:35:1B:6F:5E:7A:D0:8D:F0"
+      ]
+    }
+  }
+]
