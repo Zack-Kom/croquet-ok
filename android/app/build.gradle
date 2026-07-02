@@ -16,10 +16,27 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing config is read from ~/.gradle/gradle.properties (CROQUETOK_RELEASE_*),
+    // never from the repo — keeps the upload keystore + passwords out of git entirely.
+    // Falls back to no signingConfig (an unsigned build, fine for CI/local debug work)
+    // when those properties aren't present on the machine.
+    if (project.hasProperty('CROQUETOK_RELEASE_STORE_FILE')) {
+        signingConfigs {
+            release {
+                storeFile file(CROQUETOK_RELEASE_STORE_FILE)
+                storePassword CROQUETOK_RELEASE_STORE_PASSWORD
+                keyAlias CROQUETOK_RELEASE_KEY_ALIAS
+                keyPassword CROQUETOK_RELEASE_KEY_PASSWORD
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (project.hasProperty('CROQUETOK_RELEASE_STORE_FILE')) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

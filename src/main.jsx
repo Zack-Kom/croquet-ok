@@ -6,7 +6,7 @@ import i18n from './i18n/index.js';
 import App from './App.jsx';
 import { CroquetOkLogo } from './components/OKBadge.jsx';
 import { LawnBackground, LAWN_BASE } from './components/LawnBackground.jsx';
-import { isNativePlatform, signInWithGoogleNative } from './lib/nativeAuth.js';
+import { isNativePlatform, signInWithGoogleNative, SSO_REDIRECT_URL, isNativeGoogleBridge } from './lib/nativeAuth.js';
 import './index.css';
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -84,6 +84,47 @@ function NativeGoogleSignIn() {
     err && React.createElement('p', {
       style: { margin: 0, color: '#fecaca', fontSize: 13, textAlign: 'center', maxWidth: 340 },
     }, err)
+  );
+}
+
+// Bridge page for native Google sign-in: the app opens this URL directly in the
+// SYSTEM BROWSER (not the WebView) via Browser.open() in nativeAuth.js. Running
+// signIn.create() here — inside the same continuous Chrome tab that will also
+// receive Google's redirect back to Clerk — keeps Clerk's __client cookie valid
+// through the whole handshake. (The earlier approach called signIn.create() from
+// the WebView, whose cookie jar Chrome/Custom Tabs never share, so Clerk rejected
+// the callback with "authorization_invalid".) Once Clerk's own oauth_callback
+// completes, it redirects this same tab straight to our custom URL scheme with a
+// rotating_token_nonce — Android intercepts that and hands it back to the app via
+// the deep link, where nativeAuth.js finishes with signIn.reload()/setActive().
+function NativeGoogleBridge() {
+  const { isLoaded, signIn } = useSignIn();
+  const [error, setError] = React.useState(null);
+  const started = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!isLoaded || !signIn || started.current) return;
+    started.current = true;
+    (async () => {
+      try {
+        await signIn.create({ strategy: 'oauth_google', redirectUrl: SSO_REDIRECT_URL });
+        const url = signIn.firstFactorVerification?.externalVerificationRedirectURL;
+        if (!url) throw new Error('Clerk did not return a Google sign-in URL.');
+        window.location.href = url.toString();
+      } catch (e) {
+        setError((e && e.errors && e.errors[0] && e.errors[0].message) || 'Could not start Google sign-in.');
+      }
+    })();
+  }, [isLoaded, signIn]);
+
+  return React.createElement('div', {
+    style: {
+      position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 12, background: LAWN_BASE,
+      color: '#fff', fontFamily: 'inherit', padding: '2rem', textAlign: 'center',
+    },
+  },
+    React.createElement('p', { style: { margin: 0, fontSize: 15 } }, error || 'Connecting to Google…')
   );
 }
 
@@ -165,7 +206,9 @@ function LandingScreen() {
 ReactDOM.createRoot(document.getElementById('root')).render(
   React.createElement(I18nextProvider, { i18n },
   React.createElement(ClerkProvider, { publishableKey: PUBLISHABLE_KEY, afterSignInUrl: '/', afterSignUpUrl: '/' },
-    React.createElement(React.Fragment, null,
+    isNativeGoogleBridge()
+    ? React.createElement(NativeGoogleBridge)
+    : React.createElement(React.Fragment, null,
       React.createElement(SignedOut, null,
         React.createElement(LandingScreen)
       ),
