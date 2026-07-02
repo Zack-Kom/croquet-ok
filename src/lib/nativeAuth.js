@@ -43,8 +43,14 @@ export async function signInWithGoogleNative(signIn, setActive) {
   const { App } = await import('@capacitor/app');
 
   // Kick off the OAuth sign-in and get Clerk's hand-off URL to the provider.
-  await signIn.create({ strategy: 'oauth_google', redirectUrl: SSO_REDIRECT_URL });
+  try {
+    await signIn.create({ strategy: 'oauth_google', redirectUrl: SSO_REDIRECT_URL });
+  } catch (e) {
+    console.error('[nativeAuth] signIn.create failed', e && e.errors ? JSON.stringify(e.errors) : String(e));
+    throw e;
+  }
   const externalUrl = signIn.firstFactorVerification?.externalVerificationRedirectURL;
+  console.log('[nativeAuth] externalUrl =', externalUrl ? externalUrl.toString() : externalUrl);
   if (!externalUrl) {
     throw new Error('Clerk did not return an OAuth redirect URL. Is Google enabled and the redirect URL allow-listed?');
   }
