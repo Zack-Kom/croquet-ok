@@ -102,10 +102,17 @@ export async function signInWithGoogleNative(signIn, setActive) {
     };
 
     App.addListener('appUrlOpen', async ({ url }) => {
+      console.log('[nativeAuth] appUrlOpen url =', url);
       if (!url || url.indexOf(SSO_REDIRECT_URL) !== 0) return; // not our callback
       try {
         const nonce = new URL(url).searchParams.get('rotating_token_nonce');
-        const res = await signIn.reload(nonce ? { rotatingTokenNonce: nonce } : undefined);
+        console.log('[nativeAuth] rotating_token_nonce =', nonce);
+        if (!nonce) {
+          await finish(new Error('Callback URL had no rotating_token_nonce.'));
+          return;
+        }
+        const res = await signIn.reload({ rotatingTokenNonce: nonce });
+        console.log('[nativeAuth] reload status =', res.status, 'createdSessionId =', res.createdSessionId);
         if (res.status === 'complete' && res.createdSessionId) {
           await setActive({ session: res.createdSessionId });
           await finish(null, 'complete');
@@ -113,6 +120,7 @@ export async function signInWithGoogleNative(signIn, setActive) {
           await finish(new Error('Google sign-in did not complete (status: ' + res.status + ').'));
         }
       } catch (e) {
+        console.error('[nativeAuth] reload/setActive failed', e && e.errors ? JSON.stringify(e.errors) : String(e));
         await finish(e instanceof Error ? e : new Error(String(e)));
       }
     }).then((h) => { listener = h; })
