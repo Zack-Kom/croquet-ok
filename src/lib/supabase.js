@@ -62,6 +62,21 @@ export function clubMediaUrl(path) {
   return supabase.storage.from('club-media').getPublicUrl(path).data.publicUrl
 }
 
+// Bulk logo lookup for club-listing screens (directory, venue search) that render
+// many clubs at once and can't afford a fetchClubProfileCore() round-trip per card.
+// Returns { [slug]: logoUrl | null }, applying the same logo_path-over-legacy-base64
+// precedence as fetchClubProfileCore. Safe with the unauthenticated client — clubs
+// are publicly readable.
+export async function fetchAllClubLogos(client) {
+  const { data, error } = await client.from('clubs').select('slug, logo, logo_path')
+  if (error) throw error
+  const map = {}
+  for (const row of data || []) {
+    map[row.slug] = row.logo_path ? clubMediaUrl(row.logo_path) : (row.logo || null)
+  }
+  return map
+}
+
 // ─── Broadcast contributions ──────────────────────────────────────────────────
 
 // Uploads a media file to the broadcast-media bucket and inserts a contribution row.
